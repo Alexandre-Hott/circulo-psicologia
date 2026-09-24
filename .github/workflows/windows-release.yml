@@ -1,0 +1,49 @@
+name: Windows release (gated)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Build a signed production release'
+        required: true
+        type: boolean
+        default: false
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npm run guard:repository
+      - run: npm run build
+
+  signed-installer:
+    needs: validate
+    # Production builds cannot run until signing secrets and explicit approval exist.
+    if: github.event_name == 'workflow_dispatch' && inputs.release == true && vars.PRODUCTION_RELEASES_ENABLED == 'true'
+    runs-on: windows-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm ci
+      - run: npm install -D @tauri-apps/cli
+      # Configure Azure Trusted Signing or equivalent here. Certificate material stays in GitHub secrets.
+      - name: Verify signing gate
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace('${{ secrets.WINDOWS_SIGNING_CONFIG }}')) { throw 'Signing configuration is required.' }
+      - run: npx tauri build
+      # Deliberately no upload/publish step. Add it only after approved release governance.

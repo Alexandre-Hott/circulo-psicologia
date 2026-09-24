@@ -1,0 +1,3 @@
+export const BACKUP_FORMAT='circulo-backup'; export const BACKUP_VERSION=1
+export const createManifest=({createdAt,appVersion,sourceId})=>({format:BACKUP_FORMAT,version:BACKUP_VERSION,createdAt,appVersion,sourceId,crypto:{kdf:'Argon2id',cipher:'XChaCha20-Poly1305',nonceBytes:24,saltBytes:16},payload:{encrypted:true,checksum:'provided-by-native-layer'}})
+export const validateRestoreManifest=m=>{if(m?.format!==BACKUP_FORMAT||m.version!==BACKUP_VERSION)throw new Error('Formato de backup incompatível.');if(!m.payload?.encrypted||!m.payload?.checksum)throw new Error('Backup sem proteção de integridade.');return true}

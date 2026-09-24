@@ -1,0 +1,29 @@
+{
+  "name": "mvp-psicologia-infantil",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "oxlint",
+    "test": "node --test test/libraryModel.test.js test/calendarModel.test.js test/calendarDate.test.js test/demoState.test.js test/backupContract.test.js test/sessionTemplateModel.test.js test/sessionFinalizationModel.test.js test/sessionTimelineModel.test.js test/indicatorSummaryModel.test.js test/indicatorEvolutionModel.test.js test/indicatorValueModel.test.js test/emotionHistoryModel.test.js test/sessionDateModel.test.js test/appointmentSessionModel.test.js test/schemaContract.test.js test/repositoryGuard.test.js test/patientLifecycle.test.js test/patientModel.test.js test/modalityModel.test.js test/recurringSeriesModel.test.js test/nextAppointmentModel.test.js",
+    "test:e2e": "playwright test",
+    "guard:repository": "node scripts/repositoryGuard.js",
+    "preflight:windows": "node scripts/windowsPreflight.js",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@tauri-apps/cli": "^2.11.5",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "oxlint": "^1.81.0",
+    "vite": "^8.3.0"
+  }
+}

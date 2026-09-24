@@ -1,0 +1,3 @@
+import test from 'node:test'; import assert from 'node:assert/strict'; import { createManifest, validateRestoreManifest } from '../src/backupContract.js'
+test('encrypted backup manifest declares Argon2id and authenticated payload',()=>{const m=createManifest({createdAt:'2026-09-22',appVersion:'0.1',sourceId:'local'});assert.equal(m.crypto.kdf,'Argon2id');assert.equal(validateRestoreManifest(m),true)})
+test('restore rejects incompatible or unauthenticated backup before replacement',()=>{assert.throws(()=>validateRestoreManifest({format:'x',version:1}),/incompatível/);assert.throws(()=>validateRestoreManifest({format:'circulo-backup',version:1,payload:{encrypted:true}}),/integridade/)})

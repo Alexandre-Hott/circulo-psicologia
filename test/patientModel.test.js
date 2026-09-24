@@ -1,0 +1,36 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {createPatient,formatPatientAge,isChildPatient,compatibleTemplates,newPatientId,patientDefaultModality,updatePatient} from '../src/patientModel.js'
+test('patient cycle is validated and child mode is conditional',()=>{assert.equal(isChildPatient(createPatient({name:'Exemplo',lifeCycle:'Criança'})),true);assert.equal(isChildPatient(createPatient({name:'Exemplo',lifeCycle:'Adulto'})),false);assert.throws(()=>createPatient({name:'Exemplo',lifeCycle:'Outro'}),/inválido/)})
+test('template selection respects patient life cycle and modality',()=>{const ts=[{lifeCycles:['Adulto'],modalities:['Online']},{lifeCycles:['Criança'],modalities:['Presencial']}];assert.equal(compatibleTemplates(ts,{lifeCycle:'Adulto'},'Online').length,1);assert.equal(compatibleTemplates(ts,{lifeCycle:'Adulto'},'Presencial').length,0)})
+test('patient age is optional or a non-negative whole number without inferring life cycle',()=>{
+  assert.deepEqual([createPatient({name:'Exemplo',lifeCycle:'Adulto',age:'  '}).age,formatPatientAge(null)],[null,'Idade não informada'])
+  assert.deepEqual([createPatient({name:'Exemplo',lifeCycle:'Criança',age:'31'}).age,formatPatientAge(31)],[31,'31 anos'])
+  assert.equal(formatPatientAge(1),'1 ano')
+  assert.equal(formatPatientAge(0),'0 anos')
+  for(const age of ['-1','2.5','texto','1e2'])assert.throws(()=>createPatient({name:'Exemplo',lifeCycle:'Adulto',age}),/idade/i)
+})
+test('patient creation trims the name, validates modality, and generates distinct UUID identities',()=>{
+  assert.equal(createPatient({name:'  Nome Fictício  ',lifeCycle:'Adulto',preferredModality:'Online'}).name,'Nome Fictício')
+  assert.throws(()=>createPatient({name:' ',lifeCycle:'Adulto'}),/nome/)
+  assert.throws(()=>createPatient({name:'Exemplo',lifeCycle:'Adulto',preferredModality:'Híbrido'}),/inválida/)
+  const first=newPatientId(),second=newPatientId()
+  assert.match(first,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
+  assert.notEqual(first,second)
+})
+test('patient edit validates fields while preserving identity and linked metadata',()=>{
+  const original={id:'p1',name:'Luna Martins',age:8,lifeCycle:'Criança',preferredModality:'',initials:'LM',status:'Em acompanhamento',objective:'Objetivo histórico'}
+  const edited=updatePatient(original,{id:'outro',name:'  Luna Exemplo  ',age:'',lifeCycle:'Adulto',preferredModality:'Online'})
+  assert.deepEqual([edited.id,edited.name,edited.age,edited.lifeCycle,edited.preferredModality,edited.initials],['p1','Luna Exemplo',null,'Adulto','Online','LE'])
+  assert.equal(edited.objective,original.objective)
+  assert.equal(original.name,'Luna Martins')
+  assert.throws(()=>updatePatient(original,{name:'  '}),/nome/)
+  assert.throws(()=>updatePatient(original,{age:'-1'}),/idade/)
+  assert.throws(()=>updatePatient(original,{lifeCycle:'Outro'}),/inválido/)
+  assert.throws(()=>updatePatient(original,{preferredModality:'Híbrido'}),/inválida/)
+})
+test('modality preference supplies only a valid initial choice',()=>{
+ assert.equal(patientDefaultModality({preferredModality:'Online'}),'Online')
+ assert.equal(patientDefaultModality({preferredModality:'Presencial'}),'Presencial')
+ assert.equal(patientDefaultModality({preferredModality:''}),'Presencial')
+ assert.equal(patientDefaultModality({preferredModality:'Inválida'}),'Presencial')
+ assert.equal(patientDefaultModality(null),'Presencial')
+})

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Círculo",
+  "version": "0.1.0",
+  "identifier": "br.circulo.psicologia",
+  "build": { "beforeDevCommand": "npm run dev", "beforeBuildCommand": "npm run build", "devUrl": "http://localhost:5173", "frontendDist": "../dist" },
+  "app": { "windows": [{ "title": "Círculo", "width": 1200, "height": 800, "minWidth": 900, "minHeight": 650 }] },
+  "bundle": { "active": true, "targets": ["nsis"] }
+}

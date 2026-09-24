@@ -1,0 +1,3 @@
+export const SCHEMA_VERSION=1
+export const migrateEnvelope=e=>({schemaVersion:SCHEMA_VERSION,patients:e.patients||[],sessions:e.sessions||[],catalog:e.catalog||[],occurrences:e.occurrences||[],series:e.series||[],templates:e.templates||[],backupSettings:e.backupSettings||{}})
+export const validateEnvelope=e=>{if(e.schemaVersion!==SCHEMA_VERSION)throw new Error('Versão de esquema incompatível.');for(const o of e.occurrences)if(!o.itemSnapshot||!o.patientId||!o.sessionId)throw new Error('Ocorrência sem snapshot histórico.');for(const s of e.sessions)if(s.templateSnapshot&& !s.templateSnapshot.version)throw new Error('Sessão sem versão do modelo.');return true}

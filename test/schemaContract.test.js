@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {migrateEnvelope,validateEnvelope,SCHEMA_VERSION} from '../src/schemaContract.js'
+test('migration fills missing collections without discarding data',()=>{const e=migrateEnvelope({patients:[{id:'p'}],sessions:[]});assert.equal(e.schemaVersion,SCHEMA_VERSION);assert.equal(e.patients[0].id,'p');assert.deepEqual(e.series,[])})
+test('historical snapshots are invariant gates',()=>{assert.throws(()=>validateEnvelope({schemaVersion:1,occurrences:[{patientId:'p',sessionId:'s'}],sessions:[]}),/snapshot/);assert.equal(validateEnvelope({schemaVersion:1,occurrences:[{patientId:'p',sessionId:'s',itemSnapshot:{version:1}}],sessions:[]}),true)})
