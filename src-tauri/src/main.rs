@@ -9,6 +9,7 @@ mod native_smoke_test;
 
 use tauri::Manager;
 use vault::{
+    AnalyticsOverview,
     AgendaEvent, AgendaOccurrence, AgendaSeries, AgendaSeriesInput, AutoBackupStatus,
     BackupPreview, BehaviorTemplate, CaseContextRevision, ClinicalPatient, ClinicalSession, IndicatorDefinition,
     PatientInput, RelatedParty, RelatedPartyInput, ProfessionalIdentity, RecoveryInventory, RescheduleInput, SessionAddendum, SessionDraft, SessionDraftInput, Vault,
@@ -358,6 +359,16 @@ fn recovery_inventory(vault: tauri::State<'_, Vault>) -> Result<RecoveryInventor
     vault.recovery_inventory()
 }
 
+#[tauri::command]
+fn analytics_overview(
+    vault: tauri::State<'_, Vault>,
+    from: String,
+    to: String,
+    patient_id: Option<String>,
+) -> Result<AnalyticsOverview, String> {
+    vault.analytics_overview(&from, &to, patient_id.as_deref())
+}
+
 fn main() {
     #[cfg(feature = "native-smoke-test")]
     {
@@ -449,7 +460,8 @@ fn main() {
             backup_select,
             backup_restore,
             indicator_catalog,
-            recovery_inventory
+            recovery_inventory,
+            analytics_overview
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar Círculo")

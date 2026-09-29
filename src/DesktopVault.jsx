@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import DesktopAgenda from './DesktopAgenda.jsx'
+import DesktopAnalytics from './DesktopAnalytics.jsx'
 import DesktopSessions from './DesktopSessions.jsx'
 import { seedSyntheticDemo } from './desktopDemoSeed.js'
 import { checkDesktopUpdate, closeDesktopUpdate, installDesktopUpdate } from './desktopUpdater.js'
@@ -609,6 +610,7 @@ export default function DesktopVault() {
           <button type="button" aria-current={space === 'patients' ? 'page' : undefined} onClick={() => setSpace('patients')}>Pacientes</button>
           <button type="button" aria-label="Abrir Agenda" aria-current={space === 'agenda' ? 'page' : undefined} onClick={() => { setAgendaRecordPatientId(''); setQuickStart(false); setAgendaOpen(true); setSpace('agenda') }}>Agenda</button>
           <button type="button" aria-label="Abrir sessões sintéticas" aria-current={space === 'sessions' ? 'page' : undefined} onClick={() => { setSessionsOpen(true); setSpace('sessions') }}>Sessões</button>
+          <button type="button" aria-current={space === 'analytics' ? 'page' : undefined} onClick={() => setSpace('analytics')}>Análises</button>
           <button type="button" className="vault-nav-settings" aria-current={space === 'settings' ? 'page' : undefined} onClick={() => setSpace('settings')}>Ajustes</button>
         </nav>
         {space === 'home' && <section className="vault-panel vault-home" aria-label="Início">
@@ -617,10 +619,12 @@ export default function DesktopVault() {
             <button type="button" onClick={() => setSpace('patients')}><span aria-hidden="true">◯</span><strong>Pacientes</strong><small>Cadastros e vínculos</small></button>
             <button type="button" onClick={() => { setAgendaRecordPatientId(''); setQuickStart(false); setAgendaOpen(true); setSpace('agenda') }}><span aria-hidden="true">▦</span><strong>Agenda</strong><small>Compromissos e horários</small></button>
             <button type="button" onClick={() => { setAgendaRecordPatientId(''); setQuickStart(true); setAgendaOpen(true); setStartAvulsaSignal(value => value + 1); setSpace('agenda') }}><span aria-hidden="true">✎</span><strong>Registrar sessão</strong><small>Crie e inicie em seguida</small></button>
+            <button type="button" onClick={() => setSpace('analytics')}><span aria-hidden="true">▥</span><strong>Análises</strong><small>Resumo das sessões</small></button>
             <button type="button" disabled={busy || !status?.unlocked} onClick={loadSyntheticDemo}><span aria-hidden="true">✳</span><strong>Carregar dados fictícios de demonstração</strong><small>Adiciona exemplos ao cofre atual</small></button>
           </div>
           <div className="vault-home-preview"><section><h3>Pacientes</h3>{patients.filter(item => item.archivedAt == null).length ? <ul>{patients.filter(item => item.archivedAt == null).slice(0, 3).map(item => <li key={item.id}>{item.name}</li>)}</ul> : <p>Nenhum paciente cadastrado ainda.</p>}<button type="button" className="vault-secondary" onClick={() => setSpace('patients')}>Ver pacientes</button></section><section><h3>Agenda de hoje</h3>{homeAgenda.state === 'loading' ? <p>Carregando compromissos...</p> : homeAgenda.state === 'error' ? <><p>Não foi possível consultar a agenda agora.</p><button type="button" className="vault-secondary" onClick={() => { setHomeAgenda({ state: 'loading', items: [] }); setHomeAgendaRetry(value => value + 1) }}>Tentar novamente</button></> : homeAgenda.items.length ? <ul>{homeAgenda.items.slice(0, 3).map(item => <li key={item.id}>{item.start} · {patients.find(patient => patient.id === item.patientId)?.name || 'Paciente'}{item.status === 'completed' ? ' · realizado' : ''}</li>)}</ul> : <p>Nenhum compromisso para hoje.</p>}<button type="button" className="vault-secondary" onClick={() => { setAgendaOpen(true); setSpace('agenda') }}>Ver agenda</button></section></div>
         </section>}
+        {space === 'analytics' && <section className="vault-panel" aria-label="Análises"><div className="vault-section-heading"><div><p className="vault-eyebrow">ANÁLISES</p><h2>Análises</h2></div></div><DesktopAnalytics /></section>}
         <section className="vault-panel" hidden={space !== 'patients'} aria-label="Pacientes"><div className="vault-section-heading"><div><p className="vault-eyebrow">PACIENTES</p><h2>Pacientes</h2></div><button type="button" onClick={() => setPatientFormOpen(true)}>Novo cadastro</button></div>
         <p>Use somente identidades inventadas. Arquivar é reversível; não há exclusão definitiva nesta etapa.</p>
         {patientFormOpen && <form className="vault-form-panel" onSubmit={submitPatient} aria-label={editing ? 'Editar cadastro' : 'Novo cadastro'}>

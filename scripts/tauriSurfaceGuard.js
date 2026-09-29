@@ -15,7 +15,7 @@ export const REVIEWED_HANDLERS = Object.freeze([
   'agenda_list_series', 'agenda_occurrences', 'agenda_history', 'agenda_create_series', 'agenda_end_series', 'agenda_cancel', 'agenda_reschedule',
   'behavior_list', 'behavior_create', 'behavior_update',
   'session_draft_start', 'session_draft_list', 'session_draft_save', 'session_draft_cancel',
-  'session_finalize', 'session_timeline', 'session_addendum_create', 'session_addendum_list', 'backup_create',
+  'session_finalize', 'session_timeline', 'session_addendum_create', 'session_addendum_list', 'analytics_overview', 'backup_create',
   'auto_backup_status', 'auto_backup_retry', 'auto_backup_validate', 'auto_backup_restore',
   'backup_select', 'backup_restore', 'indicator_catalog', 'recovery_inventory',
 ])

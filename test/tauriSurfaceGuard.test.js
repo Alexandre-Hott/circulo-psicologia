@@ -32,7 +32,8 @@ function check(snapshot) {
 
 test('current checkout matches reviewed handlers and narrowly scoped updater', async () => {
   const result = await checkTauriSurface(projectRoot)
-  assert.equal(result.handlers.length, 47)
+  assert.equal(result.handlers.length, 48)
+  assert.ok(result.handlers.includes('analytics_overview'))
   assert.ok(result.invoked.includes('vault_status'))
   assert.ok(result.handlers.includes('record_copy_export'))
   assert.ok(result.handlers.includes('case_context_create'))

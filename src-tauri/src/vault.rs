@@ -1,5 +1,6 @@
 //! Native local vault backend. This is a fresh reconstruction, not a byte-faithful recovery.
 mod agenda;
+mod analytics;
 mod backup;
 mod crypto;
 mod daily;
@@ -19,6 +20,7 @@ use std::{
     sync::{Mutex, MutexGuard},
 };
 pub use types::*;
+pub use analytics::AnalyticsOverview;
 pub use sessions::SessionAddendum;
 use zeroize::{Zeroize, Zeroizing};
 
@@ -377,6 +379,13 @@ impl Vault {
     pub fn session_timeline(&self, p: &str) -> Result<Vec<ClinicalSession>, String> {
         let c = self.open_conn()?;
         sessions::timeline(&c, p)
+    }
+    pub fn analytics_overview(&self, from: &str, to: &str, patient_id: Option<&str>) -> Result<AnalyticsOverview, String> {
+        let input = analytics::validate(from, to, patient_id)?;
+        let c = self.open_conn()?;
+        c.execute_batch("PRAGMA query_only=ON")
+            .map_err(|_| "Não foi possível consultar análises.".to_string())?;
+        analytics::overview(&c, &input)
     }
     pub fn session_addendum_create(&self, session_id: &str, patient_id: &str, content: String) -> Result<SessionAddendum, String> {
         self.mutate(|c| sessions::addendum_create(c, session_id, patient_id, content))
