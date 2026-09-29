@@ -1,0 +1,19 @@
+# Validação local do release 0.2.3 — 27/09/2026
+
+Artefato: `release/Círculo_0.2.3_x64-setup.exe` (NSIS x64, 4.186.794 bytes). SHA-256: `8990E6484F4A2E925B0C3C0160D2AC9543515C91671CDDF2E6495DE1B890EA22`. `ProductVersion` e `FileVersion` do instalador: 0.2.3. Authenticode: `NotSigned`. Manifesto de auditoria local: `%TEMP%\circulo-installer-audit-023-20260927.json`. O conteúdo interno completo do NSIS não foi auditado. O instalador 0.2.2 permanece preservado como versão anterior.
+
+## Mudança limitada
+
+A Agenda agora consulta a existência de sessão finalizada pela identidade estável da ocorrência (série e data original). Uma ocorrência finalizada recebe status `completed`, exibe “Realizada” e não oferece “Iniciar sessão sintética”. Uma ocorrência ainda agendada continua iniciável. O backend já impedia uma segunda sessão para a mesma ocorrência; este release alinha a interface com essa regra. Não foram adicionadas funcionalidades de recovery, migração de backups antigos ou serviços externos.
+
+## Testes executados
+
+- Rust release offline: **30/30 passaram**. Com a feature `native-smoke-test`: **30/30 passaram**. A compilação Rust de teste em perfil debug encontrou problema de preparação do OpenSSL antes da execução; a execução release concluiu. Não foi executado um smoke test do binário final do NSIS com a feature, que não integra o pacote distribuído.
+- `npm run lint`: passou. `npm test`: **142/142 passaram**. `npm run test:e2e`: **114/114 passaram**, incluindo o novo caso de ocorrência concluída e outra agendada. Os E2E usam comandos Tauri simulados e não substituem validação visual instalada.
+- `npm run build` e `npm run preflight:windows`: passaram. `npx tauri build`: passou fora de `%TEMP%`, com NSIS 0.2.3 gerado. Duas tentativas anteriores em `%TEMP%` falharam por desaparecimento de arquivos intermediários (`invoked.timestamp` do WebView2 e `bindgen.rs` do SQLite); não há evidência de falha dos testes de cofre nessas tentativas.
+- Instalador 0.2.3 executado no perfil Windows local sobre 0.2.2 com `/S`: **código 0**. `ProductVersion`, `FileVersion` e registro de desinstalação HKCU indicaram **0.2.3**. O app instalado abriu responsivo na tela bloqueada. Os hashes de `vault.key`, `circulo.db` e `auto-backup.db` sintéticos permaneceram idênticos antes e depois do upgrade. Isso confirma preservação byte a byte dos arquivos, não a abertura lógica de todos os registros nesta versão.
+- A entrada pela ferramenta de controle da janela falhou com `failed to activate captured window`; foi feita uma nova abertura visível e uma tentativa de recuperação, mas a falha se repetiu. **Não passaram nem falharam** nesta rodada os passos visuais de desbloqueio, leitura do paciente/sessão preservados, status “Realizada” no app instalado e reabertura depois de desbloquear: ficaram **não testados**. A porta local de depuração não foi habilitada; o ambiente rejeitou essa inicialização. O app foi deixado aberto normalmente, na tela bloqueada.
+
+## Limites e pendências
+
+O cofre, paciente e sessão usados são inteiramente fictícios. Na versão 0.2.2, criação/desbloqueio/bloqueio/reabertura, exportação/verificação CBK1 e Agenda → sessão → evolução haviam passado no aplicativo instalado; ver [validação 0.2.2](validacao-release-0.2.2.md). Esses resultados não provam o fluxo completo no 0.2.3. Antes de declarar o upgrade funcional de ponta a ponta, repetir no 0.2.3 o desbloqueio, conferir paciente e sessão, confirmar “Realizada”/ausência do botão e reabrir o app. O bloqueio automático de 15 minutos, a restauração pela interface, o ciclo de desinstalação e a revisão operacional/legal continuam pendentes. Limpeza genérica de recovery e compatibilidade/migração de backups CBK1 v1–v4 não foram investigadas ou implementadas nesta etapa. Não usar dados clínicos reais nem para atendimento.

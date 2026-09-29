@@ -1,0 +1,11 @@
+# Validação local 0.2.12 — 28/09/2026
+
+Instalador NSIS x64: `release/Círculo_0.2.12_x64-setup.exe` (4.248.605 bytes); SHA-256 `a2c48320cb28b9dc3446557dd28cc4e8ac86b556e32e5dc537b2cd99f71260b1`. Bundle original em `C:\Users\alexandre\Documents\Codex\build-circulo-023\release\bundle\nsis\Círculo_0.2.12_x64-setup.exe`; a cópia tem o mesmo hash. Versão PE 0.2.12, x64, Authenticode `NotSigned`.
+
+- Escopo: redesign do shell desktop, navegação entre Pacientes/Agenda/Sessões/Ajustes, calendário acessível no topo da Agenda em desktop e carga da lista quando o cofre já inicia desbloqueado. O identificador Tauri e o esquema de dados foram preservados. Versões npm, crate Rust e Tauri alinhadas em 0.2.12; dependências mantidas.
+- Verificações: `npm run lint`, `npm run build`, `npm test` (142/142), E2E desktop focado `test/e2e/desktop-vault-shell.spec.js` (22/22) e `cargo test --release --offline -- --skip single_instance` (57 aprovados, 2 filtrados). O teste de instância única foi filtrado porque havia um Círculo instalado aberto no perfil atual.
+- Build: `npm exec tauri build -- --bundles nsis`, com `CARGO_TARGET_DIR=C:\Users\alexandre\Documents\Codex\build-circulo-023` e `CARGO_NET_OFFLINE=true`, terminou com código 0. O linker emitiu avisos LNK4099 por PDB ausente do OpenSSL, sem falha do bundle.
+- Smoke nativo opt-in: `cargo build --release --offline --features native-smoke-test` e `build-circulo-023\release\circulo.exe --self-test` terminaram com código 0 após o bundle. O teste usa arquivos sintéticos temporários; o binário compilado depois do NSIS não altera o instalador já gerado.
+- Auditoria: `scripts/auditWindowsInstaller.js` confirmou SHA-256, tamanho, PE 0.2.12, x64 e `NotSigned`. Manifesto: `%TEMP%\circulo-0212-audit-20260928.json`. `scripts/verifyReleaseConsistency.js` confirmou alinhamento entre instalador, manifesto, versões npm/Tauri e estas duas notas.
+
+O instalador não foi executado ou instalado. O perfil local, aplicativo instalado, dados e backups não foram tocados. A auditoria não extraiu o NSIS nem examinou seu conteúdo interno. Não foram verificados instalação, migração, interface instalada, desbloqueio, restauração ou desinstalação desta versão. Sem assinatura e sem liberação para uso clínico real; usar apenas dados sintéticos. Não houve publicação no GitHub.

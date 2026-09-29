@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test'
 
+// The synthetic agenda fixtures use 28–29 September 2026 as upcoming dates.
+test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-09-27T12:00:00-03:00'))
+})
+
 const reachSessionSummary = async (page, summary, date) => {
   await page.getByRole('button',{name:/Luna Martins/}).click()
   await page.getByRole('button',{name:/Iniciar sessão/}).click()

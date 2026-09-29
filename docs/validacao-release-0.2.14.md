@@ -1,0 +1,14 @@
+# Validação local 0.2.14 — 28/09/2026
+
+Instalador NSIS x64: `release/Círculo_0.2.14_x64-setup.exe` (4.254.449 bytes); SHA-256 `3c688a3f7d846a53c9eaac6b2bb81d8af53a69208da935978d03466eb512b0c2`. Bundle original em `C:\Users\alexandre\Documents\Codex\build-circulo-024\release\bundle\nsis\Círculo_0.2.14_x64-setup.exe`, com hash idêntico. Versão PE 0.2.14, alvo x64, Authenticode `NotSigned`.
+
+- Escopo: Agenda desktop em mês, semana e dia, eventos simultâneos acessíveis, ações e formulários preservados; cadastro após calendário também na ordem do DOM. Identificador Tauri e esquema de dados preservados. Versões npm, crate Rust e Tauri alinhadas em 0.2.14.
+- Verificações: `npm run lint`, `npm run build`, `npm test` (142/142), E2E focado `test/e2e/desktop-vault-shell.spec.js` (32/32), `cargo test --release --offline -- --skip single_instance` (65 aprovados, 2 filtrados porque o aplicativo instalado estava aberto).
+- Bundle: `npm exec tauri build -- --bundles nsis`, com `CARGO_TARGET_DIR=C:\Users\alexandre\Documents\Codex\build-circulo-024` e `CARGO_NET_OFFLINE=true`, saída 0. Linker emitiu avisos LNK4099 por PDB ausente do OpenSSL, sem impedir o bundle.
+- Smoke opt-in: `cargo build --release --offline --features native-smoke-test` seguido de `circulo.exe --self-test`, processo aguardado com saída 0. Usa dados sintéticos temporários; a recompilação após o NSIS não modifica o instalador já gerado.
+- Auditoria: `scripts/auditWindowsInstaller.js` confirmou SHA-256, tamanho, PE 0.2.14, x64 e `NotSigned`. Manifesto em `%TEMP%\circulo-0214-audit-20260928.json`. A auditoria não extraiu o NSIS nem inspecionou seu conteúdo interno.
+- Após o empacotamento, `npm run test:e2e` completo passou: 134/134 testes em 3,9 minutos.
+
+Na preparação do pacote, o instalador não foi executado nem instalado, o perfil instalado não foi acessado e não houve push. Posteriormente, a instalação NSIS silenciosa (`/S`) terminou com código 0. O executável instalado apresentou `ProductVersion` e `FileVersion` 0.2.14. Antes da instalação, os três arquivos existentes do perfil (`circulo.db`, `daily-unlock.dpapi` e `vault.key`) foram copiados binariamente para `C:\Users\alexandre\Documents\Codex\circulo-profile-backup-before-0214-20260928`; os SHA-256 dos arquivos do perfil conferiram antes e depois da instalação. O aplicativo foi reaberto como PID 41172, e a árvore de acessibilidade mostrou a tela inicial desbloqueada.
+
+A captura visual nativa e a navegação pela Agenda instalada **não foram verificadas**: a captura por Computer Use expirou e a geometria necessária para clicar não estava disponível. Restauração e desinstalação da 0.2.14 também não foram verificadas. Nenhum dado real de paciente foi usado. O pacote permanece sem assinatura e sem liberação para uso clínico real; use somente dados fictícios.

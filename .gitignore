@@ -37,6 +37,10 @@ backups/
 release/
 installer/
 src-tauri/target/
+src-tauri/gen/
+src-tauri/icons/*
+!src-tauri/icons/icon.ico
+!src-tauri/icons/icon.png
 
 # Editor directories and files
 .vscode/*

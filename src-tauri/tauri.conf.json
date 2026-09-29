@@ -1,9 +1,15 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Círculo",
-  "version": "0.1.0",
+  "version": "0.2.17",
   "identifier": "br.circulo.psicologia",
   "build": { "beforeDevCommand": "npm run dev", "beforeBuildCommand": "npm run build", "devUrl": "http://localhost:5173", "frontendDist": "../dist" },
   "app": { "windows": [{ "title": "Círculo", "width": 1200, "height": 800, "minWidth": 900, "minHeight": 650 }] },
-  "bundle": { "active": true, "targets": ["nsis"] }
+  "bundle": { "active": true, "targets": ["nsis"], "createUpdaterArtifacts": true },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFCMzNBQUI3QTFERTU3NgpSV1IyNVIxNnF6cXpDbm92dkV3cG12TUV6bDFCSEFCcDVpTGJ6NlI2aE0wNVJSeGd2YjM3TE41YQo=",
+      "endpoints": ["https://github.com/Alexandre-Hott/circulo-psicologia/releases/latest/download/latest.json"]
+    }
+  }
 }
