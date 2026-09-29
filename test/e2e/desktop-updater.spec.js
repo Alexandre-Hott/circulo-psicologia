@@ -73,6 +73,7 @@ test('bloqueia instalação com cadastro, vínculo e Agenda abertos, sem descart
   await expect(page.getByLabel('Nome da pessoa ou instituição')).toHaveValue('Vínculo fictício')
   await page.getByRole('button', { name: 'Descartar edições e fechar formulários' }).click()
   await page.getByRole('button', { name: 'Abrir Agenda' }).click()
+  await page.getByRole('region', { name: 'Novo compromisso' }).getByRole('button', { name: 'Novo compromisso' }).click()
   await page.getByLabel('Horário inicial').fill('10:30')
   await page.getByRole('button', { name: 'Baixar e instalar' }).click()
   await expect(page.getByText('Feche os formulários antes de instalar')).toBeVisible()

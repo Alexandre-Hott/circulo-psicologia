@@ -48,3 +48,7 @@
 .vault-updater{border:1px solid #b9d1c7;border-left:4px solid #315e57;border-radius:8px;background:#f0f7f3;padding:12px 16px;margin:12px 0;overflow-wrap:anywhere}
 .vault-updater p{margin:6px 0}.vault-updater progress{display:block;width:min(100%,420px);height:12px}.vault-updater[role=alert]{border-left-color:#a12b2b;background:#fff4f1}
 .vault-card .agenda-day-actions button{margin:0;padding:7px 10px}
+.vault-agenda .agenda-drawer{clear:both;border:1px solid #dce6df;border-radius:12px;background:#fbfcfa;margin:12px 0;overflow:hidden}
+.vault-card .agenda-drawer-toggle{display:flex;justify-content:space-between;align-items:center;width:100%;margin:0;padding:14px 16px;background:transparent;color:#27443f;text-align:left;font-weight:700;border-radius:0}
+.vault-card .agenda-drawer-toggle:hover,.vault-card .agenda-drawer-toggle[aria-expanded=true]{background:#eaf3ed}
+.agenda-drawer>div{padding:0 16px 14px}.agenda-drawer>div>form{margin:0}.agenda-detail-list{grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr))}.agenda-detail-list li{display:grid;align-content:start;gap:4px}.agenda-detail-list li>span{font-weight:600}.agenda-detail-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.vault-card .agenda-detail-actions button{margin:0;padding:8px 11px}.agenda-detail-list li:focus{outline:3px solid #d28b38;outline-offset:2px}

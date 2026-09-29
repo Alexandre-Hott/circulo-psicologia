@@ -43,9 +43,14 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, ini
   const [history, setHistory] = useState([])
   const [form, setForm] = useState(() => emptyForm(patients, currentCivilDate(AGENDA_TIME_ZONE)))
   const [appointmentType, setAppointmentType] = useState('Avulsa')
+  const [createOpen, setCreateOpen] = useState(Boolean(initialPatientId || quickStart || startAvulsaSignal))
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [persistedOpen, setPersistedOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [focusedOccurrenceId, setFocusedOccurrenceId] = useState(null)
   useEffect(() => {
     if (!startAvulsaSignal) return
-    const frame = window.requestAnimationFrame(() => setAppointmentType('Avulsa'))
+    const frame = window.requestAnimationFrame(() => { setAppointmentType('Avulsa'); setCreateOpen(true) })
     return () => window.cancelAnimationFrame(frame)
   }, [startAvulsaSignal])
   const [selected, setSelected] = useState(null)
@@ -60,6 +65,7 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, ini
   const selectedFormRef = useRef(null)
   const createFormRef = useRef(null)
   const originButtonRef = useRef(null)
+  const detailOriginRef = useRef(null)
   const calendarRef = useRef(null)
   const requestIdRef = useRef(0)
   const currentRangeRef = useRef('')
@@ -77,6 +83,7 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, ini
       appliedInitialPatientEntryRef.current = entryKey
       setForm(current => ({ ...current, patientId: initialPatientId }))
       setAppointmentType('Avulsa')
+      setCreateOpen(true)
     })
     return () => window.cancelAnimationFrame(frame)
   }, [initialPatientId, startAvulsaSignal, patients, allPatients])
@@ -89,11 +96,25 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, ini
   const sortedOccurrences = [...occurrences].sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start) || a.id.localeCompare(b.id))
   const occurrencesFor = date => sortedOccurrences.filter(occurrence => occurrence.date === date)
   const movePeriod = delta => setDay(current => mode === 'Dia' ? addCivilDays(current, delta) : mode === 'Semana' ? addCivilDays(current, delta * 7) : moveMonth(current, delta))
-  const showOccurrenceActions = occurrence => {
-    const card = document.getElementById(`agenda-occurrence-${occurrence.id}`)
-    card?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    card?.focus({ preventScroll: true })
+  const showOccurrenceActions = (occurrence, origin) => {
+    detailOriginRef.current = origin || null
+    setFocusedOccurrenceId(occurrence.id)
+    setDetailsOpen(true)
   }
+  const closeDetails = () => {
+    if (selected) return
+    setDetailsOpen(false)
+    window.requestAnimationFrame(() => (detailOriginRef.current?.isConnected ? detailOriginRef.current : calendarRef.current)?.focus({ preventScroll: false }))
+  }
+  useEffect(() => {
+    if (!detailsOpen) return
+    const frame = window.requestAnimationFrame(() => {
+      const card = focusedOccurrenceId ? document.getElementById(`agenda-detail-${focusedOccurrenceId}`) : document.querySelector('#agenda-details-panel .agenda-detail-list li')
+      card?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      card?.focus({ preventScroll: true })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [detailsOpen, focusedOccurrenceId, mode, loadedRange])
   useEffect(() => {
     if (!selected) return
     const frame = window.requestAnimationFrame(() => {
@@ -164,6 +185,7 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, ini
 
   const selectOccurrence = (occurrence, originButton) => {
     originButtonRef.current = originButton
+    setDetailsOpen(true)
     setSelected(occurrence); setAction('remarcar')
     setChange({ date: occurrence.date, start: occurrence.start, end: occurrence.end, reason: '' })
     setError(''); setMessage('')
@@ -204,13 +226,15 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, ini
   }
   const seriesPatient = id => series.find(item => item.id === id)?.patientId
   const activePatients = allPatients.filter(patient => patient.archivedAt == null)
+  const focusedOccurrence = sortedOccurrences.find(item => item.id === focusedOccurrenceId)
+  const detailOccurrences = focusedOccurrence ? [focusedOccurrence] : sortedOccurrences
 
   return <section className="vault-agenda" aria-label="Agenda persistente de sessões">
     <h2>Agenda de sessões</h2>
     <p className="agenda-intro">Organização de horários. Fuso civil: {AGENDA_TIME_ZONE}. O início de sessão cria um rascunho no cofre; não abre chamada online.</p>
     {error && <p role="alert" className="vault-error">{error}</p>}
     {message && <p role="status" className="vault-ok">{message}</p>}
-    <button type="button" className="vault-secondary agenda-create-jump" onClick={() => { createFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); createFormRef.current?.focus({ preventScroll: true }) }}>Cadastrar compromisso</button>
+    <button type="button" className="vault-secondary agenda-create-jump" onClick={() => { setCreateOpen(true); window.requestAnimationFrame(() => { createFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); createFormRef.current?.focus({ preventScroll: true }) }) }}>Novo compromisso</button>
     <div className="vault-agenda-controls"><h3>Calendário</h3><div className="agenda-mode-switch" role="group" aria-label="Visualização da Agenda">{['Dia', 'Semana', 'Mês'].map(value => <button key={value} type="button" className={mode === value ? '' : 'vault-secondary'} aria-pressed={mode === value} onClick={() => setMode(value)}>{value}</button>)}</div><div className="agenda-navigation"><button type="button" className="vault-secondary" onClick={() => movePeriod(-1)}>Anterior</button><button type="button" className="vault-secondary" onClick={() => setDay(currentCivilDate(AGENDA_TIME_ZONE))}>Hoje</button><button type="button" className="vault-secondary" onClick={() => movePeriod(1)}>Próximo</button></div><label htmlFor="agenda-day">Data de referência</label><input id="agenda-day" type="date" value={day} onChange={event => { if (isCivilDate(event.target.value)) setDay(event.target.value) }} /><p aria-live="polite">{from} a {to}</p></div>
     <div ref={calendarRef} className="agenda-calendar" role="region" tabIndex={0} aria-label={`Calendário ${mode.toLowerCase()}`}>
       {!loaded ? <p role="status">Carregando Agenda...</p> : mode === 'Mês' ? <div className="agenda-month-grid">
@@ -219,7 +243,7 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, ini
           const inside = date >= from && date <= to
           return <div className={`agenda-month-day${inside ? '' : ' outside'}${date === day ? ' selected' : ''}`} key={date}>
             <button type="button" className="agenda-date-button" onClick={() => { setDay(date); setMode('Dia') }} aria-label={`Ver dia ${date}`} aria-current={date === day ? 'date' : undefined}><time dateTime={date}>{formatCivilShortDate(date)}</time></button>
-            {inside && occurrencesFor(date).map(occurrence => <button type="button" className={`agenda-event-chip ${occurrence.status === 'completed' ? 'completed' : ''}`} key={occurrence.id} onClick={() => showOccurrenceActions(occurrence)} aria-label={`Ver ações de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`}><span>{occurrence.start} {patientName(occurrence.patientId)}</span>{(occurrence.wasRescheduled || occurrence.status === 'completed') && <small>{occurrence.wasRescheduled ? 'Remarcada' : statusLabel(occurrence.status)}</small>}</button>)}
+            {inside && occurrencesFor(date).map(occurrence => <button type="button" className={`agenda-event-chip ${occurrence.status === 'completed' ? 'completed' : ''}`} key={occurrence.id} onClick={event => showOccurrenceActions(occurrence, event.currentTarget)} aria-label={`Ver ações de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`}><span>{occurrence.start} {patientName(occurrence.patientId)}</span>{(occurrence.wasRescheduled || occurrence.status === 'completed') && <small>{occurrence.wasRescheduled ? 'Remarcada' : statusLabel(occurrence.status)}</small>}</button>)}
           </div>
         })}
       </div> : mode === 'Semana' ? <div className="agenda-time-grid week-view agenda-week-compact">
@@ -228,7 +252,7 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, ini
           return <div className="agenda-time-day" key={date}>
             <button type="button" className="agenda-time-heading" onClick={() => { setDay(date); setMode('Dia') }} aria-current={date === day ? 'date' : undefined}>{weekDays[civilWeekday(date)]} <time dateTime={date}>{formatCivilShortDate(date)}</time></button>
             <div className="agenda-week-appointments">
-              {appointments.length ? appointments.map(occurrence => <button type="button" className={`agenda-time-event agenda-week-event ${occurrence.status === 'completed' ? 'completed' : ''}`} key={occurrence.id} onClick={() => showOccurrenceActions(occurrence)} aria-label={`Ver ações de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`}><strong>{occurrence.start}–{occurrence.end}</strong><span>{patientName(occurrence.patientId)}</span>{(occurrence.wasRescheduled || occurrence.status === 'completed') && <small>{occurrence.wasRescheduled ? 'Remarcada' : statusLabel(occurrence.status)}</small>}</button>) : <p className="agenda-week-empty">Sem compromissos</p>}
+              {appointments.length ? appointments.map(occurrence => <button type="button" className={`agenda-time-event agenda-week-event ${occurrence.status === 'completed' ? 'completed' : ''}`} key={occurrence.id} onClick={event => showOccurrenceActions(occurrence, event.currentTarget)} aria-label={`Ver ações de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`}><strong>{occurrence.start}–{occurrence.end}</strong><span>{patientName(occurrence.patientId)}</span>{(occurrence.wasRescheduled || occurrence.status === 'completed') && <small>{occurrence.wasRescheduled ? 'Remarcada' : statusLabel(occurrence.status)}</small>}</button>) : <p className="agenda-week-empty">Sem compromissos</p>}
             </div>
           </div>
         })}
@@ -237,15 +261,14 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, ini
           <button type="button" className="agenda-time-heading" onClick={() => { setDay(date); setMode('Dia') }} aria-current={date === day ? 'date' : undefined}>{weekDays[civilWeekday(date)]} <time dateTime={date}>{formatCivilShortDate(date)}</time></button>
           {occurrencesFor(date).length > 0 && <ol className="agenda-day-list">{occurrencesFor(date).map(occurrence => <li key={occurrence.id} id={`agenda-occurrence-${occurrence.id}`} tabIndex={-1}>
             <div className="agenda-day-summary"><strong>{occurrence.start}–{occurrence.end}</strong><span>{patientName(occurrence.patientId)}</span><small>{statusLabel(occurrence.status)}{occurrence.wasRescheduled ? ' · Remarcada' : ''} · {occurrence.modality}</small></div>
-            {occurrence.modality === 'Online' && occurrence.meetingLink && <small>Referência online (texto): {occurrence.meetingLink}</small>}
-            <div className="agenda-day-actions">{occurrence.status !== 'completed' && <button disabled={busy} className="vault-secondary" type="button" aria-label={`Alterar ocorrência de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={event => selectOccurrence(occurrence, event.currentTarget)}>Alterar esta ocorrência</button>}{occurrence.status !== 'completed' && allPatients.some(patient => patient.id === occurrence.patientId && patient.archivedAt == null) && <button disabled={busy} type="button" aria-label={`Iniciar sessão de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={() => onStartSession(occurrence)}>Iniciar sessão sintética de {patientName(occurrence.patientId)} em {occurrence.date}</button>}</div>
+            <div className="agenda-day-actions"><button type="button" className="vault-secondary" aria-label={`Ver ações de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={event => showOccurrenceActions(occurrence, event.currentTarget)}>Detalhes</button>{occurrence.status !== 'completed' && <button disabled={busy} className="vault-secondary" type="button" aria-label={`Alterar ocorrência de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={event => selectOccurrence(occurrence, event.currentTarget)}>Alterar</button>}{occurrence.status !== 'completed' && allPatients.some(patient => patient.id === occurrence.patientId && patient.archivedAt == null) && <button disabled={busy} type="button" aria-label={`Iniciar sessão de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={() => onStartSession(occurrence)}>Iniciar sessão</button>}</div>
           </li>)}</ol>}
         </div>)}
       </div>}
       {loaded && !sortedOccurrences.length && <p className="agenda-empty">Nenhum compromisso neste período.</p>}
     </div>
-    <form ref={createFormRef} tabIndex={-1} onSubmit={create} aria-label="Novo compromisso">
-      <h3>Novo compromisso</h3>
+    <section className="agenda-drawer" aria-label="Novo compromisso"><button type="button" className="agenda-drawer-toggle" aria-expanded={createOpen} aria-controls="agenda-create-panel" onClick={() => setCreateOpen(value => !value)}>Novo compromisso <span aria-hidden="true">{createOpen ? '▾' : '▸'}</span></button>{createOpen && <div id="agenda-create-panel"><form ref={createFormRef} tabIndex={-1} onSubmit={create} aria-label="Novo compromisso">
+      <h3>Novo compromisso</h3><p>Recolher ou trocar de espaço mantém este rascunho enquanto o aplicativo estiver aberto. Salve antes de bloquear ou fechar.</p>
       <label htmlFor="agenda-type">Tipo</label><select id="agenda-type" disabled={quickStart} value={appointmentType} onChange={event => setAppointmentType(event.target.value)}><option>Avulsa</option><option>Recorrente</option></select>
       <label htmlFor="agenda-patient">Paciente</label><select id="agenda-patient" required value={form.patientId} onChange={event => setForm({ ...form, patientId: event.target.value })}><option value="">Selecione</option>{activePatients.map(patient => <option key={patient.id} value={patient.id}>{patient.name}</option>)}</select>
       {appointmentType === 'Recorrente' && <><label htmlFor="agenda-weekday">Dia da semana</label><select id="agenda-weekday" value={form.weekday} onChange={event => setForm({ ...form, weekday: Number(event.target.value) })}>{['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'].map((label, index) => <option value={index} key={label}>{label}</option>)}</select><label htmlFor="agenda-frequency">Frequência</label><select id="agenda-frequency" value={form.frequency} onChange={event => setForm({ ...form, frequency: event.target.value })}><option>Semanal</option><option>Quinzenal</option></select></>}
@@ -256,12 +279,12 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, ini
       <label htmlFor="agenda-modality">Modalidade</label><select id="agenda-modality" value={form.modality} onChange={event => setForm({ ...form, modality: event.target.value, meetingLink: event.target.value === 'Presencial' ? '' : form.meetingLink })}><option>Presencial</option><option>Online</option></select>
       {form.modality === 'Online' && <><label htmlFor="agenda-link">Referência online opcional (somente texto)</label><input id="agenda-link" type="url" value={form.meetingLink} onChange={event => setForm({ ...form, meetingLink: event.target.value })} /></>}
       <button type="submit" disabled={busy || !activePatients.length}>{quickStart ? 'Criar e iniciar sessão' : appointmentType === 'Avulsa' ? 'Criar compromisso avulso' : 'Criar série'}</button>
-    </form>
-    {mode !== 'Dia' && loaded && sortedOccurrences.length > 0 && <section className="agenda-occurrence-details" aria-label="Detalhes e ações dos compromissos"><h3>Detalhes e ações</h3><ul className="vault-patients">{sortedOccurrences.map(occurrence => <li key={occurrence.id} id={`agenda-occurrence-${occurrence.id}`} tabIndex={-1}><strong>{occurrence.date} · {occurrence.start}–{occurrence.end} · {patientName(occurrence.patientId)}</strong><small>original {occurrence.originalDate} · {statusLabel(occurrence.status)} · {occurrence.frequency} · {occurrence.modality}{occurrence.wasRescheduled ? ' · Remarcada' : ''}</small>{occurrence.modality === 'Online' && occurrence.meetingLink && <small>Referência online (texto): {occurrence.meetingLink}</small>}{occurrence.status !== 'completed' && <button disabled={busy} className="vault-secondary" type="button" aria-label={`Alterar ocorrência de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={event => selectOccurrence(occurrence, event.currentTarget)}>Alterar esta ocorrência</button>}{occurrence.status !== 'completed' && allPatients.some(patient => patient.id === occurrence.patientId && patient.archivedAt == null) && <button disabled={busy} type="button" aria-label={`Iniciar sessão de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={() => onStartSession(occurrence)}>Iniciar sessão sintética de {patientName(occurrence.patientId)} em {occurrence.date}</button>}</li>)}</ul></section>}
+    </form></div>}</section>
+    {(selected || (loaded && sortedOccurrences.length > 0)) && <section className="agenda-drawer agenda-occurrence-details" aria-label="Detalhes e ações dos compromissos"><button type="button" className="agenda-drawer-toggle" aria-expanded={detailsOpen} aria-controls="agenda-details-panel" disabled={Boolean(selected)} onClick={event => { if (detailsOpen) closeDetails(); else { detailOriginRef.current = event.currentTarget; setFocusedOccurrenceId(null); setDetailsOpen(true) } }}>Detalhes e ações <span aria-hidden="true">{detailsOpen ? '▾' : '▸'}</span></button>{detailsOpen && <div id="agenda-details-panel"><ul className="vault-patients agenda-detail-list">{detailOccurrences.map(occurrence => <li key={occurrence.id} id={`agenda-detail-${occurrence.id}`} tabIndex={-1}><strong>{patientName(occurrence.patientId)}</strong><span>{occurrence.date} · {occurrence.start}–{occurrence.end}</span><small>{statusLabel(occurrence.status)} · {occurrence.modality}{occurrence.wasRescheduled ? ' · Remarcada' : ''}</small>{occurrence.originalDate !== occurrence.date && <small>Data original: {occurrence.originalDate}</small>}{occurrence.modality === 'Online' && occurrence.meetingLink && <small>Referência online (texto): {occurrence.meetingLink}</small>}<div className="agenda-detail-actions">{occurrence.status !== 'completed' && <button disabled={busy} className="vault-secondary" type="button" aria-label={`Alterar ocorrência de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={event => selectOccurrence(occurrence, event.currentTarget)}>Alterar</button>}{occurrence.status !== 'completed' && allPatients.some(patient => patient.id === occurrence.patientId && patient.archivedAt == null) && <button disabled={busy} type="button" aria-label={`Iniciar sessão de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={() => onStartSession(occurrence)}>Iniciar sessão</button>}</div></li>)}</ul><button type="button" className="vault-secondary" disabled={Boolean(selected)} onClick={closeDetails}>Fechar detalhes</button></div>}</section>}
     {selected && <form ref={selectedFormRef} tabIndex={-1} onSubmit={applyChange} aria-label="Alterar ocorrência individual"><h3>Ocorrência selecionada</h3><p>{patientName(selected.patientId)} · série {selected.seriesId} · original {selected.originalDate} · efetiva {selected.date} às {selected.start}–{selected.end}</p><label htmlFor="agenda-action">Ação explícita</label><select id="agenda-action" value={action} onChange={event => setAction(event.target.value)}><option value="remarcar">Remarcar somente esta ocorrência</option><option value="cancelar">Cancelar esta ocorrência</option></select>{action === 'remarcar' && <><label htmlFor="agenda-new-date">Nova data efetiva</label><input id="agenda-new-date" type="date" required value={change.date} onChange={event => setChange({ ...change, date: event.target.value })} /><label htmlFor="agenda-new-start">Novo início</label><input id="agenda-new-start" type="time" required value={change.start} onChange={event => setChange({ ...change, start: event.target.value })} /><label htmlFor="agenda-new-end">Novo fim</label><input id="agenda-new-end" type="time" required value={change.end} onChange={event => setChange({ ...change, end: event.target.value })} /></>}<label htmlFor="agenda-reason">Motivo administrativo {action === 'cancelar' ? '(obrigatório)' : '(opcional)'}</label><textarea id="agenda-reason" maxLength={240} required={action === 'cancelar'} value={change.reason} onChange={event => setChange({ ...change, reason: event.target.value })} /><p>Não inclua conteúdo clínico no motivo. O histórico administrativo preserva ações anteriores.</p><button disabled={busy} type="submit">Confirmar {action === 'cancelar' ? 'cancelamento' : 'remarcação individual'}</button><button className="vault-secondary" type="button" onClick={closeSelected}>Fechar</button></form>}
-    <section className="agenda-admin-section" aria-label="Compromissos persistidos"><h3>Compromissos persistidos</h3>{series.length ? <ul className="vault-patients">{series.map(item => <li key={item.id}>{patientName(item.patientId)} · {item.frequency} · {item.start}–{item.end} · {item.startDate}{item.frequency !== 'Avulsa' && (item.endDate ? item.endDate < item.startDate ? ` · encerrada antes do início (${item.endDate})` : ` a ${item.endDate}` : ' sem término')}<small>{item.modality}</small>{item.frequency !== 'Avulsa' && (!item.endDate || item.endDate >= currentCivilDate(AGENDA_TIME_ZONE)) && <button type="button" disabled={busy} className="vault-secondary" aria-label={`Encerrar série de ${patientName(item.patientId)} · série ${item.id}`} onClick={() => { setEnding(item); setEffectiveDate(currentCivilDate(AGENDA_TIME_ZONE)); setError(''); setMessage('') }}>{item.endDate ? 'Antecipar término' : 'Encerrar série'}</button>}</li>)}</ul> : <p>Nenhum compromisso cadastrado.</p>}</section>
+    <section className="agenda-drawer agenda-admin-section" aria-label="Compromissos persistidos"><button type="button" className="agenda-drawer-toggle" aria-expanded={persistedOpen} aria-controls="agenda-persisted-panel" disabled={Boolean(ending)} onClick={() => setPersistedOpen(value => !value)}>Compromissos persistidos <span aria-hidden="true">{persistedOpen ? '▾' : '▸'}</span></button>{persistedOpen && <div id="agenda-persisted-panel">{series.length ? <ul className="vault-patients">{series.map(item => <li key={item.id}>{patientName(item.patientId)} · {item.frequency} · {item.start}–{item.end} · {item.startDate}{item.frequency !== 'Avulsa' && (item.endDate ? item.endDate < item.startDate ? ` · encerrada antes do início (${item.endDate})` : ` a ${item.endDate}` : ' sem término')}<small>{item.modality}</small>{item.frequency !== 'Avulsa' && (!item.endDate || item.endDate >= currentCivilDate(AGENDA_TIME_ZONE)) && <button type="button" disabled={busy} className="vault-secondary" aria-label={`Encerrar série de ${patientName(item.patientId)} · série ${item.id}`} onClick={() => { setEnding(item); setEffectiveDate(currentCivilDate(AGENDA_TIME_ZONE)); setError(''); setMessage('') }}>{item.endDate ? 'Antecipar término' : 'Encerrar série'}</button>}</li>)}</ul> : <p>Nenhum compromisso cadastrado.</p>}</div>}</section>
     {ending && <form onSubmit={endSeries} aria-label="Encerrar série recorrente"><h3>Encerrar série de {patientName(ending.patientId)} · {ending.id}</h3><p>Escolha a primeira data original que deixará de gerar ocorrências, inclusive antes do início da série. Sessões, rascunhos e alterações individuais nessa data ou depois impedem o encerramento. Uma ocorrência anterior remarcada para depois do corte também impede a ação. Histórico permanece.</p><label htmlFor="agenda-effective-date">Primeira data excluída</label><input id="agenda-effective-date" type="date" required min={currentCivilDate(AGENDA_TIME_ZONE)} max={ending.endDate || undefined} value={effectiveDate} onChange={event => setEffectiveDate(event.target.value)} /><button type="submit" disabled={busy}>Confirmar encerramento</button><button type="button" className="vault-secondary" onClick={() => setEnding(null)}>Voltar</button></form>}
-    <section className="agenda-admin-section" aria-label="Histórico administrativo"><h3>Histórico administrativo</h3>{history.length ? <ul className="vault-patients">{history.map(item => <li key={item.id}>{patientName(seriesPatient(item.seriesId))} · {item.action} · original {item.originalDate}{item.effectiveDate ? ` → ${item.effectiveDate} ${item.start}–${item.end}` : ''}{item.reason && <small>Motivo administrativo: {item.reason}</small>}</li>)}</ul> : <p>Nenhuma ação registrada.</p>}</section>
+    <section className="agenda-drawer agenda-admin-section" aria-label="Histórico administrativo"><button type="button" className="agenda-drawer-toggle" aria-expanded={historyOpen} aria-controls="agenda-history-panel" onClick={() => setHistoryOpen(value => !value)}>Histórico administrativo <span aria-hidden="true">{historyOpen ? '▾' : '▸'}</span></button>{historyOpen && <div id="agenda-history-panel">{history.length ? <ul className="vault-patients">{history.map(item => <li key={item.id}>{patientName(seriesPatient(item.seriesId))} · {item.action} · original {item.originalDate}{item.effectiveDate ? ` → ${item.effectiveDate} ${item.start}–${item.end}` : ''}{item.reason && <small>Motivo administrativo: {item.reason}</small>}</li>)}</ul> : <p>Nenhuma ação registrada.</p>}</div>}</section>
     <p className="vault-warning">Cancelamentos permanecem no histórico e não podem ser desfeitos por aqui.</p>
   </section>
 }

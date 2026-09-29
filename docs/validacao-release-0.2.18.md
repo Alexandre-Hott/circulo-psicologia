@@ -1,0 +1,12 @@
+# Validação local 0.2.18 — 29/09/2026
+
+Instalador NSIS x64: `release/Círculo_0.2.18_x64-setup.exe` (5.205.759 bytes), SHA-256 `ac8b5dae4a522ec7e589c27f697e672b9c5f2732ca2aecb3f146cb0d2d942372`. Assinatura do updater: `release/Círculo_0.2.18_x64-setup.exe.sig` (440 bytes), SHA-256 `9eb75cc4ffe2ba9dd7bd721dc3310f3dea728a9f96adc240d8169fb490f2cbf4`. Os arquivos copiados do bundle em `C:\Users\alexandre\Documents\Codex\build-circulo-024\release\bundle\nsis\` coincidiram por SHA-256. Versões npm, npm lock, Cargo, Cargo.lock e Tauri: 0.2.18.
+
+- Mudança: painéis recolhíveis para criar e consultar compromissos, ações e histórico na Agenda; navegação por ID e restauração de foco em desktop e largura móvel.
+- Validações antes do build: `git diff --check` sem erros; lint com aviso preexistente de pureza em `src/App.jsx`; testes JS 153/153; E2E focado da Agenda e do cofre 39/39 em 1100 px e 390 px.
+- E2E completo: primeira execução 150/151, com o teste do updater ainda tentando preencher o formulário recolhido pela nova Agenda. O preparo desse teste foi corrigido para abrir explicitamente o painel; E2E focado do updater 8/8 e repetição completa 151/151. A alteração após o build assinado foi somente no teste, sem mudança no produto.
+- Testes Rust em release/offline: 67 aprovados, 0 falhas, 1 filtrado (`single_instance::tests::second_process_is_rejected_then_reopen_succeeds`, pois o aplicativo instalado segue aberto). O teste não foi executado contra o perfil instalado.
+- Build: `npm exec tauri build -- --bundles nsis` com target curto, Cargo offline, Strawberry Perl no PATH e `TAURI_SIGNING_PRIVATE_KEY` apontando à chave externa. Saída 0. O linker emitiu avisos LNK4099 por PDB ausente do OpenSSL, sem falha de build. Nenhum conteúdo da chave privada foi lido ou copiado para o repo.
+- Auditoria: ProductVersion e FileVersion 0.2.18, alvo x64, Authenticode `NotSigned`, SHA-256 acima. Manifesto em `%TEMP%\circulo-0218-audit-20260929-01.json`. A assinatura do updater não é Authenticode.
+- Manifesto do updater: `release/staging-0.2.18-20260929-01/latest.json`, versão 0.2.18, URL ASCII do asset no tag `v0.2.18`, assinatura textual igual ao `.sig` local. O script de manifesto verifica forma e presença, não a assinatura criptográfica de forma independente.
+- O instalador não foi executado nesta validação; o perfil instalado e dados clínicos não foram acessados. A atualização instalada e preservação de dados pelo updater exigem teste em perfil descartável.
