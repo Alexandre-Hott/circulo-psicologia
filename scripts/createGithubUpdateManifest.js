@@ -34,7 +34,9 @@ export async function createGithubUpdateManifest({ version, installerPath, signa
   if (!signatureInfo.isFile() || signatureInfo.size === 0) throw new Error('Assinatura ausente, vazia ou não regular.')
   const signatureText = signature.trim()
   if (!signatureText || /\s/.test(signatureText) || !/^[A-Za-z0-9+/]+={0,2}$/.test(signatureText)) throw new Error('Assinatura deve conter texto base64 em uma linha.')
-  const url = `https://github.com/${OWNER}/${REPO}/releases/download/v${version}/${encodeURIComponent(basename)}`
+  // GitHub release upload normalizes the accented local NSIS name to this ASCII asset name.
+  const githubAssetName = `Circulo_${version}_x64-setup.exe`
+  const url = `https://github.com/${OWNER}/${REPO}/releases/download/v${version}/${githubAssetName}`
   const manifest = {
     version,
     notes: notes.trim(),

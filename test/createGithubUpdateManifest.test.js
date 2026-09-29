@@ -25,10 +25,17 @@ test('creates immutable-tag Windows update manifest from exact local artifacts',
   assert.equal(result.version, '0.2.17')
   assert.equal(result.notes, 'Teste sintético')
   assert.deepEqual(result.platforms['windows-x86_64'], {
-    url: 'https://github.com/Alexandre-Hott/circulo-psicologia/releases/download/v0.2.17/C%C3%ADrculo_0.2.17_x64-setup.exe',
+    url: 'https://github.com/Alexandre-Hott/circulo-psicologia/releases/download/v0.2.17/Circulo_0.2.17_x64-setup.exe',
     signature: 'c3ludGhldGljLXNpZ25hdHVyZQ==',
   })
   await assert.rejects(createGithubUpdateManifest(options), /EEXIST/)
+}))
+
+test('accented local installer maps to the normalized GitHub asset without changing signature bytes', async () => fixture(async options => {
+  const manifest = await createGithubUpdateManifest(options)
+  assert.equal(path.basename(options.installerPath), 'Círculo_0.2.17_x64-setup.exe')
+  assert.equal(new URL(manifest.platforms['windows-x86_64'].url).pathname.split('/').at(-1), 'Circulo_0.2.17_x64-setup.exe')
+  assert.equal(manifest.platforms['windows-x86_64'].signature, (await readFile(options.signaturePath, 'utf8')).trim())
 }))
 
 test('rejects mismatched version, empty files and malformed signature', async () => fixture(async options => {
