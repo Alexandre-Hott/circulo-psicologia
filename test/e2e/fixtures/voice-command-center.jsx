@@ -15,8 +15,21 @@ createRoot(document.getElementById('root')).render(<>
     indicators={indicators}
     activeSessionDraft={{ id: 'synthetic-draft-1', patientId: 'synthetic-ana', patientName: 'Ana Clara', originalDate: '2026-09-30' }}
     referenceDate="2026-09-30"
-    onDraft={intent => { window.__lastIntent = intent; document.getElementById('intent-result').textContent = JSON.stringify(intent) }}
-    onTranscribe={async () => 'Adicionar uma sessão semanal para Ana Clara toda quinta às 15:00'}
+    onDraft={intent => { window.__lastIntent = intent; document.getElementById('intent-result').textContent = intent ? JSON.stringify(intent) : '' }}
+    onTranscribe={async patientNames => {
+      window.__transcribePatientNames = [...patientNames]
+      window.__transcribePatientNamesReference = patientNames
+      if (new URLSearchParams(window.location.search).get('voiceFail') === 'permission') {
+        throw new Error('O acesso ao microfone foi bloqueado. Permita o microfone para o Círculo ou digite o comando.')
+      }
+      if (new URLSearchParams(window.location.search).get('voiceTranscript') === 'patient-pause') {
+        return 'Cadastrar paciente. Bia Fictância com 9 anos.'
+      }
+      if (new URLSearchParams(window.location.search).get('voiceTranscript') === 'deferred') {
+        return await new Promise(resolve => { window.__resolveVoiceTranscript = resolve })
+      }
+      return 'Ajendar seçao semanal para Ana Clara toda quinta às 15:00'
+    }}
   />
   <output id="intent-result" aria-label="Intent emitted"></output>
 </>)

@@ -13,11 +13,45 @@ test('typed command emits only a preview intent; it does not save or run a comma
   await expect(page.getByText('Nada foi salvo nem alterado.')).toBeVisible()
 })
 
-test('microphone button calls the supplied transcription prop and previews its text intent', async ({ page }) => {
-  await page.getByRole('button', { name: 'Ditar comando' }).click()
+test('microphone only fills editable transcript; interpretation requires explicit click', async ({ page }) => {
+  await page.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await expect.poll(() => page.evaluate(() => window.__transcribePatientNames)).toEqual(['Ana Clara', 'Caio Fictício'])
+  await expect.poll(() => page.evaluate(() => window.__transcribePatientNamesReference)).toEqual(['', ''])
+  const command = page.getByLabel('Seu comando')
+  await expect(command).toHaveValue('Ajendar seçao semanal para Ana Clara toda quinta às 15:00')
+  await expect(page.locator('.voice-command-preview')).toContainText('Nada foi interpretado ou salvo')
+  await expect(page.getByLabel('Intent emitted')).toBeEmpty()
+  await page.getByRole('button', { name: 'Preparar rascunho' }).click()
+  await expect(page.locator('.voice-command-error')).toContainText('Ainda não reconheço esse comando')
+  await expect(page.getByLabel('Intent emitted')).toBeEmpty()
+  await command.fill('Adicionar uma sessão semanal para Ana Clara toda quinta às 15:00')
+  await page.getByRole('button', { name: 'Preparar rascunho' }).click()
   await expect(page.locator('.voice-command-preview')).toContainText('Ana Clara')
   await expect(page.getByLabel('Intent emitted')).toContainText('appointment.recurring.create')
   await expect(page.getByLabel('Intent emitted')).toContainText('15:00')
+})
+
+test('microphone permission error is explained and typed fallback remains usable', async ({ page }) => {
+  await page.goto('/test/e2e/fixtures/voice-command-center.html?voiceFail=permission')
+  await page.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await expect(page.locator('.voice-command-error')).toContainText('O acesso ao microfone foi bloqueado')
+  await expect.poll(() => page.evaluate(() => window.__transcribePatientNamesReference)).toEqual(['', ''])
+  const command = page.getByLabel('Seu comando')
+  await expect(command).toBeEditable()
+  await command.fill('Cadastrar paciente Bia de Teste com 8 anos')
+  await page.getByRole('button', { name: 'Preparar rascunho' }).click()
+  await expect(page.locator('.voice-command-preview')).toContainText('Bia de Teste')
+})
+
+test('transcription with a pause after patient prepares an editable patient draft', async ({ page }) => {
+  await page.goto('/test/e2e/fixtures/voice-command-center.html?voiceTranscript=patient-pause')
+  await page.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  const command = page.getByLabel('Seu comando')
+  await expect(command).toHaveValue('Cadastrar paciente. Bia Fictância com 9 anos.')
+  await page.getByRole('button', { name: 'Preparar rascunho' }).click()
+  await expect(page.getByLabel('Intent emitted')).toContainText('patient.create')
+  await expect(page.getByLabel('Intent emitted')).toContainText('Bia Fictância')
+  await expect(page.getByText('Nada foi salvo nem alterado.')).toBeVisible()
 })
 
 test('session behavior is targeted to the active patient and session draft', async ({ page }) => {
@@ -28,9 +62,42 @@ test('session behavior is targeted to the active patient and session draft', asy
   await expect(page.locator('.voice-command-preview')).toContainText('não define o paciente')
 })
 
+test('recovers observed speech variants for recording a behavior without saving it', async ({ page }) => {
+  await page.getByLabel('Seu comando').fill('Registrar comportamento, pede ajuda para Ana Clara na sesalibra-o')
+  await page.getByRole('button', { name: 'Preparar rascunho' }).click()
+  await expect(page.locator('.voice-command-preview')).toContainText('Pede ajuda')
+  await expect(page.locator('.voice-command-preview')).toContainText('apenas nesta sessão')
+  await expect(page.getByLabel('Intent emitted')).toContainText('session.draft.update')
+})
+
 test('unsupported command is refused and emits no intent', async ({ page }) => {
   await page.getByLabel('Seu comando').fill('Faça qualquer coisa que achar melhor')
   await page.getByRole('button', { name: 'Preparar rascunho' }).click()
   await expect(page.locator('.voice-command-error')).toContainText('Ainda não reconheço esse comando')
+  await expect(page.getByLabel('Intent emitted')).toBeEmpty()
+})
+
+test('changing a prepared command discards its previous draft', async ({ page }) => {
+  const command = page.getByLabel('Seu comando')
+  await command.fill('Cadastrar paciente Bia de Teste com 8 anos')
+  await page.getByRole('button', { name: 'Preparar rascunho' }).click()
+  await expect(page.getByLabel('Intent emitted')).toContainText('patient.create')
+  await command.fill('Faça qualquer coisa que achar melhor')
+  await expect(page.getByLabel('Intent emitted')).toBeEmpty()
+  await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Preparar rascunho' }).click()
+  await expect(page.locator('.voice-command-error')).toContainText('Ainda não reconheço esse comando')
+  await expect(page.getByLabel('Intent emitted')).toBeEmpty()
+})
+
+test('a late transcription cannot overwrite text typed during capture', async ({ page }) => {
+  await page.goto('/test/e2e/fixtures/voice-command-center.html?voiceTranscript=deferred')
+  await page.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await expect.poll(() => page.evaluate(() => typeof window.__resolveVoiceTranscript)).toBe('function')
+  const command = page.getByLabel('Seu comando')
+  await command.fill('Cadastrar paciente Bia de Teste com 8 anos')
+  await page.evaluate(() => window.__resolveVoiceTranscript('Marcar sessão semanal para Ana Clara toda quinta às 15:00'))
+  await expect(page.getByRole('button', { name: 'Ouvir e transcrever' })).toBeEnabled()
+  await expect(command).toHaveValue('Cadastrar paciente Bia de Teste com 8 anos')
   await expect(page.getByLabel('Intent emitted')).toBeEmpty()
 })

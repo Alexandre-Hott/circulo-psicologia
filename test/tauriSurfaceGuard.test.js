@@ -32,7 +32,7 @@ function check(snapshot) {
 
 test('current checkout matches reviewed handlers and narrowly scoped updater', async () => {
   const result = await checkTauriSurface(projectRoot)
-  assert.equal(result.handlers.length, 48)
+  assert.equal(result.handlers.length, 49)
   assert.ok(result.handlers.includes('analytics_overview'))
   assert.ok(result.invoked.includes('vault_status'))
   assert.ok(result.handlers.includes('record_copy_export'))
@@ -42,6 +42,7 @@ test('current checkout matches reviewed handlers and narrowly scoped updater', a
   assert.ok(result.handlers.includes('professional_save'))
   assert.ok(result.handlers.includes('session_addendum_create'))
   assert.ok(result.handlers.includes('session_addendum_list'))
+  assert.ok(result.handlers.includes('voice_transcribe'))
 })
 
 test('updater approval requires only check and combined download/install permissions', () => {

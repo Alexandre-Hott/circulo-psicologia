@@ -38,6 +38,9 @@ release/
 installer/
 src-tauri/target/
 src-tauri/gen/
+src-tauri/resources/voice/*
+!src-tauri/resources/voice/README.md
+!src-tauri/resources/voice/THIRD-PARTY-NOTICES.txt
 src-tauri/icons/*
 !src-tauri/icons/icon.ico
 !src-tauri/icons/icon.png

@@ -2,8 +2,24 @@ const normalize = value => String(value ?? '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
   .toLocaleLowerCase('pt-BR')
-  .replace(/[’']/g, '')
+  .replace(/[\u2019\u0027]/g, '')
+  // Whisper can split "sessão" into "se são" or confuse it with "seção".
+  .replace(/\bse sao\b/g, 'sessao')
+  .replace(/\bsecao\b/g, 'sessao')
+  // Observed Whisper base-model variants for a slow synthetic weekly-agenda phrase.
+  .replace(/\b(?:cesa|sesa|sesao)\s*,?\s+libra\s+ossemanal\b/g, 'sessao semanal')
+  // Additional exact SAPI/Whisper variants observed through the app's Rust audio path.
+  .replace(/\bsesalibra\s+ossemanal\b/g, 'sessao semanal')
+  .replace(/\bsesa\s+libra\s*-?\s*o\b/g, 'sessao')
+  // Observed SAPI/Whisper spelling “Sessã Libra O”; repair only this phrase.
+  .replace(/\bsessa\s+libra\s*-?\s*o\b/g, 'sessao')
+  .replace(/\bsesalibra\s*-\s*o\b/g, 'sessao')
+  .replace(/\b(comportamento|indicador|observacao|evolucao),\s*/g, '$1 ')
+  .replace(/\besse (?=\d{1,2}\s*(?:h\b|horas?\b))/g, 'as ')
+  // Whisper sometimes hears a clipped “às” as “toda” before a numeric time.
+  .replace(/\btoda (?=\d{1,2}\s*horas?\b)/g, 'as ')
   .replace(/\s+/g, ' ')
+  .replace(/[.!?;,:]+$/u, '')
   .trim()
 
 const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -48,7 +64,17 @@ const uniqueEntity = (text, entities, label, getName) => {
 
 const parseAge = value => {
   if (value == null) return null
-  const age = Number(value)
+  const spokenAges = new Map([
+    ['zero', 0], ['um', 1], ['uma', 1], ['dois', 2], ['duas', 2], ['tres', 3],
+    ['quatro', 4], ['cinco', 5], ['seis', 6], ['sete', 7], ['oito', 8], ['nove', 9],
+    ['dez', 10], ['onze', 11], ['doze', 12], ['treze', 13], ['catorze', 14], ['quatorze', 14],
+    ['quinze', 15], ['dezesseis', 16], ['dezessete', 17], ['dezoito', 18], ['dezenove', 19],
+    ['vinte', 20], ['vinte e um', 21], ['vinte e uma', 21], ['vinte e dois', 22],
+    ['vinte e duas', 22], ['vinte e tres', 23],
+  ])
+  const numeric = /^\d{1,3}$/u.test(String(value).trim()) ? Number(value) : null
+  const age = numeric ?? spokenAges.get(normalize(value))
+  if (age == null) return undefined
   return Number.isInteger(age) && age >= 0 && age <= 120 ? age : undefined
 }
 
@@ -112,7 +138,7 @@ const isCivilDate = value => {
 }
 
 const parsePatientCreation = text => {
-  const match = /^(?:cadastrar|criar|adicionar)\s+(?:um\s+)?paciente\s+(?:chamado\s+|chamada\s+)?(.+?)(?:\s+com\s+(\d{1,3})\s+anos?)?[.!?]*$/iu.exec(text)
+  const match = /^(?:cadastrar|criar|adicionar)\s+(?:um\s+)?paciente[.!?,:]?\s+(?:chamado\s+|chamada\s+)?(.+?)(?:\s+com\s+(\d{1,3}|[\p{L}]+(?:\s+e\s+[\p{L}]+){0,2})\s+anos?)?[.!?]*$/iu.exec(text)
   if (!match) return null
   const name = match[1].trim().replace(/[.!?]+$/g, '').trim()
   if (!name || name.length > 160) return refuse('Informe um nome de paciente com até 160 caracteres.')
@@ -176,7 +202,7 @@ const parseSessionDraft = ({ text, rawText, context }) => {
     sessionDate: target.session.originalDate || target.session.date || null,
   }
 
-  const behaviorCommand = /\b(?:selecionar|marcar|adicionar)\s+(?:o\s+)?comportamento\s+(.+?)\s+(?:para|na sessao de|na sessao do|na sessao da)\s+(.+?)\s+na sessao\b/u.exec(text)
+  const behaviorCommand = /\b(?:selecionar|marcar|adicionar|registrar)\s+(?:o\s+)?comportamento\s+(.+?)\s+(?:para|na sessao de|na sessao do|na sessao da)\s+(.+?)\s+na sessao\b/u.exec(text)
     || /\b(?:selecionar|marcar|adicionar)\s+(?:o\s+)?comportamento\s+(.+?)\s+na sessao de\s+(.+?)\s*$/u.exec(text)
   if (behaviorCommand) {
     const behaviorResult = uniqueEntity(behaviorCommand[1], context.behaviors || [], 'modelo de comportamento', item => item.title)
@@ -217,7 +243,7 @@ const parseSessionDraft = ({ text, rawText, context }) => {
     }
     const patientInCommand = uniqueEntity(fieldCommand[2], [target.patient], 'paciente')
     if (patientInCommand.error) return refuse(patientInCommand.error)
-    const exactText = fieldCommand[3].trim().replace(/^['“"]|['”"]$/g, '')
+    const exactText = fieldCommand[3].trim().replace(/^[\u0027\u201c\u0022]|[\u0027\u201d\u0022]$/g, '')
     if (!exactText || exactText.length > 1000) return refuse('O texto do campo deve ter entre 1 e 1000 caracteres.')
     const key = fieldMap[field]
     return draft(
@@ -243,7 +269,9 @@ export function parseCentralCommand({ text, context = {}, referenceDate } = {}) 
   if (/\b(?:apague|apagar|exclua|excluir|delete|remova|remover|finalize|finalizar|cancele|cancelar|arquive|arquivar|restaure|restaurar)\b/u.test(normalized)) {
     return refuse('Este comando não pode executar ações destrutivas ou finais. Faça essa ação manualmente na tela correspondente.')
   }
-  const patient = parsePatientCreation(rawText)
+  // Repair only the command prefix Whisper misheard; preserve the name exactly as spoken.
+  const patientInput = rawText.replace(/^cada estrar(?=\s+paciente\b)/iu, 'cadastrar')
+  const patient = parsePatientCreation(patientInput)
   if (patient) return patient
   const session = parseSessionDraft({ text: normalized, rawText, context })
   if (session) return session

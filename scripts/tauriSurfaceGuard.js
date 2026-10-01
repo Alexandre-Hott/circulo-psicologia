@@ -17,7 +17,7 @@ export const REVIEWED_HANDLERS = Object.freeze([
   'session_draft_start', 'session_draft_list', 'session_draft_save', 'session_draft_cancel',
   'session_finalize', 'session_timeline', 'session_addendum_create', 'session_addendum_list', 'analytics_overview', 'backup_create',
   'auto_backup_status', 'auto_backup_retry', 'auto_backup_validate', 'auto_backup_restore',
-  'backup_select', 'backup_restore', 'indicator_catalog', 'recovery_inventory',
+  'backup_select', 'backup_restore', 'indicator_catalog', 'recovery_inventory', 'voice_transcribe',
 ])
 
 // The updater UI uses check() and downloadAndInstall() only.

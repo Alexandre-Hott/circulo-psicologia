@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test'
 
 for (const width of [1100, 390]) {
   test(`Agenda abre o detalhe correto por ID e restaura foco em ${width}px`, async ({ page }) => {
+    const pageErrors = []
+    page.on('pageerror', error => pageErrors.push(error.message))
     await page.setViewportSize({ width, height: 850 })
     await page.clock.install({ time: new Date('2026-10-05T12:00:00Z') })
     await page.addInitScript(() => {
@@ -38,6 +40,7 @@ for (const width of [1100, 390]) {
     await expect(page.getByRole('region', { name: 'Calendário semana' })).toBeVisible()
     await createToggle.click()
     await createToggle.click()
+    expect(pageErrors).toEqual([])
     await expect(page.getByLabel('Data do compromisso')).toHaveValue('2026-10-09')
     await expect(page.getByLabel('Horário inicial')).toHaveValue('10:30')
     await page.getByRole('button', { name: 'Início' }).click()

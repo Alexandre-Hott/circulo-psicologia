@@ -64,6 +64,140 @@ test('aceita formulação curta natural, data válida e modalidade explícita', 
   assert.match(invalidDate.message, /data de início válida/u)
 })
 
+test('corrige confusões frequentes do reconhecimento local para "sessão" sem alargar o comando', () => {
+  for (const spoken of [
+    'Marcar se são semanal para Ana Clara toda quinta às quinze horas',
+    'Adiciona uma seção semanal para Ana Clara toda quinta às quinze horas',
+  ]) {
+    const result = parseCentralCommand({ text: spoken, context, referenceDate: '2026-09-30' })
+    assert.equal(result.status, 'draft', spoken)
+    assert.equal(result.intent.type, 'appointment.recurring.create')
+    assert.equal(result.intent.draft.start, '15:00')
+  }
+})
+
+test('corrige a forma sintética observada para sessão semanal e respeita o escopo exato', () => {
+  for (const transcript of [
+    'Marcar Cesã Libra Óssemanal para Ana Clara toda quinta às quinze horas;',
+    'Marcar sesã, Libra Óssemanal para Ana Clara, toda quinta, esse 15 horas.',
+  ]) {
+    const result = parseCentralCommand({ text: transcript, context, referenceDate: '2026-09-30' })
+    assert.equal(result.status, 'draft', transcript)
+    assert.equal(result.intent.type, 'appointment.recurring.create')
+    assert.equal(result.intent.draft.patientId, 'patient-ana')
+    assert.equal(result.intent.draft.weekday, 4)
+    assert.equal(result.intent.draft.start, '15:00')
+  }
+  assert.equal(parseCentralCommand({ text: 'Cesã Libra Óssemanal sem paciente ou dia' }).status, 'clarification')
+})
+
+test('decodificação beam preserva rascunho se reconhece o dia e recusa quando a reamostragem o omite', () => {
+  const preservedWeekday = parseCentralCommand({
+    text: 'Marcar sesã libra óssemanal para Ana Clara, toda quinta, esse 15 horas.',
+    context,
+    referenceDate: '2026-09-30',
+  })
+  assert.equal(preservedWeekday.status, 'draft')
+  assert.equal(preservedWeekday.intent.draft.weekday, 4)
+  assert.equal(preservedWeekday.intent.draft.start, '15:00')
+
+  const omittedWeekday = parseCentralCommand({
+    text: 'Marcar sesã libra óssemanal para Ana Clara, toda 15 horas.',
+    context,
+    referenceDate: '2026-09-30',
+  })
+  assert.equal(omittedWeekday.status, 'clarification')
+  assert.match(omittedWeekday.message, /dia da semana/u)
+  assert.equal(omittedWeekday.intent, undefined)
+})
+
+test('transcrição SAPI com erro de separação identifica comportamento, mas small ambíguo não vira série', () => {
+  const behavior = parseCentralCommand({
+    text: 'Registrar comportamento pede ajuda para Ana Clara na Sessã Libra-O.',
+    context,
+  })
+  assert.equal(behavior.status, 'draft')
+  assert.equal(behavior.intent.patch.value, 'behavior-regulation')
+
+  const smallAppointment = parseCentralCommand({
+    text: 'Marcar sessã-libra osemanal para Ana Clara toda quinta-anésse 15 horas.',
+    context,
+    referenceDate: '2026-09-30',
+  })
+  assert.equal(smallAppointment.status, 'clarification')
+  assert.equal(smallAppointment.intent, undefined)
+})
+
+test('corrige somente a variante observada “Sessã Libra O” ao nomear sessão de comportamento', () => {
+  const result = parseCentralCommand({
+    text: 'Registrar comportamento pede ajuda para Ana Clara na Sessã Libra O.',
+    context,
+  })
+  assert.equal(result.status, 'draft')
+  assert.equal(result.intent.patch.value, 'behavior-regulation')
+  assert.equal(result.intent.target.sessionDraftId, session.id)
+})
+
+test('transcrição do backend nativo não inventa o dia da semana quando Whisper o omite', () => {
+  const result = parseCentralCommand({
+    text: 'Marcar sesalibra óssemanal para Ana Clara, toda 15 horas.',
+    context,
+    referenceDate: '2026-09-30',
+  })
+  assert.equal(result.status, 'clarification')
+  assert.match(result.message, /dia da semana/u)
+  assert.equal(result.intent, undefined)
+})
+
+test('corrige a frase de cadastro sintética transcrita como "cada estrar paciente"', () => {
+  const result = parseCentralCommand({ text: 'Cada estrar paciente bia ficticia com 9 anos' })
+  assert.equal(result.status, 'draft')
+  assert.deepEqual(result.intent, { type: 'patient.create', draft: { name: 'bia ficticia', age: 9 } })
+})
+
+test('idade falada explicitamente é separada do nome do paciente no cadastro', () => {
+  const result = parseCentralCommand({ text: 'Cadastrar paciente Bia Fictícia com nove anos.' })
+  assert.equal(result.status, 'draft')
+  assert.deepEqual(result.intent, { type: 'patient.create', draft: { name: 'Bia Fictícia', age: 9 } })
+
+  const unsupported = parseCentralCommand({ text: 'Cadastrar paciente Bia Fictícia com cento e vinte e um anos' })
+  assert.equal(unsupported.status, 'clarification')
+  assert.match(unsupported.message, /idade deve ser um número inteiro/u)
+
+  const syntheticWhisper = parseCentralCommand({ text: 'Cadastrar paciente bia fictância com 9 anos.' })
+  assert.equal(syntheticWhisper.status, 'draft')
+  assert.equal(syntheticWhisper.intent.draft.age, 9)
+  assert.doesNotMatch(syntheticWhisper.intent.draft.name, /com 9 anos/u)
+})
+
+test('aceita pausa pontuada pelo Whisper entre “paciente” e o nome no rascunho de cadastro', () => {
+  const result = parseCentralCommand({ text: 'Cadastrar paciente. Bia Fictância com 9 anos' })
+  assert.equal(result.status, 'draft')
+  assert.deepEqual(result.intent, { type: 'patient.create', draft: { name: 'Bia Fictância', age: 9 } })
+})
+
+test('recupera variantes sintéticas restritas da palavra sessão sem alterar paciente/comportamento', () => {
+  const transcript = 'Registrar comportamento, pede ajuda para Ana Clara na sesalibra-o.'
+  const result = parseCentralCommand({ text: transcript, context })
+  assert.equal(result.status, 'draft')
+  assert.equal(result.intent.type, 'session.draft.update')
+  assert.equal(result.intent.target.patientId, 'patient-ana')
+  assert.equal(result.intent.patch.label, 'Pede ajuda')
+  assert.match(result.notes.join(' '), /apenas nesta sessão/u)
+})
+
+test('infere frequência semanal e converte o horário da tarde na transcrição sintética', () => {
+  const result = parseCentralCommand({
+    text: 'Cria uma sessão para Ana Clara toda quinta às três da tarde',
+    context,
+    referenceDate: '2026-09-30',
+  })
+  assert.equal(result.status, 'draft')
+  assert.equal(result.intent.draft.frequency, 'Semanal')
+  assert.equal(result.intent.draft.start, '15:00')
+  assert.equal(result.intent.draft.end, '15:50')
+})
+
 test('entende horário falado explicitamente como período da tarde e exige esclarecimento quando ambíguo', () => {
   const afternoon = parseCentralCommand({ text: 'Marcar sessão para Ana Clara toda quinta às três da tarde semanal', context, referenceDate: '2026-09-30' })
   assert.equal(afternoon.status, 'draft')

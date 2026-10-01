@@ -1,9 +1,9 @@
-import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { groupIndicatorHistory } from './desktopIndicatorEvolution.js'
 import './DesktopSessions.css'
 
-export default function DesktopSessions({ ref, patientId, onPatientChange, activeDraft, onDraftChange, onChanged, onSessionMessage, onStartRecord }) {
+export default function DesktopSessions({ ref, patientId, onPatientChange, activeDraft, voiceCommandDraft = null, onVoiceDraftApplied, onDraftChange, onChanged, onSessionMessage, onStartRecord }) {
   const [patients, setPatients] = useState([])
   const [templates, setTemplates] = useState([])
   const [indicatorCatalog, setIndicatorCatalog] = useState([])
@@ -32,9 +32,13 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   const revisionRef = useRef(0)
   const dirtyRef = useRef(false)
   const savePromiseRef = useRef(null)
+  const saveRef = useRef(null)
   const autosaveTimerRef = useRef(null)
   const mountedRef = useRef(true)
   const draftIdentityRef = useRef({ id: activeDraft?.id, patientId: activeDraft?.patientId })
+  const appliedVoiceDraftRef = useRef('')
+  const voiceConfirmationPendingRef = useRef(false)
+  const [voiceConfirmationPending, setVoiceConfirmationPending] = useState(false)
   const busyRef = useRef(false)
   const idleWaiters = useRef(new Set())
   const setBusy = value => {
@@ -86,20 +90,45 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     return () => { active = false }
   }, [patientId])
 
-  const updateValues = next => {
+  const updateValues = useCallback(next => {
     valuesRef.current = { ...valuesRef.current, ...next }
     revisionRef.current++
     dirtyRef.current = true
     clearTimeout(autosaveTimerRef.current)
-    if (activeDraft && activeDraft.patientId === patientId) {
-      const { id, patientId: draftPatientId } = draftIdentityRef.current
+    const { id, patientId: draftPatientId } = draftIdentityRef.current
+    if (id && draftPatientId === patientId && !voiceConfirmationPendingRef.current) {
       autosaveTimerRef.current = setTimeout(() => {
         autosaveTimerRef.current = null
-        if (draftIdentityRef.current.id === id && draftIdentityRef.current.patientId === draftPatientId) save().catch(reason => { if (mountedRef.current) setError(String(reason)) })
+        if (draftIdentityRef.current.id === id && draftIdentityRef.current.patientId === draftPatientId) saveRef.current?.().catch(reason => { if (mountedRef.current) setError(String(reason)) })
       }, 600)
     }
-  }
-  const save = () => {
+  }, [patientId])
+
+  useEffect(() => {
+    const intent = voiceCommandDraft
+    if (!intent?.commandId || appliedVoiceDraftRef.current === intent.commandId || !activeDraft || activeDraft.id !== intent.target?.sessionDraftId || activeDraft.patientId !== intent.target?.patientId || patientId !== activeDraft.patientId) return
+    appliedVoiceDraftRef.current = intent.commandId
+    voiceConfirmationPendingRef.current = true
+    setVoiceConfirmationPending(true)
+    const patch = intent.patch
+    if (patch?.field === 'behaviorIds' && patch.operation === 'add' && typeof patch.value === 'string') {
+      const next = valuesRef.current.behaviorIds.includes(patch.value) ? valuesRef.current.behaviorIds : [...valuesRef.current.behaviorIds, patch.value]
+      setBehaviorIds(next); updateValues({ behaviorIds: next })
+      onSessionMessage?.(`Comportamento preenchido. Confira o formulário e clique em “Salvar rascunho” para gravar.`)
+    } else if (['observation', 'procedures', 'outcomeDecision', 'referralClosure'].includes(patch?.field) && patch.operation === 'replace' && typeof patch.value === 'string') {
+      const setter = { observation: setObservation, procedures: setProcedures, outcomeDecision: setOutcomeDecision, referralClosure: setReferralClosure }[patch.field]
+      setter(patch.value); updateValues({ [patch.field]: patch.value })
+      onSessionMessage?.(`Texto preenchido. Confira o formulário e clique em “Salvar rascunho” para gravar.`)
+    } else if (patch?.field === 'indicators' && patch.operation === 'set' && patch.value?.id && Number.isInteger(patch.value.value)) {
+      const previous = valuesRef.current.indicatorEntries.find(item => item.id === patch.value.id) || { id: patch.value.id, value: null, note: null }
+      const entry = { id: patch.value.id, value: patch.value.value, note: previous.note ?? null }
+      const next = [...valuesRef.current.indicatorEntries.filter(item => item.id !== entry.id), entry]
+      setIndicatorEntries(next); updateValues({ indicatorEntries: next })
+      onSessionMessage?.(`Indicador preenchido. Confira o formulário e clique em “Salvar rascunho” para gravar.`)
+    } else onSessionMessage?.('Não apliquei o comando: o campo ou a operação não é compatível com este rascunho.')
+    onVoiceDraftApplied?.(intent.commandId)
+  }, [voiceCommandDraft, activeDraft, patientId, onVoiceDraftApplied, onSessionMessage, updateValues])
+  const save = useCallback(() => {
     clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = null
     if (savePromiseRef.current) return savePromiseRef.current
@@ -117,6 +146,8 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       const stillActive = mountedRef.current && draftIdentityRef.current.id === draftId && draftIdentityRef.current.patientId === draftPatientId
       if (stillActive) {
         dirtyRef.current = false
+        voiceConfirmationPendingRef.current = false
+        setVoiceConfirmationPending(false)
         setError('')
         if (draftIdentityRef.current.id === draftId && draftIdentityRef.current.patientId === draftPatientId && saved.id === draftId && saved.patientId === draftPatientId) {
           onDraftChange(saved)
@@ -130,11 +161,12 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     void pending.then(() => {
       if (savePromiseRef.current === pending) savePromiseRef.current = null
       if (mountedRef.current && dirtyRef.current && !autosaveTimerRef.current && draftIdentityRef.current.id === draftId && draftIdentityRef.current.patientId === draftPatientId) {
-        autosaveTimerRef.current = setTimeout(() => { autosaveTimerRef.current = null; if (draftIdentityRef.current.id === draftId && draftIdentityRef.current.patientId === draftPatientId) save().catch(reason => { if (mountedRef.current) setError(String(reason)) }) }, 600)
+        autosaveTimerRef.current = setTimeout(() => { autosaveTimerRef.current = null; if (draftIdentityRef.current.id === draftId && draftIdentityRef.current.patientId === draftPatientId) saveRef.current?.().catch(reason => { if (mountedRef.current) setError(String(reason)) }) }, 600)
       }
     }, () => { if (savePromiseRef.current === pending) savePromiseRef.current = null })
     return pending
-  }
+  }, [activeDraft, patientId, onDraftChange, onChanged])
+  useLayoutEffect(() => { saveRef.current = save }, [save])
   const flush = async () => {
     let saved
     do { saved = await save() } while (dirtyRef.current)
@@ -143,10 +175,12 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
 
   useImperativeHandle(ref, () => ({
     savePending: async () => {
+      if (voiceConfirmationPendingRef.current) throw new Error('Há uma alteração de voz não salva. Revise e clique em “Salvar rascunho” ou cancele o rascunho antes de sair.')
       if (!activeDraft || (!dirtyRef.current && !savePromiseRef.current)) return
       setBusy(true)
       try { await flush() } finally { setBusy(false) }
     },
+    hasUnconfirmedVoiceChanges: () => voiceConfirmationPendingRef.current,
     waitForIdle,
     hasOtherUnsavedEditors: () => Boolean(
       caseDemand.trim() || caseObjectives.trim() || addendumSessionId || addendumContent.trim() ||
@@ -187,7 +221,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       clearTimeout(autosaveTimerRef.current)
       if (savePromiseRef.current) await savePromiseRef.current
       await invoke('session_draft_cancel', { id: activeDraft.id })
-      setObservation(''); setProcedures(''); setOutcomeDecision(''); setReferralClosure(''); setBehaviorIds([]); setIndicatorEntries([]); valuesRef.current = { observation: '', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicatorEntries: [] }; revisionRef.current++; dirtyRef.current = false
+      setObservation(''); setProcedures(''); setOutcomeDecision(''); setReferralClosure(''); setBehaviorIds([]); setIndicatorEntries([]); valuesRef.current = { observation: '', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicatorEntries: [] }; revisionRef.current++; dirtyRef.current = false; voiceConfirmationPendingRef.current = false; setVoiceConfirmationPending(false)
       onSessionMessage('Rascunho cancelado sem registro clínico final.')
       onDraftChange(null)
       await onChanged()
@@ -210,6 +244,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   const selectDraft = async draft => {
     setBusy(true); setError('')
     try {
+      if (voiceConfirmationPendingRef.current) throw new Error('Salve ou cancele a alteração de voz antes de trocar de rascunho.')
       const saved = activeDraft && (dirtyRef.current || savePromiseRef.current) ? await flush() : null
       const selected = saved?.id === draft.id ? saved : draft
       onPatientChange(selected.patientId); onDraftChange(selected)
@@ -221,6 +256,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   const changePatient = async value => {
     setBusy(true); setError('')
     try {
+      if (voiceConfirmationPendingRef.current) throw new Error('Salve ou cancele a alteração de voz antes de trocar de paciente.')
       if (activeDraft && (dirtyRef.current || savePromiseRef.current)) await flush()
       clearTimeout(autosaveTimerRef.current); onPatientChange(value); onDraftChange(null); valuesRef.current = { observation: '', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicatorEntries: [] }; revisionRef.current++; dirtyRef.current = false
       setAddendumSessionId(''); setAddendumContent('')
@@ -304,6 +340,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       <h3>Rascunho da ocorrência {activeDraft.originalDate}</h3>
       <p>Paciente: <strong>{patients.find(patient => patient.id === patientId)?.name || patientId}</strong> · {activeDraft.originalDate}</p>
       <fieldset id="draft-behaviors" className="session-behavior-choices" tabIndex={-1} disabled={busy}><legend>Comportamentos desta sessão</legend>{templates.length ? templates.map(template => <label key={template.id} className="vault-checkbox"><input type="checkbox" checked={behaviorIds.includes(template.id)} onChange={event => { const next = event.target.checked ? [...behaviorIds, template.id] : behaviorIds.filter(id => id !== template.id); setBehaviorIds(next); updateValues({ behaviorIds: next }) }} /> {template.title} · v{template.version}</label>) : <p>Nenhum comportamento disponível. <a href="#session-behaviors" onClick={() => document.getElementById('session-behaviors')?.setAttribute('open', '')}>Criar na biblioteca</a>.</p>}</fieldset>
+      {voiceConfirmationPending && <p role="status">Alteração de voz ainda não salva. Revise os campos e clique em “Salvar rascunho”.</p>}
       <div id="draft-actions" className="session-draft-actions"><button type="submit" disabled={busy}>Salvar rascunho</button><button type="button" disabled={busy || activeDraft.patientId !== patientId || missingFinalizationFields.length > 0} aria-describedby={missingFinalizationFields.length ? 'session-finalize-requirements' : undefined} onClick={finalize}>Finalizar sessão sintética</button></div>
       <p id="session-finalize-requirements" className="session-finalize-requirements" role="status" aria-live="polite">{missingFinalizationFields.length ? `Para finalizar, preencha: ${missingFinalizationFields.join(', ')}.` : 'Campos necessários preenchidos; a sessão pode ser finalizada.'}</p>
       <nav className="session-draft-steps" aria-label="Etapas do rascunho"><a href="#draft-behaviors">Comportamentos</a> · <a href="#session-observation">Evolução descritiva</a> · <a href="#draft-indicators">Indicadores e escalas</a> · <a href="#draft-actions">Salvar ou finalizar</a></nav>
