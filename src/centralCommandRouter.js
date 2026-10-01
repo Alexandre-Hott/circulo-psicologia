@@ -59,6 +59,14 @@ const uniqueEntity = (text, entities, label, getName) => {
   const longest = matches[0].normalizedName.length
   const best = matches.filter(item => item.normalizedName.length === longest)
   if (best.length !== 1) return { error: `Encontrei mais de um ${label} compatível. Informe um nome mais específico.` }
+  const selectedName = best[0].normalizedName
+  const withoutSelected = normalize(text).replace(
+    new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(selectedName)}(?=$|[^\\p{L}\\p{N}])`, 'gu'),
+    '$1 ',
+  )
+  if (findExactMatches(withoutSelected, entities, getName).some(item => item.entity.id !== best[0].entity.id)) {
+    return { error: `Encontrei mais de um ${label} no pedido. Mencione apenas um por comando.` }
+  }
   return { entity: best[0].entity }
 }
 

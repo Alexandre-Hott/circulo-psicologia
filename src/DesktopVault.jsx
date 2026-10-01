@@ -66,6 +66,7 @@ export default function DesktopVault() {
   const [sessionVoiceDraft, setSessionVoiceDraft] = useState(null)
   const [voiceNotice, setVoiceNotice] = useState('')
   const voiceCaptureRef = useRef(null)
+  const voiceFocusTarget = useRef(null)
   const [updateState, setUpdateState] = useState({ phase: 'checking' })
   const updateRef = useRef(null)
   const updateBusy = useRef(false)
@@ -98,6 +99,25 @@ export default function DesktopVault() {
     voiceCaptureRef.current?.abort()
     voiceCaptureRef.current = null
   }, [space, status?.unlocked])
+  useEffect(() => {
+    if (voiceFocusTarget.current !== space || !status?.unlocked) return
+    const selectors = {
+      patients: 'section[aria-label="Pacientes"] #clinical-name',
+      agenda: 'section[aria-label="Agenda"] form[aria-label="Novo compromisso"]',
+      sessions: 'section[aria-label="Sessões e registros"] #draft-behaviors',
+    }
+    const focusDestination = () => {
+      const target = document.querySelector(selectors[space])
+      if (!target) return false
+      target.focus()
+      voiceFocusTarget.current = null
+      return true
+    }
+    if (focusDestination()) return
+    const observer = new MutationObserver(() => { if (focusDestination()) observer.disconnect() })
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [space, status?.unlocked])
 
   const transcribeLocalVoice = async (patientNames = []) => {
     if (voiceCaptureRef.current) throw new Error('Já existe uma captura de voz em andamento.')
@@ -121,11 +141,13 @@ export default function DesktopVault() {
     const intent = voiceIntent
     setVoiceNotice('')
     if (intent.type === 'patient.create') {
+      voiceFocusTarget.current = 'patients'
       setEditing(null)
       setForm({ ...emptyPatientForm(), name: intent.draft.name, age: intent.draft.age == null ? '' : String(intent.draft.age) })
       setPatientFormOpen(true)
       setSpace('patients')
     } else if (intent.type === 'appointment.recurring.create') {
+      voiceFocusTarget.current = 'agenda'
       setAgendaVoiceDraft({ ...intent.draft, commandId: crypto.randomUUID() })
       setAgendaRecordPatientId('')
       setQuickStart(false)
@@ -137,6 +159,7 @@ export default function DesktopVault() {
         setVoiceIntent(null)
         return
       }
+      voiceFocusTarget.current = 'sessions'
       setSessionVoiceDraft({ ...intent, commandId: crypto.randomUUID() })
       setSessionPatientId(intent.target.patientId)
       setSessionsOpen(true)

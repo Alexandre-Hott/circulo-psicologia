@@ -102,6 +102,7 @@ test('Home prepara paciente, abre formulário preenchido e não salva sem clique
   await page.getByRole('button', { name: 'Revisar no formulário' }).click()
   const form = page.getByRole('form', { name: 'Novo cadastro' })
   await expect(form.getByLabel('Nome')).toHaveValue('Bia de Teste')
+  await expect(form.getByLabel('Nome')).toBeFocused()
   await expect(form.getByLabel('Idade em anos (opcional)')).toHaveValue('8')
   await expect.poll(() => page.evaluate(() => window.voiceSavedWrites)).toBe(0)
 })
@@ -129,6 +130,7 @@ test('Home prepara horário semanal e abre Agenda com campos revisáveis sem sal
   await expect(command.getByRole('status')).toContainText('15:00–15:50')
   await page.getByRole('button', { name: 'Revisar no formulário' }).click()
   const form = page.getByRole('form', { name: 'Novo compromisso' })
+  await expect(form).toBeFocused()
   await expect(form.getByLabel('Paciente')).toHaveValue('patient-ana')
   await expect(form.getByLabel('Dia da semana')).toHaveValue('4')
   await expect(form.getByLabel('Frequência')).toHaveValue('Semanal')
@@ -154,6 +156,7 @@ test('comportamento por voz fica ligado à sessão certa e só aplica após revi
 
   const behavior = page.getByRole('checkbox', { name: /Pede ajuda/u })
   await expect(behavior).toBeChecked()
+  await expect(page.locator('#draft-behaviors')).toBeFocused()
   await page.waitForTimeout(750)
   await expect.poll(() => page.evaluate(() => window.voiceSavedWrites)).toBe(0)
   await expect(page.getByRole('status').filter({ hasText: 'Alteração de voz ainda não salva' })).toBeVisible()

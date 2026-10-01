@@ -38,6 +38,8 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   const draftIdentityRef = useRef({ id: activeDraft?.id, patientId: activeDraft?.patientId })
   const appliedVoiceDraftRef = useRef('')
   const voiceConfirmationPendingRef = useRef(false)
+  const voiceVersionRef = useRef(0)
+  const approvedVoiceVersionRef = useRef(0)
   const [voiceConfirmationPending, setVoiceConfirmationPending] = useState(false)
   const busyRef = useRef(false)
   const idleWaiters = useRef(new Set())
@@ -108,6 +110,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     const intent = voiceCommandDraft
     if (!intent?.commandId || appliedVoiceDraftRef.current === intent.commandId || !activeDraft || activeDraft.id !== intent.target?.sessionDraftId || activeDraft.patientId !== intent.target?.patientId || patientId !== activeDraft.patientId) return
     appliedVoiceDraftRef.current = intent.commandId
+    voiceVersionRef.current++
     voiceConfirmationPendingRef.current = true
     setVoiceConfirmationPending(true)
     const patch = intent.patch
@@ -132,6 +135,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = null
     if (savePromiseRef.current) return savePromiseRef.current
+    if (voiceVersionRef.current > approvedVoiceVersionRef.current) return Promise.reject(new Error('Revise a alteração de voz e clique em “Salvar rascunho” antes de gravar.'))
     const draftId = activeDraft.id
     const draftPatientId = activeDraft.patientId
     if (draftIdentityRef.current.id !== draftId || draftIdentityRef.current.patientId !== draftPatientId || patientId !== draftPatientId) return Promise.reject(new Error('Rascunho ativo alterado antes de salvar'))
@@ -142,12 +146,14 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
         revision = revisionRef.current
         const values = valuesRef.current
         saved = await invoke('session_draft_save', { id: draftId, input: { observation: values.observation, procedures: values.procedures, outcomeDecision: values.outcomeDecision, referralClosure: values.referralClosure, behaviorIds: values.behaviorIds, indicators: values.indicatorEntries } })
-      } while (revision !== revisionRef.current)
+      } while (revision !== revisionRef.current && voiceVersionRef.current <= approvedVoiceVersionRef.current)
       const stillActive = mountedRef.current && draftIdentityRef.current.id === draftId && draftIdentityRef.current.patientId === draftPatientId
       if (stillActive) {
-        dirtyRef.current = false
-        voiceConfirmationPendingRef.current = false
-        setVoiceConfirmationPending(false)
+        dirtyRef.current = revision !== revisionRef.current
+        if (!dirtyRef.current && voiceVersionRef.current <= approvedVoiceVersionRef.current) {
+          voiceConfirmationPendingRef.current = false
+          setVoiceConfirmationPending(false)
+        }
         setError('')
         if (draftIdentityRef.current.id === draftId && draftIdentityRef.current.patientId === draftPatientId && saved.id === draftId && saved.patientId === draftPatientId) {
           onDraftChange(saved)
@@ -160,8 +166,8 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     savePromiseRef.current = pending
     void pending.then(() => {
       if (savePromiseRef.current === pending) savePromiseRef.current = null
-      if (mountedRef.current && dirtyRef.current && !autosaveTimerRef.current && draftIdentityRef.current.id === draftId && draftIdentityRef.current.patientId === draftPatientId) {
-        autosaveTimerRef.current = setTimeout(() => { autosaveTimerRef.current = null; if (draftIdentityRef.current.id === draftId && draftIdentityRef.current.patientId === draftPatientId) saveRef.current?.().catch(reason => { if (mountedRef.current) setError(String(reason)) }) }, 600)
+      if (mountedRef.current && dirtyRef.current && !voiceConfirmationPendingRef.current && !autosaveTimerRef.current && draftIdentityRef.current.id === draftId && draftIdentityRef.current.patientId === draftPatientId) {
+        autosaveTimerRef.current = setTimeout(() => { autosaveTimerRef.current = null; if (draftIdentityRef.current.id === draftId && draftIdentityRef.current.patientId === draftPatientId && !voiceConfirmationPendingRef.current) saveRef.current?.().catch(reason => { if (mountedRef.current) setError(String(reason)) }) }, 600)
       }
     }, () => { if (savePromiseRef.current === pending) savePromiseRef.current = null })
     return pending
@@ -196,6 +202,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
 
   const saveDraft = async event => {
     event.preventDefault(); setBusy(true); setError(''); setMessage('')
+    approvedVoiceVersionRef.current = voiceVersionRef.current
     try { await flush(); setMessage('Rascunho salvo no cofre cifrado.') }
     catch (reason) { setError(String(reason)) }
     finally { setBusy(false) }
@@ -203,6 +210,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
 
   const finalize = async () => {
     if (!activeDraft || activeDraft.patientId !== patientId || !observation.trim() || !procedures.trim() || !outcomeDecision.trim() || !window.confirm(`Finalizar sessão sintética do paciente ${patientId}, ocorrência original ${activeDraft.originalDate}?`)) return
+    if (voiceConfirmationPendingRef.current) { setError('Salve a alteração de voz em “Salvar rascunho” antes de finalizar.'); return }
     setBusy(true); setError(''); setMessage('')
     try {
       const saved = await flush()
@@ -221,6 +229,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       clearTimeout(autosaveTimerRef.current)
       if (savePromiseRef.current) await savePromiseRef.current
       await invoke('session_draft_cancel', { id: activeDraft.id })
+      approvedVoiceVersionRef.current = voiceVersionRef.current
       setObservation(''); setProcedures(''); setOutcomeDecision(''); setReferralClosure(''); setBehaviorIds([]); setIndicatorEntries([]); valuesRef.current = { observation: '', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicatorEntries: [] }; revisionRef.current++; dirtyRef.current = false; voiceConfirmationPendingRef.current = false; setVoiceConfirmationPending(false)
       onSessionMessage('Rascunho cancelado sem registro clínico final.')
       onDraftChange(null)

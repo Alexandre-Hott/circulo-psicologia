@@ -219,6 +219,34 @@ test('recusa criação de série quando paciente ou detalhes obrigatórios estã
   assert.match(missing.message, /horário explícito/u)
 })
 
+test('recusa pedidos que nomeiam dois pacientes mesmo quando um nome é mais longo', () => {
+  const maria = { id: 'patient-maria', name: 'Maria', age: 10, archivedAt: null }
+  const both = { ...context, patients: [...patients, maria] }
+  const behavior = parseCentralCommand({
+    text: 'Marcar comportamento Pede ajuda para Ana Clara na sessão de Maria',
+    context: both,
+  })
+  assert.equal(behavior.status, 'clarification')
+  assert.match(behavior.message, /mais de um paciente/u)
+  assert.equal(behavior.intent, undefined)
+
+  const appointment = parseCentralCommand({
+    text: 'Marcar sessão semanal para Ana Clara e Maria toda quinta às 15 horas',
+    context: both,
+    referenceDate: '2026-09-30',
+  })
+  assert.equal(appointment.status, 'clarification')
+  assert.match(appointment.message, /mais de um paciente/u)
+
+  const nestedName = parseCentralCommand({
+    text: 'Marcar sessão semanal para Ana Clara toda quinta às 15 horas',
+    context: { ...both, patients: [...both.patients, { id: 'patient-ana-short', name: 'Ana', archivedAt: null }] },
+    referenceDate: '2026-09-30',
+  })
+  assert.equal(nestedName.status, 'draft')
+  assert.equal(nestedName.intent.draft.patientId, 'patient-ana')
+})
+
 test('seleciona modelo de comportamento somente para paciente e rascunho de sessão nomeados', () => {
   const result = parseCentralCommand({ text: 'Marcar comportamento Pede ajuda para Ana Clara na sessão', context })
   assert.equal(result.status, 'draft')

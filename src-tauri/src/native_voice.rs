@@ -1,14 +1,17 @@
 use std::{
     fs,
-    io::Write,
+    io::{self, Write},
     path::Path,
-    process::{Command, Stdio},
+    process::{Command, ExitStatus, Stdio},
+    thread,
+    time::{Duration, Instant},
 };
 use zeroize::Zeroizing;
 
 const MAX_SECONDS: f64 = 12.0;
 const MIN_INPUT_RATE: u32 = 8_000;
 const MAX_INPUT_RATE: u32 = 192_000;
+const INFERENCE_TIMEOUT: Duration = Duration::from_secs(60);
 const INITIAL_PROMPT: &str = "Agenda de sessões. Cadastrar paciente. Sessão semanal. Registrar comportamento na sessão. Observação, evolução e indicador.";
 
 pub fn transcribe(
@@ -62,9 +65,7 @@ pub fn transcribe(
         command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
 
-    let status = command
-        .status()
-        .map_err(|error| format!("Não foi possível executar o reconhecimento local: {error}"))?;
+    let status = run_with_timeout(&mut command, INFERENCE_TIMEOUT)?;
     if !status.success() {
         return Err(format!(
             "O reconhecimento local terminou com erro ({status})."
@@ -78,10 +79,25 @@ pub fn transcribe(
 }
 
 fn hard_link_voice_resources(resources: &Path, destination: &Path) -> Result<(), String> {
+    stage_voice_resources_with(
+        resources,
+        destination,
+        |from, to| fs::hard_link(from, to),
+        |from, to| fs::copy(from, to),
+    )
+}
+
+fn stage_voice_resources_with(
+    resources: &Path,
+    destination: &Path,
+    mut link: impl FnMut(&Path, &Path) -> io::Result<()>,
+    mut copy: impl FnMut(&Path, &Path) -> io::Result<u64>,
+) -> Result<(), String> {
     fs::create_dir(destination)
         .map_err(|error| format!("Não foi possível preparar os recursos locais de voz: {error}"))?;
     let entries = fs::read_dir(resources)
         .map_err(|error| format!("Não foi possível acessar os recursos locais de voz: {error}"))?;
+    let mut different_volume = false;
     for entry in entries {
         let entry =
             entry.map_err(|error| format!("Não foi possível ler um recurso de voz: {error}"))?;
@@ -91,12 +107,61 @@ fn hard_link_voice_resources(resources: &Path, destination: &Path) -> Result<(),
         if !file_type.is_file() {
             continue;
         }
-        let file_name = entry.file_name();
-        fs::hard_link(entry.path(), destination.join(file_name)).map_err(|error| {
-            format!("Não foi possível preparar um recurso local de voz: {error}")
+        let source = entry.path();
+        let target = destination.join(entry.file_name());
+        if !different_volume {
+            match link(&source, &target) {
+                Ok(()) => continue,
+                Err(error) if is_cross_volume(&error) => different_volume = true,
+                Err(error) => {
+                    return Err(format!(
+                        "Não foi possível preparar um recurso local de voz: {error}"
+                    ))
+                }
+            }
+        }
+        // A cross-volume copy of ggml-base.bin costs about 148 MB per request.
+        // Only pay that cost when a hard link is impossible; other errors remain fatal.
+        copy(&source, &target).map_err(|error| {
+            format!("Não foi possível copiar um recurso local de voz entre volumes: {error}")
         })?;
     }
     Ok(())
+}
+
+fn is_cross_volume(error: &io::Error) -> bool {
+    #[cfg(windows)]
+    {
+        error.raw_os_error() == Some(17)
+    } // ERROR_NOT_SAME_DEVICE
+    #[cfg(not(windows))]
+    {
+        error.kind() == io::ErrorKind::CrossesDevices
+    }
+}
+
+fn run_with_timeout(command: &mut Command, timeout: Duration) -> Result<ExitStatus, String> {
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("Não foi possível executar o reconhecimento local: {error}"))?;
+    let started = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Ok(status),
+            Ok(None) => {}
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("Falha ao aguardar o reconhecimento local: {error}"));
+            }
+        }
+        if started.elapsed() >= timeout {
+            child.kill().map_err(|error| format!("Não foi possível interromper o reconhecimento local após o limite de tempo: {error}"))?;
+            child.wait().map_err(|error| format!("Não foi possível aguardar a limpeza do reconhecimento local interrompido: {error}"))?;
+            return Err("O reconhecimento local excedeu o limite de 60 segundos e foi interrompido. Tente novamente ou digite o comando.".into());
+        }
+        thread::sleep(Duration::from_millis(50).min(timeout.saturating_sub(started.elapsed())));
+    }
 }
 
 fn build_initial_prompt(patient_names: &[String]) -> String {
@@ -191,6 +256,7 @@ fn parse_generated_transcript(contents: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::Cell;
     use std::io::Read;
     use std::path::PathBuf;
 
@@ -322,6 +388,108 @@ mod tests {
             );
         }
         assert!(!destination.join("ignored-directory").exists());
+    }
+
+    #[test]
+    fn copies_resources_only_after_a_cross_volume_link_error() {
+        let source = tempfile::tempdir().unwrap();
+        let destination_root = tempfile::tempdir().unwrap();
+        let destination = destination_root.path().join("engine");
+        fs::write(source.path().join("whisper-cli.exe"), b"engine").unwrap();
+        fs::write(source.path().join("ggml-base.bin"), b"synthetic model").unwrap();
+        let link_calls = Cell::new(0);
+        let copy_calls = Cell::new(0);
+        stage_voice_resources_with(
+            source.path(),
+            &destination,
+            |_, _| {
+                link_calls.set(link_calls.get() + 1);
+                #[cfg(windows)]
+                {
+                    Err(io::Error::from_raw_os_error(17))
+                }
+                #[cfg(not(windows))]
+                {
+                    Err(io::Error::from(io::ErrorKind::CrossesDevices))
+                }
+            },
+            |from, to| {
+                copy_calls.set(copy_calls.get() + 1);
+                fs::copy(from, to)
+            },
+        )
+        .unwrap();
+        assert_eq!(link_calls.get(), 1);
+        assert_eq!(copy_calls.get(), 2);
+        assert_eq!(
+            fs::read(destination.join("ggml-base.bin")).unwrap(),
+            b"synthetic model"
+        );
+    }
+
+    #[test]
+    fn permission_errors_do_not_trigger_a_copy_fallback() {
+        let source = tempfile::tempdir().unwrap();
+        let destination_root = tempfile::tempdir().unwrap();
+        fs::write(source.path().join("ggml-base.bin"), b"synthetic model").unwrap();
+        let copy_calls = Cell::new(0);
+        let result = stage_voice_resources_with(
+            source.path(),
+            &destination_root.path().join("engine"),
+            |_, _| Err(io::Error::from(io::ErrorKind::PermissionDenied)),
+            |_, _| {
+                copy_calls.set(copy_calls.get() + 1);
+                Ok(0)
+            },
+        );
+        assert!(result.is_err());
+        assert_eq!(copy_calls.get(), 0);
+    }
+
+    #[test]
+    fn timed_out_process_is_killed_before_temporary_files_are_removed() {
+        let temp_path;
+        {
+            let temp = tempfile::tempdir().unwrap();
+            temp_path = temp.path().to_owned();
+            fs::write(temp.path().join("synthetic-input.wav"), b"synthetic").unwrap();
+            #[cfg(windows)]
+            let mut command = {
+                let mut command = Command::new("powershell.exe");
+                command.args([
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    "Start-Sleep -Seconds 5",
+                ]);
+                command
+            };
+            #[cfg(not(windows))]
+            let mut command = {
+                let mut command = Command::new("sleep");
+                command.arg("5");
+                command
+            };
+            let started = Instant::now();
+            let error = run_with_timeout(&mut command, Duration::from_millis(500)).unwrap_err();
+            assert!(error.contains("excedeu o limite"), "{error}");
+            assert!(started.elapsed() < Duration::from_secs(4));
+        }
+        assert!(!temp_path.exists());
+    }
+
+    #[test]
+    fn successful_process_returns_without_waiting_for_the_timeout() {
+        #[cfg(windows)]
+        let mut command = {
+            let mut command = Command::new("powershell.exe");
+            command.args(["-NoProfile", "-NonInteractive", "-Command", "exit 0"]);
+            command
+        };
+        #[cfg(not(windows))]
+        let mut command = Command::new("true");
+        let status = run_with_timeout(&mut command, Duration::from_secs(5)).unwrap();
+        assert!(status.success());
     }
 
     #[test]
