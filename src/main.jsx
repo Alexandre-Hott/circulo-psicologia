@@ -11,8 +11,8 @@ createRoot(document.getElementById('root')).render(
     {isDesktop
       ? <DesktopVault />
       : <>
-          <aside className="browser-mode-note" aria-label="Limite da demonstração web">
-            Demonstração no navegador. O ditado offline está disponível no aplicativo Windows; esta página não envia áudio para reconhecimento pela internet.
+          <aside className="browser-mode-note" aria-label="Demonstração no navegador">
+            Demonstração no navegador · alterações somem ao recarregar · ditado offline no aplicativo Windows.
           </aside>
           <App />
         </>}

@@ -99,7 +99,7 @@ for (const editor of ['contexto', 'adendo', 'comportamento']) {
     await mockDesktop(page, true, true)
     await page.goto('/')
     await expect(page.getByText('Atualização disponível: Círculo 0.2.18')).toBeVisible()
-    await page.getByRole('button', { name: 'Abrir sessões sintéticas' }).click()
+    await page.getByRole('button', { name: 'Abrir sessões' }).click()
     if (editor !== 'comportamento') await page.getByLabel('Paciente para evolução e sessões').selectOption('p1')
     if (editor === 'contexto') {
       await page.getByText('Contexto do caso', { exact: true }).click()

@@ -32,7 +32,7 @@ test('voz aguarda confirmação mesmo com autosave pendente e novo comando duran
   await nav.getByRole('button', { name: 'Agenda' }).click()
   await page.getByRole('button', { name: 'Detalhes e ações' }).click()
   await page.getByRole('button', { name: /Iniciar sessão de Ana Clara/u }).click()
-  const session = page.getByRole('form', { name: 'Rascunho de sessão sintética' })
+  const session = page.getByRole('form', { name: 'Rascunho de sessão' })
   await expect(session).toBeVisible()
   await session.getByLabel('Observações descritivas').fill('Texto digitado antes da voz')
   await expect.poll(() => page.evaluate(() => window.sessionSaveCalls.length)).toBe(1)

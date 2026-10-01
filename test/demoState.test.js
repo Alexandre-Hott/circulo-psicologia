@@ -17,7 +17,7 @@ test('demonstration UI does not persist clinical drafts to browser storage', () 
   assert.doesNotMatch(source,/localStorage|sessionStorage|indexedDB/i)
   assert.match(source,/Confirmar limpeza/)
   assert.match(source,/Cancelar/)
-  assert.match(source,/não são restauradas depois de recarregar/)
+  assert.match(source,/desaparecem ao recarregar/)
 })
 
 test('only meaningful edits require confirmation before leaving a session', () => {

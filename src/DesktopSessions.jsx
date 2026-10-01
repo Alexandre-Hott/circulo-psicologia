@@ -209,13 +209,13 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   }
 
   const finalize = async () => {
-    if (!activeDraft || activeDraft.patientId !== patientId || !observation.trim() || !procedures.trim() || !outcomeDecision.trim() || !window.confirm(`Finalizar sessão sintética do paciente ${patientId}, ocorrência original ${activeDraft.originalDate}?`)) return
+    if (!activeDraft || activeDraft.patientId !== patientId || !observation.trim() || !procedures.trim() || !outcomeDecision.trim() || !window.confirm(`Finalizar sessão do paciente ${patientId}, ocorrência original ${activeDraft.originalDate}?`)) return
     if (voiceConfirmationPendingRef.current) { setError('Salve a alteração de voz em “Salvar rascunho” antes de finalizar.'); return }
     setBusy(true); setError(''); setMessage('')
     try {
       const saved = await flush()
       await invoke('session_finalize', { id: saved.id })
-      onSessionMessage('Sessão sintética finalizada e persistida.')
+      onSessionMessage('Sessão finalizada e salva.')
       onDraftChange(null)
       await onChanged()
     } catch (reason) { setError(String(reason)) }
@@ -329,9 +329,8 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     updateValues({ indicatorEntries: next })
   }
 
-  return <section className="vault-backup session-workspace" aria-label="Sessões clínicas sintéticas persistentes">
+  return <section className="vault-backup session-workspace" aria-label="Sessões e registros">
     <h2>Registros do paciente</h2>
-    <p className="vault-warning">Protótipo: use apenas dados fictícios. Registros descritivos, sem interpretação clínica.</p>
     {error && <p role="alert" className="vault-error">{error}</p>}
     {message && <p role="status" className="vault-ok">{message}</p>}
     <label htmlFor="session-patient">Paciente para evolução e sessões</label>
@@ -345,12 +344,12 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       {!activeDraft && !visibleDrafts.length && <p>Escolha ou crie um compromisso para este paciente; depois marque os comportamentos na sessão.</p>}
       {!activeDraft && !visibleDrafts.length && !onStartRecord && <p>Abra a Agenda para criar ou escolher um compromisso.</p>}
     </section>}
-    {activeDraft && activeDraft.patientId === patientId && <form id="session-draft" onSubmit={saveDraft} aria-label="Rascunho de sessão sintética">
+    {activeDraft && activeDraft.patientId === patientId && <form id="session-draft" onSubmit={saveDraft} aria-label="Rascunho de sessão">
       <h3>Rascunho da ocorrência {activeDraft.originalDate}</h3>
       <p>Paciente: <strong>{patients.find(patient => patient.id === patientId)?.name || patientId}</strong> · {activeDraft.originalDate}</p>
       <fieldset id="draft-behaviors" className="session-behavior-choices" tabIndex={-1} disabled={busy}><legend>Comportamentos desta sessão</legend>{templates.length ? templates.map(template => <label key={template.id} className="vault-checkbox"><input type="checkbox" checked={behaviorIds.includes(template.id)} onChange={event => { const next = event.target.checked ? [...behaviorIds, template.id] : behaviorIds.filter(id => id !== template.id); setBehaviorIds(next); updateValues({ behaviorIds: next }) }} /> {template.title} · v{template.version}</label>) : <p>Nenhum comportamento disponível. <a href="#session-behaviors" onClick={() => document.getElementById('session-behaviors')?.setAttribute('open', '')}>Criar na biblioteca</a>.</p>}</fieldset>
       {voiceConfirmationPending && <p role="status">Alteração de voz ainda não salva. Revise os campos e clique em “Salvar rascunho”.</p>}
-      <div id="draft-actions" className="session-draft-actions"><button type="submit" disabled={busy}>Salvar rascunho</button><button type="button" disabled={busy || activeDraft.patientId !== patientId || missingFinalizationFields.length > 0} aria-describedby={missingFinalizationFields.length ? 'session-finalize-requirements' : undefined} onClick={finalize}>Finalizar sessão sintética</button></div>
+      <div id="draft-actions" className="session-draft-actions"><button type="submit" disabled={busy}>Salvar rascunho</button><button type="button" disabled={busy || activeDraft.patientId !== patientId || missingFinalizationFields.length > 0} aria-describedby={missingFinalizationFields.length ? 'session-finalize-requirements' : undefined} onClick={finalize}>Finalizar sessão</button></div>
       <p id="session-finalize-requirements" className="session-finalize-requirements" role="status" aria-live="polite">{missingFinalizationFields.length ? `Para finalizar, preencha: ${missingFinalizationFields.join(', ')}.` : 'Campos necessários preenchidos; a sessão pode ser finalizada.'}</p>
       <nav className="session-draft-steps" aria-label="Etapas do rascunho"><a href="#draft-behaviors">Comportamentos</a> · <a href="#session-observation">Evolução descritiva</a> · <a href="#draft-indicators">Indicadores e escalas</a> · <a href="#draft-actions">Salvar ou finalizar</a></nav>
       <label htmlFor="session-observation">Observações descritivas</label><textarea disabled={busy} id="session-observation" maxLength={4000} value={observation} onChange={event => { setObservation(event.target.value); updateValues({ observation: event.target.value }) }} />

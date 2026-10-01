@@ -89,8 +89,8 @@ test('Home captura áudio, chama o backend local, mostra texto editável e limpa
 
 test('demonstração web explica que ditado offline exige o aplicativo Windows', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('complementary', { name: 'Limite da demonstração web' }))
-    .toContainText('O ditado offline está disponível no aplicativo Windows')
+  await expect(page.getByRole('complementary', { name: 'Demonstração no navegador' }))
+    .toContainText('ditado offline no aplicativo Windows')
 })
 
 test('Home prepara paciente, abre formulário preenchido e não salva sem clique explícito', async ({ page }) => {
@@ -145,7 +145,7 @@ test('comportamento por voz fica ligado à sessão certa e só aplica após revi
   await nav.getByRole('button', { name: 'Agenda' }).click()
   await page.getByRole('button', { name: 'Detalhes e ações' }).click()
   await page.getByRole('button', { name: /Iniciar sessão de Ana Clara/u }).click()
-  await expect(page.getByRole('form', { name: 'Rascunho de sessão sintética' })).toBeVisible()
+  await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toBeVisible()
   await nav.getByRole('button', { name: 'Início' }).click()
 
   const command = page.getByRole('region', { name: 'Comando do Círculo' })
@@ -164,7 +164,7 @@ test('comportamento por voz fica ligado à sessão certa e só aplica após revi
   await expect(page.getByRole('alert')).toContainText('Há uma alteração de voz não salva')
   await expect.poll(() => page.evaluate(() => window.voiceVaultLocks)).toBe(0)
   await expect.poll(() => page.evaluate(() => window.voiceSavedWrites)).toBe(0)
-  const sessionForm = page.getByRole('form', { name: 'Rascunho de sessão sintética' })
+  const sessionForm = page.getByRole('form', { name: 'Rascunho de sessão' })
   await sessionForm.getByRole('button', { name: 'Salvar rascunho' }).click()
   await expect.poll(() => page.evaluate(() => window.voiceSavedWrites)).toBe(1)
   await expect.poll(() => page.evaluate(() => window.voiceSavedPatch?.behaviorIds)).toEqual(['behavior-help'])
