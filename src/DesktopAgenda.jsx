@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { AGENDA_TIME_ZONE, addCivilDays, civilMonthEnd, civilWeekday, currentCivilDate, formatCivilShortDate, isCivilDate, parseCivilDate } from './calendarDate.js'
+import { parseVoiceAgendaCommand } from './voiceAgendaCommand.js'
 
 const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 const statusLabel = status => status === 'completed' ? 'Realizada' : status === 'scheduled' ? 'Agendada' : status
@@ -34,7 +35,7 @@ const rangeFor = (day, mode) => {
   return [`${day.slice(0, 7)}-01`, civilMonthEnd(day)]
 }
 
-export default function DesktopAgenda({ patients, onChanged, onStartSession, initialPatientId = '', startAvulsaSignal = 0, quickStart = false, onQuickStartConsumed }) {
+export default function DesktopAgenda({ patients, onChanged, onStartSession, initialPatientId = '', startAvulsaSignal = 0, quickStart = false, onQuickStartConsumed, active = true }) {
   const [allPatients, setAllPatients] = useState(patients)
   const [day, setDay] = useState(() => currentCivilDate(AGENDA_TIME_ZONE))
   const [mode, setMode] = useState('Semana')
@@ -61,6 +62,11 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, ini
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [commandText, setCommandText] = useState('')
+  const [commandReview, setCommandReview] = useState(null)
+  const [commandError, setCommandError] = useState('')
+  const [listening, setListening] = useState(false)
+  const recognizerRef = useRef(null)
   const [loadedRange, setLoadedRange] = useState('')
   const selectedFormRef = useRef(null)
   const createFormRef = useRef(null)
@@ -70,6 +76,30 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, ini
   const requestIdRef = useRef(0)
   const currentRangeRef = useRef('')
   const appliedInitialPatientEntryRef = useRef('')
+
+  const stopRecognition = () => {
+    const recognizer = recognizerRef.current
+    if (!recognizer) return
+    recognizerRef.current = null
+    recognizer.onresult = null
+    recognizer.onerror = null
+    recognizer.onend = null
+    recognizer.abort?.()
+  }
+  useEffect(() => () => {
+    const recognizer = recognizerRef.current
+    if (!recognizer) return
+    recognizerRef.current = null
+    recognizer.onresult = null
+    recognizer.onerror = null
+    recognizer.onend = null
+    recognizer.abort?.()
+  }, [])
+  useLayoutEffect(() => {
+    if (active || !recognizerRef.current) return
+    stopRecognition()
+    setListening(false)
+  }, [active])
 
   useEffect(() => {
     if (!initialPatientId) {
@@ -174,6 +204,8 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, ini
       setMessage(appointmentType === 'Avulsa' ? 'Compromisso avulso salvo no cofre cifrado.' : 'Série recorrente salva no cofre cifrado.')
       if (appointmentType === 'Avulsa') setDay(form.startDate)
       setForm(emptyForm(patients, input.startDate))
+      setCommandReview(null)
+      setCommandText('')
       await load(...rangeFor(input.startDate, mode))
       if (startNow) {
         const started = await onStartSession({ seriesId: created.id, originalDate: input.startDate })
@@ -226,6 +258,67 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, ini
   }
   const seriesPatient = id => series.find(item => item.id === id)?.patientId
   const activePatients = allPatients.filter(patient => patient.archivedAt == null)
+  const interpretCommand = text => {
+    const parsed = parseVoiceAgendaCommand({ text, patients: activePatients, referenceDate: currentCivilDate(AGENDA_TIME_ZONE) })
+    if (parsed.intent !== 'create') {
+      setCommandError(parsed.intent === 'error' ? parsed.error : 'Comando não reconhecido. Use “marcar” ou “adicionar” com paciente, data ou dia da semana e horário.')
+      setCommandReview(null)
+      return
+    }
+    if (quickStart && parsed.appointmentType !== 'Avulsa') {
+      setCommandError('Este atalho inicia apenas compromissos avulsos. Abra a Agenda normalmente para criar uma série.')
+      setCommandReview(null)
+      return
+    }
+    setForm(current => ({
+      ...current,
+      patientId: parsed.patientId || '',
+      weekday: parsed.appointmentType === 'Recorrente' ? parsed.weekday ?? '' : current.weekday,
+      start: parsed.start || '', end: parsed.end || '',
+      startDate: parsed.missing.includes('date') ? '' : parsed.startDate,
+      endDate: '', frequency: 'Semanal', modality: 'Presencial', meetingLink: '',
+    }))
+    setAppointmentType(parsed.appointmentType)
+    setCreateOpen(true)
+    setCommandReview(parsed)
+    setCommandError('')
+  }
+  const startRecognition = () => {
+    if (!active || recognizerRef.current) return
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!Recognition) { setCommandError('Este ambiente não oferece reconhecimento de voz. Digite o comando no campo acima.'); return }
+    try {
+      const recognizer = new Recognition()
+      recognizerRef.current = recognizer
+      recognizer.lang = 'pt-BR'
+      recognizer.continuous = false
+      recognizer.interimResults = false
+      recognizer.maxAlternatives = 1
+      recognizer.onresult = event => {
+        if (!active || recognizerRef.current !== recognizer) return
+        const transcript = event.results?.[0]?.[0]?.transcript?.trim()
+        if (!transcript) { setCommandError('Não foi possível entender o áudio. Tente novamente ou digite o comando.'); return }
+        setCommandText(transcript)
+        interpretCommand(transcript)
+      }
+      recognizer.onerror = event => {
+        if (!active || recognizerRef.current !== recognizer) return
+        const code = event.error
+        setCommandError(code === 'not-allowed' || code === 'service-not-allowed' ? 'Microfone não autorizado. Permita o acesso nas configurações do sistema ou digite o comando.' : code === 'network' ? 'Reconhecimento de voz indisponível pela rede. Digite o comando.' : code === 'no-speech' ? 'Nenhuma fala detectada. Tente novamente ou digite o comando.' : 'Não foi possível reconhecer a fala. Digite o comando ou tente novamente.')
+        stopRecognition()
+        setListening(false)
+      }
+      recognizer.onend = () => { if (recognizerRef.current === recognizer) { recognizerRef.current = null; recognizer.onresult = null; recognizer.onerror = null; recognizer.onend = null; setListening(false) } }
+      setCommandError('')
+      recognizer.start()
+      setListening(true)
+    } catch {
+      stopRecognition()
+      setListening(false)
+      setCommandError('Não foi possível iniciar o microfone. Digite o comando ou verifique a permissão.')
+    }
+  }
+  const missingLabels = { patient: 'paciente', weekday: 'dia da semana', date: 'data', time: 'horário' }
   const focusedOccurrence = sortedOccurrences.find(item => item.id === focusedOccurrenceId)
   const detailOccurrences = focusedOccurrence ? [focusedOccurrence] : sortedOccurrences
 
@@ -267,11 +360,12 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, ini
       </div>}
       {loaded && !sortedOccurrences.length && <p className="agenda-empty">Nenhum compromisso neste período.</p>}
     </div>
-    <section className="agenda-drawer" aria-label="Novo compromisso"><button type="button" className="agenda-drawer-toggle" aria-expanded={createOpen} aria-controls="agenda-create-panel" onClick={() => setCreateOpen(value => !value)}>Novo compromisso <span aria-hidden="true">{createOpen ? '▾' : '▸'}</span></button>{createOpen && <div id="agenda-create-panel"><form ref={createFormRef} tabIndex={-1} onSubmit={create} aria-label="Novo compromisso">
+    <section className="agenda-drawer" aria-label="Novo compromisso"><button type="button" className="agenda-drawer-toggle" aria-expanded={createOpen} aria-controls="agenda-create-panel" onClick={() => { if (createOpen) { stopRecognition(); setListening(false) } setCreateOpen(value => !value) }}>Novo compromisso <span aria-hidden="true">{createOpen ? '▾' : '▸'}</span></button>{createOpen && <div id="agenda-create-panel"><form ref={createFormRef} tabIndex={-1} onSubmit={create} aria-label="Novo compromisso">
       <h3>Novo compromisso</h3><p>Recolher ou trocar de espaço mantém este rascunho enquanto o aplicativo estiver aberto. Salve antes de bloquear ou fechar.</p>
+      <section className="agenda-command" aria-label="Comando de agendamento"><h4>Preencher por comando</h4><p>Digite ou dite só um comando simples de agenda, sem notas clínicas. Neste protótipo, o serviço de voz do WebView pode enviar áudio para reconhecimento.</p><label htmlFor="agenda-command-text">Comando de agendamento</label><input id="agenda-command-text" type="text" value={commandText} onChange={event => setCommandText(event.target.value)} placeholder="Ex.: marcar semanal para Ana na quinta às 15" /><div className="agenda-command-actions"><button type="button" className="vault-secondary" onClick={() => interpretCommand(commandText)}>Interpretar comando</button><button type="button" className="vault-secondary" disabled={listening} onClick={startRecognition} aria-label="Ditar comando de agendamento">{listening ? 'Ouvindo…' : '🎙 Ditar comando'}</button></div>{commandError && <p role="alert" className="vault-error">{commandError}</p>}{commandReview && <div className="agenda-command-review" role="status"><strong>Confira antes de salvar</strong><p>{commandReview.appointmentType} · {commandReview.startDate}{commandReview.start ? ` · ${commandReview.start}–${commandReview.end}` : ''} · Presencial</p>{commandReview.missing.length > 0 && <p>Complete no formulário: {commandReview.missing.map(item => missingLabels[item]).join(', ')}.</p>}{commandReview.timeAmbiguous && <p>Horário de 1 a 12 é ambíguo. Diga manhã, tarde ou noite, ou informe no formato de 24 horas.</p>}{commandReview.ambiguousPatients.length > 0 && <div><p>Mais de um paciente com esse nome. Escolha o cadastro correto:</p>{commandReview.ambiguousPatients.map(candidate => <button key={candidate.id} type="button" className="vault-secondary" onClick={() => { setForm(current => ({ ...current, patientId: candidate.id })); setCommandReview(current => ({ ...current, patientId: candidate.id, missing: current.missing.filter(item => item !== 'patient') })) }}>{candidate.name} · ID {candidate.id}</button>)}</div>}<p>O comando apenas preencheu os campos. Revise e use o botão de criação para salvar.</p></div>}</section>
       <label htmlFor="agenda-type">Tipo</label><select id="agenda-type" disabled={quickStart} value={appointmentType} onChange={event => setAppointmentType(event.target.value)}><option>Avulsa</option><option>Recorrente</option></select>
       <label htmlFor="agenda-patient">Paciente</label><select id="agenda-patient" required value={form.patientId} onChange={event => setForm({ ...form, patientId: event.target.value })}><option value="">Selecione</option>{activePatients.map(patient => <option key={patient.id} value={patient.id}>{patient.name}</option>)}</select>
-      {appointmentType === 'Recorrente' && <><label htmlFor="agenda-weekday">Dia da semana</label><select id="agenda-weekday" value={form.weekday} onChange={event => setForm({ ...form, weekday: Number(event.target.value) })}>{['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'].map((label, index) => <option value={index} key={label}>{label}</option>)}</select><label htmlFor="agenda-frequency">Frequência</label><select id="agenda-frequency" value={form.frequency} onChange={event => setForm({ ...form, frequency: event.target.value })}><option>Semanal</option><option>Quinzenal</option></select></>}
+      {appointmentType === 'Recorrente' && <><label htmlFor="agenda-weekday">Dia da semana</label><select id="agenda-weekday" required value={form.weekday} onChange={event => setForm({ ...form, weekday: event.target.value === '' ? '' : Number(event.target.value) })}><option value="">Selecione</option>{['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'].map((label, index) => <option value={index} key={label}>{label}</option>)}</select><label htmlFor="agenda-frequency">Frequência</label><select id="agenda-frequency" value={form.frequency} onChange={event => setForm({ ...form, frequency: event.target.value })}><option>Semanal</option><option>Quinzenal</option></select></>}
       <label htmlFor="agenda-start-date">{appointmentType === 'Avulsa' ? 'Data do compromisso' : 'Início da série'}</label><input id="agenda-start-date" type="date" required value={form.startDate} onChange={event => setForm({ ...form, startDate: event.target.value })} />
       {appointmentType === 'Recorrente' && <><label htmlFor="agenda-end-date">Término opcional (inclusivo)</label><input id="agenda-end-date" type="date" value={form.endDate} onChange={event => setForm({ ...form, endDate: event.target.value })} /></>}
       <label htmlFor="agenda-start-time">Horário inicial</label><input id="agenda-start-time" type="time" required value={form.start} onChange={event => setForm({ ...form, start: event.target.value })} />

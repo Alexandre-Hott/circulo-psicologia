@@ -1,0 +1,10 @@
+# Validação local 0.2.20 — 30/09/2026
+
+Instalador NSIS x64: `release/Círculo_0.2.20_x64-setup.exe` (5.220.391 bytes), SHA-256 `504ec1c76ad3cdcb030f77415730699cc79e085e7d62e785589d92f26f39ad02`. Assinatura do updater: `release/Círculo_0.2.20_x64-setup.exe.sig` (440 bytes), SHA-256 `0eb96b941ff2528cb21eedd837f6672cb82c1376d22b891b04db449cff4cb430`. As cópias coincidiram por SHA-256 com o bundle no target curto. Versões npm, npm lock, Cargo, Cargo.lock e Tauri: 0.2.20.
+
+- Mudança: protótipo de comando de agendamento digitado ou por reconhecimento de voz `pt-BR`. O texto interpretado apenas preenche o formulário; a pessoa deve revisar os campos e salvar explicitamente. Entradas incompletas/ambíguas não escolhem paciente por aproximação.
+- Validações: `git diff --check` sem erros; lint passou com aviso preexistente de pureza em `src/App.jsx`; guard de repositório passou; testes JS 161/161; E2E completo 157/157 (4,6 min), incluindo testes com mock de `SpeechRecognition`; Rust release/offline 69 aprovados, 0 falhas, 1 filtrado (teste de instância única porque o aplicativo instalado estava aberto).
+- Build: `npm exec tauri build -- --bundles nsis` com target curto, Cargo offline, Strawberry Perl no PATH e chave de assinatura privada externa referenciada apenas por variável de ambiente; saída 0. Linker emitiu LNK4099 por PDB ausente do OpenSSL, sem impedir o bundle.
+- Auditoria: ProductVersion e FileVersion 0.2.20, alvo x64, Authenticode `NotSigned`, hash acima. Manifesto em `%TEMP%\circulo-0220-audit-20260930-01.json`. A assinatura do updater é distinta de Authenticode.
+- Manifesto do updater: `release/staging-0.2.20-20260930-01/latest.json`, versão 0.2.20, URL ASCII do asset no tag `v0.2.20`, assinatura textual igual ao `.sig` local. Não houve verificação criptográfica independente da assinatura.
+- Os testes de reconhecimento usam um mock de `SpeechRecognition`; **captura real do microfone, permissões do Windows e resposta do serviço de reconhecimento não foram testadas**. Web Speech pode não estar disponível no WebView ou pode depender de rede/serviço remoto. O campo digitado é o fallback. Não usar dados clínicos reais.
