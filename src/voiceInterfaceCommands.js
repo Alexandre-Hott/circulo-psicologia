@@ -59,7 +59,9 @@ function inventory(root) {
 
 function matches(query, entries) {
   const normalized = fold(query)
-  const exact = entries.filter(item => fold(item.name) === normalized || fold(`${item.name} de ${item.context}`) === normalized || fold(`${item.name} em ${item.context}`) === normalized)
+  // Explicit legacy aliases compete with all matching controls, never picking
+  // the first retry when two operations share an old short command.
+  const exact = entries.filter(item => fold(item.name) === normalized || fold(item.element.getAttribute('data-voice-alias') || '') === normalized || fold(`${item.name} de ${item.context}`) === normalized || fold(`${item.name} em ${item.context}`) === normalized)
   if (exact.length) return exact
   const aliases = entries.filter(item => fold(item.name.replace(/\s*·\s*v\d+\s*$/i, '').replace(/\s*\(opcional\)/i, '').replace(/\s*\(at[eé]\s+\d+\s+caracteres\)/iu, '').replace(/\s+em anos\b/i, '')) === normalized)
   if (aliases.length) return aliases

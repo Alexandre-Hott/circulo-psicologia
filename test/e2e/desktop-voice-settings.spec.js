@@ -94,9 +94,10 @@ test('updater: retry da verificação por voz não baixa nem instala', async ({ 
   expect(await calls(page, 'plugin:updater|download_and_install')).toHaveLength(0)
 })
 
-test('dois retries visíveis recusam escolha ambígua e navegação delimita o alvo', async ({ page }) => {
+test('retries distintos por voz atingem o alvo sem navegar; alias curto ambíguo é recusado', async ({ page }) => {
   await openApp(page, { checkFailure: true, agendaFailure: true })
-  await expect(page.getByRole('button', { name: 'Tentar novamente', exact: true })).toHaveCount(2)
+  await expect(page.getByRole('button', { name: 'Recarregar agenda', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Verificar atualizações', exact: true })).toBeVisible()
   const checks = (await calls(page, 'plugin:updater|check')).length
   const agenda = (await calls(page, 'agenda_occurrences')).length
   await propose(page, 'Clicar em Tentar novamente')
@@ -104,15 +105,15 @@ test('dois retries visíveis recusam escolha ambígua e navegação delimita o a
   await expect(page.locator('.voice-command-error')).toContainText('mais de uma opção')
   expect(await calls(page, 'plugin:updater|check')).toHaveLength(checks)
   expect(await calls(page, 'agenda_occurrences')).toHaveLength(agenda)
-  await command(page, 'Abrir pacientes')
   await page.evaluate(() => { window.settingsFixture.checkFailure = false })
-  await command(page, 'Clicar em Tentar novamente')
+  await command(page, 'Clicar em Verificar atualizações')
   expect(await calls(page, 'plugin:updater|check')).toHaveLength(checks + 1)
-  await command(page, 'Clicar em Início')
+  expect(await calls(page, 'agenda_occurrences')).toHaveLength(agenda)
   await expect(page.getByText('Não foi possível consultar a agenda agora.')).toBeVisible()
   await page.evaluate(() => { window.settingsFixture.agendaFailure = false })
   const beforeRetry = (await calls(page, 'agenda_occurrences')).length
-  await command(page, 'Clicar em Tentar novamente')
+  await command(page, 'Clicar em Recarregar agenda')
+  expect(await calls(page, 'plugin:updater|check')).toHaveLength(checks + 1)
   expect((await calls(page, 'agenda_occurrences')).length).toBeGreaterThan(beforeRetry)
   await expect(page.getByText('Nenhum compromisso para hoje.')).toBeVisible()
   expect(await calls(page, 'plugin:updater|download_and_install')).toHaveLength(0)

@@ -153,7 +153,7 @@ test('erro de backend remove agregados anteriores; Tentar novamente por voz cons
   await expect(analytics.locator('.analytics-bars')).toHaveCount(0)
   await expect(analytics.getByText('Observação sintética anterior', { exact: true })).toHaveCount(0)
 
-  await command(page, 'Clicar em Tentar novamente')
+  await command(page, 'Clicar em Recarregar análises')
   await expect.poll(() => requests(page)).toEqual([...initialRequests, year, year])
   await expect(analytics.getByRole('alert')).toContainText('Não foi possível carregar')
   await expect(analytics.locator('.analytics-summary')).toHaveCount(0)
@@ -168,5 +168,5 @@ test('erro de backend remove agregados anteriores; Tentar novamente por voz cons
   await expect(analytics.getByRole('table')).toHaveCount(0)
   await expect(analytics.locator('.analytics-bars')).toHaveCount(0)
   await expect(analytics.getByText('Observação sintética anterior', { exact: true })).toHaveCount(0)
-  await expect(analytics.getByRole('button', { name: 'Tentar novamente', exact: true })).toHaveCount(0)
+  await expect(analytics.getByRole('button', { name: 'Recarregar análises', exact: true })).toHaveCount(0)
 })

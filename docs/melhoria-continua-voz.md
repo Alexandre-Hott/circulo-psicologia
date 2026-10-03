@@ -1,5 +1,9 @@
 # Melhoria contínua de voz
 
+## Incremento após 0.2.43: retries com alvo explícito
+
+[Implementação e provas](voz-retries-explicitos.md). Recarregar agenda/análises, Verificar atualizações e Tentar instalação novamente identificam a operação na tela e na voz; não exige navegar quando dois erros aparecem juntos. Aliases antigos continuam válidos só quando únicos. 20/20 E2E conjuntos em 58,2 s e 229/229 JS aprovados; lint/guard/build também, com avisos anteriores. Ainda não empacotado no NSIS instalado 0.2.43. Meta ativa.
+
 ## Entrega instalada 0.2.43 — 03/10/2026
 
 Cobertura adicional de Início/updater: **7/7 E2E em 38,6 s**, **229/229 JS** e lint aprovados. Retry da prévia, Ver pacientes/Ver agenda/Início, retry de verificação (falha/sucesso sem instalar) e retry com cadastro aberto preservado. Dois retries visíveis recusam comando ambíguo; navegação delimita o alvo sem efeito indevido, mas ainda é uma fricção a melhorar. [Matriz](voz-cobertura-interface.md). Sem alteração de produção ou novo pacote; sem instalação/ditado humano nesta rodada.

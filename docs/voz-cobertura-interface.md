@@ -114,11 +114,17 @@ A rodada inicial específica teve 2/3: o teste tentou acionar um botão dentro d
 
 A rodada intermediária teve 5/6 por uma expectativa incorreta de título na fixture (“Seus pacientes”, enquanto a tela mostra “Pacientes”). A expectativa foi corrigida sem mudar o produto; a rodada final com sete casos passou. Updater, arquivos e persistência continuam simulados. Não se instalou atualização real nem se validou microfone humano.
 
+## Atualização de implementação: retries sem navegação adicional
+
+[Retries explícitos](voz-retries-explicitos.md): rótulos visíveis Recarregar agenda, Recarregar análises, Verificar atualizações e Tentar instalação novamente agora são alvos distintos por voz. Aliases legados competem com todos os controles; se ambíguos são recusados, se únicos permanecem compatíveis. A fricção documentada na rodada anterior foi resolvida no código, ainda não no instalador 0.2.43.
+
+20/20 E2E conjuntos em 58,2 s e 229/229 JS aprovados, lint/guard/build frontend aprovados com avisos anteriores. Dois erros simultâneos: comandos explícitos verificaram apenas seus próprios contadores, sem trocar de área, baixar ou instalar. Microfone humano e instalação nativa não repetidos.
+
 ## Prioridades restantes para o agente principal
 
 Homologação dos testes novos de homônimos, identidade de seleção e helper: **concluída pelo principal**, conforme nota de execução. Não é mais prioridade pendente.
 
 1. **Fechar navegação restante por voz:** Fechar vínculos, demais CTAs de Sessões e cabeçalhos semanais; demonstração sintética com recusa. Início/Ver pacientes/Ver agenda/retry da prévia foram comprovados acima. Os cenários por mouse não substituem essa evidência.
 2. **Cobrir caminhos ainda só `S`:** Voltar do encerramento de série e recolher gavetas administrativas. Selects/comando local da Agenda e caminhos de evolução/âncoras/paciente arquivado foram comprovados nas atualizações acima. Usar dados sintéticos e verificar alvo/payload, sem adicionar funções.
-3. **Cobrir descarte de outros formulários do updater:** vínculo, Agenda, contexto, adendo e biblioteca, sem instalação real. Os retries check-error/forms-open e prévia do Início foram comprovados; rótulos dos retries simultâneos ainda podem ser simplificados para evitar navegação adicional. Não confundir alcance pelo código com prova específica de voz.
+3. **Cobrir descarte de outros formulários do updater:** vínculo, Agenda, contexto, adendo e biblioteca, sem instalação real. Os retries check-error/forms-open e prévia do Início foram comprovados; rótulos simultâneos foram simplificados no código e precisam do próximo empacotamento. Não confundir alcance pelo código com prova específica de voz.
 4. **Fechar evidência nativa e decidir a lacuna do cofre bloqueado:** anexar resultados do principal para microfone físico/reconhecimento no Windows, chooser cancelado e arquivos reais de backup/exportação em destino de teste autorizado. Mocks não validam essas etapas; não executar recuperação/substituição/limpeza nesta auditoria. O cofre bloqueado tem controles existentes sem acesso por voz porque não monta o assistente; senha permanece manual. Essa é uma lacuna real de cobertura, e uma implementação para atendê-la exige decisão explícita, sem presumir que esteja automaticamente fora do objetivo.
