@@ -154,11 +154,27 @@ Comandos digitados na entrada do assistente, componentes reais e backend estrita
 
 Uma expectativa inicial incorreta exigiu paciente vazio no atalho geral. A execução mostrou Ana pré-selecionada; `emptyForm` confirmou ser o padrão da interface. Corrigido apenas o teste, sem mudar o aplicativo ou permitir gravação antecipada.
 
+## Atualização: backup portátil pelo assistente em Ajustes
+
+**17/17 E2E settings em1,3min**, porta5196, após reforçar a substituição da lista fictícia. **229/229JS**, lint e diff check aprovados, com quatro avisos anteriores no lint.
+
+Cinco cenários novos em [desktop-voice-settings](../test/e2e/desktop-voice-settings.spec.js), usando apenas registros fictícios em memória e comandos digitados no assistente:
+
+- `E/N`: Selecionar e verificar backup desabilitado não é acionado. Após senha manual, cancelamento do chooser mostra cancelamento e não oferece restauração nem chama `backup_restore`.
+- `E/N`: erro de leitura remove a prévia anterior; repetir a seleção verifica novamente e não restaura automaticamente.
+- `E/N`: senha local não pode ser preenchida por comando. Confirmar restauração exige proposta e depois confirmação explícita de substituição. Voltar não chama o backend e preserva a senha digitada e o cadastro fictício atual.
+- `E/N`: aceitar chama o handler normal uma única vez, com ambas as senhas fictícias e confirmação explícita. A fixture substitui Ana pelo paciente fictício Lia do Backup; a interface limpa prévia/senha, consulta o estado desbloqueado e carrega a nova lista, sem manter Ana na tela.
+- `E/N`: retorno de cancelamento e exceção de restauração não anunciam sucesso; após o erro, a consulta de estado permite continuar navegando nos pacientes fictícios.
+
+Não comprova arquivo portátil real, integridade/criação de cópia cifrada, seletor nativo, troca efetiva do perfil instalado ou transcrição humana. Senhas e escolha de arquivo continuam manuais; o cofre bloqueado ainda não possui assistente. Limpeza de recovery e backups antigos continuam fora desta rodada. Troca da senha após a seleção e respostas tardias de seleção permanecem cenários não cobertos aqui.
+
+A rodada inicial específica teve2/5 porque três expectativas procuravam Ana como heading; o componente a apresenta em `<strong>` no cartão identificado pelo ID. Corrigida somente a asserção. O teste de sucesso foi reforçado para exigir o paciente do backup fictício e ausência do anterior, não apenas uma mensagem de sucesso. Produção e instalador0.2.44 não mudaram.
+
 ## Prioridades restantes para o agente principal
 
 Homologação dos testes novos de homônimos, identidade de seleção e helper: **concluída pelo principal**, conforme nota de execução. Não é mais prioridade pendente.
 
 1. **Continuar cobertura dos controles restantes:** entrada de Sessões, demonstração com recusa/repetição, fechamento de vínculos, cabeçalhos semanal/diário e navegação Início foram comprovados pelo assistente. Revisar itens ainda `S` sem suplemento `E`; comandos digitados e cenários por mouse não substituem reconhecimento físico ou banco nativo.
 2. **Manter regressão dos caminhos comprovados:** pacote instalado0.2.44 consolida retries e cabeçalhos. Não tomar os testes já aprovados como prova dos caminhos ainda pendentes nem repetir build sem mudança de produção.
-3. **Consolidar auditoria de Ajustes:** descarte por voz dos cinco editores foi comprovado, assim como cadastro, retries e confirmação de instalação na fronteira simulada. Ainda faltam provas específicas de selecionar/verificar/restaurar backup por voz, com senhas/chooser manuais; não investigar limpeza ou backups antigos. Não confundir mocks com arquivo nativo validado.
+3. **Consolidar evidência nativa de Ajustes:** seleção/verificação/restauração de backup pelo assistente foi comprovada na fronteira simulada, assim como descarte dos cinco editores e updater. Ainda faltam arquivo/seletor/restauração nativos; senhas/chooser manuais, sem limpeza ou backups antigos. Troca de senha após seleção e respostas tardias ainda exigem cenários próprios. Não confundir mocks com arquivo nativo validado.
 4. **Fechar evidência nativa e decidir a lacuna do cofre bloqueado:** anexar resultados do principal para microfone físico/reconhecimento no Windows, chooser cancelado e arquivos reais de backup/exportação em destino de teste autorizado. Mocks não validam essas etapas; não executar recuperação/substituição/limpeza nesta auditoria. O cofre bloqueado tem controles existentes sem acesso por voz porque não monta o assistente; senha permanece manual. Essa é uma lacuna real de cobertura, e uma implementação para atendê-la exige decisão explícita, sem presumir que esteja automaticamente fora do objetivo.

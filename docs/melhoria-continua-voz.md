@@ -1,5 +1,9 @@
 # Melhoria contínua de voz
 
+## Cobertura após0.2.44: backup portátil pelo assistente
+
+17/17 E2E settings em1,3min, 229/229JS, lint/diff check aprovados (quatro avisos anteriores). Cinco novos cenários cobrem seleção desabilitada/cancelada, erro e nova tentativa, senha manual, recusa/aceite explícito e restauração cancelada/falha sem falso sucesso. Na simulação de sucesso, a lista do backup fictício substitui a anterior na interface. [Provas e limites](voz-cobertura-interface.md). Primeiro2/5 por asserção incorreta de heading, corrigida para o cartão do paciente; duas rodadas completas17/17, a última com substituição de pacientes reforçada. Sem arquivo real, alteração do perfil Windows, microfone físico, Rust ou novo instalador; instalado permanece0.2.44. Limpeza/legados continuam fora do escopo. Meta ativa: cobertura nativa e controles sem assistente no cofre bloqueado permanecem incompletos.
+
 ## Cobertura após0.2.44: entrada de sessões e demonstração pelo assistente
 
 59/59 E2E interface/shell em2,7min; 229/229JS e lint aprovados (avisos anteriores). Dois CTAs de Sessões abrem o fluxo correto sem gravação antecipada. Demonstração por comando exige proposta/confirmação; recusa preserva todos os registros, aceitar cria três pacientes/dois modelos/três séries/quatro sessões fictícias e repetir no mesmo processo/dia não duplica ou altera registros. Comparações integrais reforçadas e novamente comprovadas em2/2 cenários mouse/comando,20,8s. [Matriz e limites](voz-cobertura-interface.md). Expectativa inicial de paciente vazio corrigida após conferir o padrão `emptyForm`, sem mudança de produção. Nenhum novo instalador, banco nativo ou microfone físico testado; instalado permanece0.2.44, meta ativa. Próxima lacuna: seleção/verificação/restauração de backup pelo assistente, mantendo senhas e seletor nativo manuais e sem limpeza ou backups antigos.

@@ -8,7 +8,7 @@ async function openApp(page, update = false) {
   await page.addInitScript(({ update = false, checkFailure = false, agendaFailure = false }) => {
     let unlocked = true
     let downloads = 0
-    window.settingsFixture = { calls: [], unexpected: [], checkFailure, agendaFailure, timeline: [] }
+    window.settingsFixture = { calls: [], unexpected: [], checkFailure, agendaFailure, timeline: [], patients: [{ id: 'ana', name: 'Ana Clara', age: 8, revision: 1, archivedAt: null }], backupPreview: null, backupSelectError: '', backupRestoreError: '', backupRestoreResult: true, backupRestorePatients: null }
     const callbacks = new Map()
     window.__TAURI_INTERNALS__ = {
       transformCallback(callback) { const id = callbacks.size + 1; callbacks.set(id, callback); return id },
@@ -20,11 +20,20 @@ async function openApp(page, update = false) {
         if (command === 'auto_backup_status') return { available: false, dirty: false }
         if (command === 'auto_backup_retry') return { available: true, dirty: false, lastVerifiedAt: 1791039600 }
         if (command === 'recovery_inventory') return { categories: [], eligibleCount: 0, eligibleBytes: 0, cleanupBlocked: false }
-        if (command === 'patient_list') return [{ id: 'ana', name: 'Ana Clara', age: 8, revision: 1, archivedAt: null }]
+        if (command === 'patient_list') return structuredClone(window.settingsFixture.patients.filter(patient => args.includeArchived || patient.archivedAt == null))
         if (command === 'agenda_occurrences' && window.settingsFixture.agendaFailure) throw new Error('Falha sintética da prévia da Agenda')
         if (command === 'session_timeline') return structuredClone(window.settingsFixture.timeline.filter(session => session.patientId === args.patientId))
         if (['behavior_list', 'indicator_catalog', 'agenda_list_series', 'agenda_history', 'agenda_occurrences', 'related_party_list', 'session_timeline', 'session_draft_list', 'session_addendum_list', 'case_context_list'].includes(command)) return []
         if (command === 'record_copy_export' || command === 'backup_create') return false // chooser cancelled; no file
+        if (command === 'backup_select') {
+          if (window.settingsFixture.backupSelectError) throw new Error(window.settingsFixture.backupSelectError)
+          return structuredClone(window.settingsFixture.backupPreview)
+        }
+        if (command === 'backup_restore') {
+          if (window.settingsFixture.backupRestoreError) throw new Error(window.settingsFixture.backupRestoreError)
+          if (window.settingsFixture.backupRestoreResult && window.settingsFixture.backupRestorePatients) window.settingsFixture.patients = structuredClone(window.settingsFixture.backupRestorePatients)
+          return window.settingsFixture.backupRestoreResult
+        }
         if (command === 'plugin:updater|check') {
           if (window.settingsFixture.checkFailure) throw new Error('Falha sintética de verificação')
           return update ? { rid: 1, currentVersion: '0.2.39', version: '0.2.40' } : null
@@ -61,6 +70,88 @@ async function command(page, text) {
 
 const calls = (page, command) => page.evaluate(name => window.settingsFixture.calls.filter(item => item.command === name), command)
 test.afterEach(async ({ page }) => expect(await page.evaluate(() => window.settingsFixture?.unexpected || [])).toEqual([]))
+
+async function selectSyntheticBackup(page) {
+  await command(page, 'Abrir ajustes')
+  // Passwords and the file chooser remain manual. No native file is opened here.
+  await page.locator('#backup-password').fill('backup-ficticio-2026')
+  await page.evaluate(() => { window.settingsFixture.backupPreview = { schemaVersion: 5, createdAt: 1791039600, sizeBytes: 4096, profileState: 'ready', replacesExisting: true } })
+  await command(page, 'Clicar em Selecionar e verificar backup')
+  await expect(page.getByText(/Backup verificado · formato v1/)).toBeVisible()
+}
+
+test('backup por comando: controle desabilitado e chooser cancelado nunca restauram', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Abrir ajustes')
+  await propose(page, 'Clicar em Selecionar e verificar backup')
+  await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+  expect(await calls(page, 'backup_select')).toHaveLength(0)
+  await page.locator('#backup-password').fill('backup-ficticio-2026')
+  await command(page, 'Clicar em Selecionar e verificar backup')
+  await expect(page.getByText('Seleção de backup cancelada.')).toBeVisible()
+  expect(await calls(page, 'backup_select')).toEqual([{ command: 'backup_select', args: { password: 'backup-ficticio-2026' } }])
+  await expect(page.getByRole('button', { name: 'Confirmar restauração', exact: true })).toHaveCount(0)
+  expect(await calls(page, 'backup_restore')).toHaveLength(0)
+})
+
+test('backup por comando: erro de seleção remove prévia e nova seleção verifica novamente', async ({ page }) => {
+  await openApp(page)
+  await selectSyntheticBackup(page)
+  await page.evaluate(() => { window.settingsFixture.backupSelectError = 'Falha fictícia de leitura do backup' })
+  await command(page, 'Clicar em Selecionar e verificar backup')
+  await expect(page.getByRole('alert')).toContainText('Falha fictícia de leitura do backup')
+  await expect(page.getByText(/Backup verificado · formato v1/)).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Confirmar restauração', exact: true })).toHaveCount(0)
+  await page.evaluate(() => { window.settingsFixture.backupSelectError = '' })
+  await command(page, 'Clicar em Selecionar e verificar backup')
+  await expect(page.getByText(/Backup verificado · formato v1/)).toBeVisible()
+  expect(await calls(page, 'backup_select')).toHaveLength(3)
+  expect(await calls(page, 'backup_restore')).toHaveLength(0)
+})
+
+test('backup por comando: recusa não restaura; aceitar exige senha manual e confirmação explícita', async ({ page }) => {
+  await openApp(page)
+  await selectSyntheticBackup(page)
+  await page.evaluate(() => { window.settingsFixture.backupRestorePatients = [{ id: 'restored-lia', name: 'Lia do Backup Fictício', age: 22, revision: 1, archivedAt: null }] })
+  await propose(page, 'Preencher Senha atual do cofre local com local-ficticio-2026')
+  await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+  await expect(page.locator('#local-restore-password')).toHaveValue('')
+  await page.locator('#local-restore-password').fill('local-ficticio-2026')
+  await command(page, 'Clicar em Confirmar restauração')
+  await expect(page.getByRole('alertdialog')).toContainText('SUBSTITUIR o único perfil local')
+  expect(await calls(page, 'backup_restore')).toHaveLength(0)
+  await propose(page, 'voltar')
+  await expect(page.locator('#local-restore-password')).toHaveValue('local-ficticio-2026')
+  expect(await calls(page, 'backup_restore')).toHaveLength(0)
+  expect(await page.evaluate(() => window.settingsFixture.patients.map(patient => patient.id))).toEqual(['ana'])
+  await command(page, 'Clicar em Confirmar restauração')
+  await propose(page, 'confirmar')
+  await expect(page.getByText('Restauração concluída. O cofre local está desbloqueado.')).toBeVisible()
+  expect(await calls(page, 'backup_restore')).toEqual([{ command: 'backup_restore', args: { backupPassword: 'backup-ficticio-2026', localPassword: 'local-ficticio-2026', confirmed: true, quarantineConfirmed: false } }])
+  await expect(page.locator('#backup-password')).toHaveValue('')
+  await expect(page.getByText(/Backup verificado · formato v1/)).toHaveCount(0)
+  await command(page, 'Abrir pacientes')
+  await expect(page.locator('[data-voice-record="patient:restored-lia"]')).toContainText('Lia do Backup Fictício')
+  await expect(page.locator('[data-voice-record="patient:ana"]')).toHaveCount(0)
+})
+
+for (const outcome of ['cancelada', 'falhou']) test(`backup por comando: restauração ${outcome} não anuncia sucesso`, async ({ page }) => {
+  await openApp(page)
+  await selectSyntheticBackup(page)
+  await page.locator('#local-restore-password').fill('local-ficticio-2026')
+  await page.evaluate(outcome => {
+    window.settingsFixture.backupRestoreResult = false
+    if (outcome === 'falhou') window.settingsFixture.backupRestoreError = 'Falha fictícia de restauração'
+  }, outcome)
+  await command(page, 'Clicar em Confirmar restauração')
+  await propose(page, 'confirmar')
+  if (outcome === 'cancelada') await expect(page.getByText('Restauração cancelada. Nenhum cofre foi criado.')).toBeVisible()
+  else await expect(page.getByRole('alert')).toContainText('Falha fictícia de restauração')
+  await expect(page.getByText('Restauração concluída. O cofre local está desbloqueado.')).toHaveCount(0)
+  expect(await calls(page, 'backup_restore')).toHaveLength(1)
+  await command(page, 'Abrir pacientes')
+  await expect(page.locator('[data-voice-record="patient:ana"]')).toContainText('Ana Clara')
+})
 
 test('Início: retry da prévia e navegação por voz sem mutação', async ({ page }) => {
   await openApp(page, { agendaFailure: true })
