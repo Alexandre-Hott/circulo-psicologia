@@ -83,11 +83,21 @@ Rodada conjunta posterior: **7/7 E2E aprovados em 46,7 s**, porta 5196, nos arqu
 
 Nenhuma mudança de produção ou novo instalador nesta rodada; o pacote continua **0.2.42**. A suíte JS também passou **225/225**; lint passou com quatro avisos preexistentes. Um teste intermediário falhou por usar `draftId` na fixture de finalização, em vez do contrato real `id`; corrigida a fixture, os quatro cenários passaram e depois os sete passaram conjuntamente. O teste de Análises passou a usar a origem de `baseURL`, sem porta fixa. Não foi encontrada falha do aplicativo nesta rodada. Não houve repetição de Rust, instalação nativa, persistência cifrada ou microfone humano.
 
+## Atualização de execução: selects e comando local da Agenda
+
+Arquivo [desktop-voice-agenda-mutations](../test/e2e/desktop-voice-agenda-mutations.spec.js): **7/7 aprovados em 56,1 s**, porta 5196, incluindo três cenários novos. **225/225 JS** e lint aprovados (quatro avisos anteriores). Sem mudanças de produção ou novo instalador.
+
+- `E`: selecionar diretamente Tipo, Paciente, Dia da semana, Frequência e Modalidade, alternar Avulsa/Recorrente preservando os campos e confirmar payload quinzenal online. Não grava antes da confirmação.
+- `E`: preencher Comando de agendamento, Interpretar comando, recusar escolha arbitrária entre homônimos, escolher explicitamente ID ana2 e criar série para esse ID. Verificada ocorrência no próximo dia da semana. A rodada inicial teve uma expectativa incorreta da data: o parser local usa hoje como limite inicial da série; as ocorrências respeitam o dia escolhido. Expectativa corrigida após inspeção do contrato, sem mudar o produto.
+- `E`: alternar Ação explícita entre cancelar/remarcar, verificar os campos condicionais e fechar sem alteração persistida. As confirmações normais de remarcação/cancelamento e encerramento continuaram passando.
+
+Esses estados substituem as lacunas correspondentes `S` da matriz original. Ainda não é reconhecimento de microfone físico, escrita cifrada nativa ou prova de todas as opções possíveis.
+
 ## Prioridades restantes para o agente principal
 
 Homologação dos testes novos de homônimos, identidade de seleção e helper: **concluída pelo principal**, conforme nota de execução. Não é mais prioridade pendente.
 
 1. **Fechar navegação restante por voz:** Fechar vínculos, abertura de Início, demais CTAs de Sessões e cabeçalhos semanais; demonstração sintética com recusa e retry da prévia do Início. Os cenários por mouse não substituem essa evidência.
-2. **Cobrir campos/caminhos ainda só `S`:** trocar selects Tipo/Frequência/Dia/Modalidade/Ação explícita pelo gateway; comando local da Agenda e candidato por ID. Usar dados sintéticos e verificar alvo/payload, sem adicionar funções.
+2. **Cobrir caminhos ainda só `S`:** Voltar do encerramento de série, recolher gavetas administrativas, âncoras de Sessões, CTA de evolução com os três caminhos e paciente arquivado em Sessões. Selects e comando local da Agenda foram comprovados na atualização acima. Usar dados sintéticos e verificar alvo/payload, sem adicionar funções.
 3. **Cobrir retries restantes:** prévia do Início e demais estados do updater, sem instalação real; caminhos de evolução, âncoras e paciente arquivado em Sessões. Não confundir alcance pelo código com prova específica de voz.
 4. **Fechar evidência nativa e decidir a lacuna do cofre bloqueado:** anexar resultados do principal para microfone físico/reconhecimento no Windows, chooser cancelado e arquivos reais de backup/exportação em destino de teste autorizado. Mocks não validam essas etapas; não executar recuperação/substituição/limpeza nesta auditoria. O cofre bloqueado tem controles existentes sem acesso por voz porque não monta o assistente; senha permanece manual. Essa é uma lacuna real de cobertura, e uma implementação para atendê-la exige decisão explícita, sem presumir que esteja automaticamente fora do objetivo.

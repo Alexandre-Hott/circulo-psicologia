@@ -2,10 +2,10 @@ import { expect, test } from '@playwright/test'
 
 // Exercise the real desktop shell, agenda and voice router. Only native persistence
 // is synthetic; event fields and inclusive endDate mirror vault/agenda.rs.
-async function openApp(page, { seed = true, endDate = null } = {}) {
+async function openApp(page, { seed = true, endDate = null, homonyms = false } = {}) {
   await page.clock.install({ time: new Date('2026-10-03T15:00:00Z') })
   await page.clock.pauseAt(new Date('2026-10-03T15:00:00Z'))
-  await page.addInitScript(({ seed, endDate }) => {
+  await page.addInitScript(({ seed, endDate, homonyms }) => {
     const clone = value => structuredClone(value)
     const plusDays = (date, days) => {
       const value = new Date(`${date}T12:00:00Z`)
@@ -42,7 +42,7 @@ async function openApp(page, { seed = true, endDate = null } = {}) {
       if (command === 'vault_status') return { initialized: true, unlocked: true, profileState: 'ready' }
       if (command === 'auto_backup_status') return { available: false, dirty: false }
       if (command === 'plugin:updater|check') return null
-      if (command === 'patient_list') return clone([patient])
+      if (command === 'patient_list') return clone(homonyms ? [patient, { ...patient, id: 'ana2' }] : [patient])
       if (command === 'behavior_list' || command === 'indicator_catalog') return []
       if (command === 'agenda_list_series') return clone(series)
       if (command === 'agenda_history') return clone(history.slice().reverse())
@@ -70,7 +70,7 @@ async function openApp(page, { seed = true, endDate = null } = {}) {
       window.agendaWorkflow.unexpected.push(command)
       throw new Error(`Invoke sem fixture: ${command}`)
     } }
-  }, { seed, endDate })
+  }, { seed, endDate, homonyms })
   await page.goto('/')
   await expect(page.getByRole('region', { name: 'Comando do Círculo' })).toBeVisible()
 }
@@ -133,6 +133,82 @@ test.beforeEach(async ({ page, baseURL }) => {
 test.afterEach(async ({ page }) => {
   expect(await page.evaluate(() => window.agendaWorkflow?.unexpected || [])).toEqual([])
   expect(page.unexpectedAgendaBoundary).toEqual([])
+})
+
+test('seletores diretos de agenda por voz preservam campos e salvam o payload escolhido', async ({ page }) => {
+  await openApp(page, { seed: false })
+  await command(page, 'Abrir agenda')
+  await command(page, 'Clicar em Novo compromisso')
+  const form = page.getByRole('form', { name: 'Novo compromisso', exact: true })
+  for (const [label, option, value] of [
+    ['Tipo', 'Recorrente', 'Recorrente'],
+    ['Paciente', 'Ana Clara', 'ana'],
+    ['Dia da semana', 'Quinta', '4'],
+    ['Frequência', 'Quinzenal', 'Quinzenal'],
+    ['Modalidade', 'Online', 'Online'],
+  ]) {
+    await command(page, `Selecionar ${label} como ${option}`)
+    await expect(form.getByLabel(label, { exact: true })).toHaveValue(value)
+  }
+  for (const [label, value] of [['Início da série', '2026-10-08'], ['Término opcional (inclusivo)', '2026-11-19'], ['Horário inicial', '14:00'], ['Horário final', '14:50']]) {
+    await command(page, `Preencher ${label} com ${value}`)
+  }
+  await command(page, 'Selecionar Tipo como Avulsa')
+  await expect(form.getByLabel('Dia da semana')).toHaveCount(0)
+  await expect(form.getByLabel('Data do compromisso')).toHaveValue('2026-10-08')
+  await command(page, 'Selecionar Tipo como Recorrente')
+  await expect(form.getByLabel('Dia da semana')).toHaveValue('4')
+  await expect(form.getByLabel('Frequência')).toHaveValue('Quinzenal')
+  expect(await writes(page, 'agenda_create_series')).toEqual([])
+  await command(page, 'Clicar em Criar série')
+  await expect.poll(() => writes(page, 'agenda_create_series')).toEqual([{ command: 'agenda_create_series', args: { input: {
+    patientId: 'ana', weekday: 4, frequency: 'Quinzenal', startDate: '2026-10-08', endDate: '2026-11-19', start: '14:00', end: '14:50', modality: 'Online', meetingLink: null,
+  } } }])
+})
+
+test('comando local da agenda por voz exige escolher o ID entre pacientes homônimos', async ({ page }) => {
+  await openApp(page, { seed: false, homonyms: true })
+  await command(page, 'Abrir agenda')
+  await command(page, 'Clicar em Novo compromisso')
+  const form = page.getByRole('form', { name: 'Novo compromisso', exact: true })
+  await command(page, 'Preencher Comando de agendamento com marcar semanal para Ana Clara na quinta às 15 horas')
+  await command(page, 'Clicar em Interpretar comando')
+  await expect(form.getByRole('button', { name: 'Ana Clara · ID ana', exact: true })).toBeVisible()
+  await expect(form.getByRole('button', { name: 'Ana Clara · ID ana2', exact: true })).toBeVisible()
+  await expect(form.getByLabel('Paciente', { exact: true })).toHaveValue('')
+  expect(await writes(page, 'agenda_create_series')).toEqual([])
+  await command(page, 'Clicar em Ana Clara ID ana2')
+  await expect(form.getByLabel('Paciente', { exact: true })).toHaveValue('ana2')
+  await expect(form.getByLabel('Dia da semana')).toHaveValue('4')
+  await expect(form.getByLabel('Horário inicial')).toHaveValue('15:00')
+  // Local parser uses the reference date as the series boundary; occurrences
+  // still begin on the selected weekday, not necessarily on that boundary.
+  await expect(form.getByLabel('Início da série')).toHaveValue('2026-10-03')
+  await command(page, 'Clicar em Criar série')
+  await expect.poll(() => writes(page, 'agenda_create_series')).toEqual([{ command: 'agenda_create_series', args: { input: {
+    patientId: 'ana2', weekday: 4, frequency: 'Semanal', startDate: '2026-10-03', endDate: null, start: '15:00', end: '15:50', modality: 'Presencial', meetingLink: null,
+  } } }])
+  await command(page, 'Mostrar agenda do dia 08/10/2026')
+  await expect(page.locator('[data-voice-action^="agenda:details:"]')).toHaveCount(1)
+  await expect.poll(() => page.evaluate(() => window.agendaWorkflow.calls.filter(call => call.command === 'agenda_occurrences').at(-1).args)).toEqual({ from: '2026-10-08', to: '2026-10-08' })
+})
+
+test('trocar ação explícita por voz e fechar não altera a ocorrência', async ({ page }) => {
+  await openApp(page)
+  const before = await state(page)
+  await command(page, 'Remarcar sessão de Ana Clara no dia 05/10/2026 às 15 horas')
+  const form = page.getByRole('form', { name: 'Alterar ocorrência individual' })
+  await command(page, 'Selecionar Ação explícita como Cancelar esta ocorrência')
+  await expect(form.getByLabel('Ação explícita')).toHaveValue('cancelar')
+  await expect(form.getByLabel('Nova data efetiva')).toHaveCount(0)
+  await command(page, 'Preencher Motivo administrativo (obrigatório) com Teste fictício')
+  await command(page, 'Selecionar Ação explícita como Remarcar somente esta ocorrência')
+  await expect(form.getByLabel('Ação explícita')).toHaveValue('remarcar')
+  await expect(form.getByLabel('Nova data efetiva')).toHaveValue('2026-10-05')
+  await command(page, 'Clicar em Fechar')
+  await expect(form).toHaveCount(0)
+  expect(await state(page)).toEqual(before)
+  expect(await page.evaluate(() => window.agendaWorkflow.writes)).toEqual([])
 })
 
 test('voz cria série recorrente com payload completo somente após confirmar', async ({ page }) => {

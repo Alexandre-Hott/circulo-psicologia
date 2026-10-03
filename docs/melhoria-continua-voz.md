@@ -6,7 +6,9 @@
 
 Rodada de cobertura sem alterações de produção: **7/7 E2E em 46,7 s** para navegação do calendário, início de sessão com falha/retry sem duplicação, encaminhamento e recusa da finalização, filtros diretos de Análises e erro/retry sem dados antigos. **225/225 JS** aprovados. [Matriz consolidada e lacunas](voz-cobertura-interface.md). Instalador permanece 0.2.42; não houve novo teste de microfone humano, Rust ou instalação nesta rodada.
 
-Próximos pontos: controles restantes de navegação, selects/comando local da Agenda, evolução e retries do Início/updater; datas/horas faladas em campos. Meta ativa; seções seguintes são histórico. Não investigar limpeza de recovery ou compatibilidade de backups antigos.
+Rodada adicional: **7/7 E2E de Agenda em 56,1 s**, incluindo três provas novas de selects diretos, comando local com escolha de ID homônimo e troca da ação cancelar/remarcar seguida de fechamento sem gravação. **225/225 JS** e lint aprovados. Expectativa de data inicial da série na fixture corrigida conforme contrato do parser; sem mudança de produção ou novo instalador.
+
+Próximos pontos: controles restantes de navegação, evolução e retries do Início/updater; datas/horas faladas em campos. Meta ativa; seções seguintes são histórico. Não investigar limpeza de recovery ou compatibilidade de backups antigos.
 
 ## Estado atual: instalado 0.2.41 — 03/10/2026
 
