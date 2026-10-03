@@ -134,11 +134,19 @@ Componentes reais e backend/armazenamento sintéticos. Sem teste novo de microfo
 
 [Entrega e limites](validacao-voz-0.2.44.md). Retries explícitos e cabeçalhos semanal/diário agora estão no pacote instalado0.2.44; referências anteriores a não empacotado são histórico. Build offline/locked e audit aprovados, instalaçãoexit0, versão44 e perfil preservado/snapshot verificado. 229/229 JS e guard repetidos. Não houve nova abertura, microfone humano ou suíte Rust; não ampliar o alcance das provas anteriores.
 
+## Atualização: descarte dos editores antes da atualização
+
+[desktop-voice-settings](../test/e2e/desktop-voice-settings.spec.js): **12/12 E2E em 1,0 min**, porta5196, incluindo cinco novos casos parametrizados para vínculo, Agenda, contexto, adendo e biblioteca. **229/229 JS**, lint e diff check aprovados; quatro avisos preexistentes no lint.
+
+Cada caso preenche por comando confirmado, verifica bloqueio da instalação por formulário aberto, recusa descarte e confirma preservação literal do campo; depois aceita descarte e verifica fechamento/esvaziamento normal e retorno da oferta de atualização. Uma lista explícita de operações de leitura/fechamento de recurso verifica que não houve gravação nem chamada de download/instalação durante esse percurso. A fixture registra e recusa comandos nativos inesperados.
+
+Estado simulado apenas em memória, inclusive sessão finalizada usada para preparar o adendo. Nenhum dado real/perfil Windows alterado. Produção não mudou; instalado permanece0.2.44, sem novo build/instalação/Rust/microfone. A lacuna de voz do descarte desses editores fica substituída por estas provas; não é instalação real validada.
+
 ## Prioridades restantes para o agente principal
 
 Homologação dos testes novos de homônimos, identidade de seleção e helper: **concluída pelo principal**, conforme nota de execução. Não é mais prioridade pendente.
 
 1. **Fechar navegação restante por voz:** demais CTAs de Sessões e demonstração sintética com recusa. Fechar vínculos e cabeçalhos semanal/diário foram comprovados, assim como Início/Ver pacientes/Ver agenda/retry da prévia. Os cenários por mouse não substituem essa evidência.
 2. **Manter regressão dos caminhos comprovados:** pacote instalado0.2.44 consolida retries e cabeçalhos. Não tomar os testes já aprovados como prova dos caminhos ainda pendentes nem repetir build sem mudança de produção.
-3. **Cobrir descarte de outros formulários do updater:** vínculo, Agenda, contexto, adendo e biblioteca, sem instalação real. Os retries check-error/forms-open e prévia do Início foram comprovados e empacotados. Não confundir alcance pelo código com prova específica de voz.
+3. **Consolidar auditoria de Ajustes:** descarte por voz dos cinco editores foi comprovado, assim como cadastro, retries e confirmação de instalação na fronteira simulada. Ainda faltam provas específicas de selecionar/verificar/restaurar backup por voz, com senhas/chooser manuais; não investigar limpeza ou backups antigos. Não confundir mocks com arquivo nativo validado.
 4. **Fechar evidência nativa e decidir a lacuna do cofre bloqueado:** anexar resultados do principal para microfone físico/reconhecimento no Windows, chooser cancelado e arquivos reais de backup/exportação em destino de teste autorizado. Mocks não validam essas etapas; não executar recuperação/substituição/limpeza nesta auditoria. O cofre bloqueado tem controles existentes sem acesso por voz porque não monta o assistente; senha permanece manual. Essa é uma lacuna real de cobertura, e uma implementação para atendê-la exige decisão explícita, sem presumir que esteja automaticamente fora do objetivo.

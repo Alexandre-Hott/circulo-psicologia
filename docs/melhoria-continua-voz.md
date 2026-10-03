@@ -1,5 +1,9 @@
 # Melhoria contínua de voz
 
+## Cobertura após a entrega0.2.44: descarte por voz do updater
+
+12/12 E2E settings em1,0min, com cinco novos casos de vínculo, Agenda, contexto, adendo e biblioteca. Recusar mantém conteúdo; aceitar descarta pelo handler normal, sem gravar nem instalar, verificado por lista de operações permitidas. 229/229JS e lint aprovados (avisos anteriores). Sem mudanças de produção ou novo instalador, perfil/dados reais não tocados. [Matriz atualizada](voz-cobertura-interface.md). Microfone e instalação real não testados nesta rodada; meta ativa.
+
 ## Entrega instalada 0.2.44 — 03/10/2026
 
 [Pacote e evidência](validacao-voz-0.2.44.md). Consolidou retries explícitos e cabeçalhos semanal/diário. 229/229 JS e guard aprovados novamente; build offline/locked, audit e consistência do pacote. Instalaçãoexit0, versão44 e quatro arquivos principais do perfil preservados, snapshot0244 verificado. Sem nova abertura/microfone humano, Release ou assinatura updater. Referências abaixo a incrementos não empacotados são histórico agora incluído na44; meta continua ativa.

@@ -8,7 +8,7 @@ async function openApp(page, update = false) {
   await page.addInitScript(({ update = false, checkFailure = false, agendaFailure = false }) => {
     let unlocked = true
     let downloads = 0
-    window.settingsFixture = { calls: [], unexpected: [], checkFailure, agendaFailure }
+    window.settingsFixture = { calls: [], unexpected: [], checkFailure, agendaFailure, timeline: [] }
     const callbacks = new Map()
     window.__TAURI_INTERNALS__ = {
       transformCallback(callback) { const id = callbacks.size + 1; callbacks.set(id, callback); return id },
@@ -22,6 +22,7 @@ async function openApp(page, update = false) {
         if (command === 'recovery_inventory') return { categories: [], eligibleCount: 0, eligibleBytes: 0, cleanupBlocked: false }
         if (command === 'patient_list') return [{ id: 'ana', name: 'Ana Clara', age: 8, revision: 1, archivedAt: null }]
         if (command === 'agenda_occurrences' && window.settingsFixture.agendaFailure) throw new Error('Falha sintética da prévia da Agenda')
+        if (command === 'session_timeline') return structuredClone(window.settingsFixture.timeline.filter(session => session.patientId === args.patientId))
         if (['behavior_list', 'indicator_catalog', 'agenda_list_series', 'agenda_history', 'agenda_occurrences', 'related_party_list', 'session_timeline', 'session_draft_list', 'session_addendum_list', 'case_context_list'].includes(command)) return []
         if (command === 'record_copy_export' || command === 'backup_create') return false // chooser cancelled; no file
         if (command === 'plugin:updater|check') {
@@ -170,6 +171,57 @@ test('atualização por voz: recusar, falhar e tentar novamente sem instalar sil
   await expect(page.getByText('Atualização 0.2.40 instalada. Reinicie o aplicativo para usar a nova versão.')).toBeVisible()
   expect(await calls(page, 'plugin:updater|download_and_install')).toHaveLength(2)
 })
+
+for (const editor of ['vínculo', 'Agenda', 'contexto', 'adendo', 'biblioteca']) {
+  test(`updater por voz: recusa preserva ${editor}; aceitar descarta sem salvar ou instalar`, async ({ page }) => {
+    await openApp(page, true)
+    let field
+    if (editor === 'vínculo') {
+      await command(page, 'Abrir vínculos de Ana Clara')
+      field = page.getByLabel('Nome da pessoa ou instituição')
+      await command(page, 'Preencher Nome da pessoa ou instituição com Vínculo fictício pendente')
+    } else if (editor === 'Agenda') {
+      await command(page, 'Abrir agenda')
+      await command(page, 'Clicar em Novo compromisso')
+      field = page.getByLabel('Horário inicial')
+      await command(page, 'Preencher Horário inicial com 10:30')
+    } else if (editor === 'biblioteca') {
+      await command(page, 'Abrir sessões')
+      await command(page, 'Clicar em Biblioteca de comportamentos reutilizáveis')
+      field = page.getByLabel('Título descritivo')
+      await command(page, 'Preencher Título descritivo com Comportamento fictício pendente')
+    } else if (editor === 'contexto') {
+      await command(page, 'Abrir registros de Ana Clara')
+      await command(page, 'Clicar em Contexto do caso')
+      field = page.getByLabel('Demanda avaliada')
+      await command(page, 'Preencher Demanda avaliada com Demanda fictícia pendente')
+    } else {
+      await page.evaluate(() => { window.settingsFixture.timeline = [{ id: 'completed', patientId: 'ana', sessionDate: '2026-10-02', start: '15:00', end: '15:50', modality: 'Presencial', observation: 'Sessão fictícia anterior', procedures: 'Atividade fictícia', outcomeDecision: 'Resultado fictício', referralClosure: '', behaviors: [], indicators: [] }] })
+      await command(page, 'Abrir evolução de Ana Clara')
+      await command(page, 'Clicar em Adicionar adendo de Ana Clara em 2026-10-02 às 15:00–15:50')
+      field = page.getByLabel('Texto do adendo (até 4000 caracteres)')
+      await command(page, 'Preencher Texto do adendo com Adendo fictício pendente')
+    }
+    const value = await field.inputValue()
+    expect(value).not.toBe('')
+    const before = await page.evaluate(() => window.settingsFixture.calls.length)
+    await command(page, 'Clicar em Baixar e instalar')
+    await expect(page.getByText('Feche os formulários antes de instalar Círculo 0.2.40.')).toBeVisible()
+    await command(page, 'Clicar em Descartar edições e fechar formulários')
+    await expect(page.getByRole('alertdialog')).toBeVisible()
+    await propose(page, 'voltar')
+    await expect(field).toHaveValue(value)
+    expect(await calls(page, 'plugin:updater|download_and_install')).toHaveLength(0)
+    await command(page, 'Clicar em Descartar edições e fechar formulários')
+    await propose(page, 'confirmar')
+    await expect(page.getByText('Atualização disponível: Círculo 0.2.40')).toBeVisible()
+    if (['contexto', 'biblioteca'].includes(editor)) await expect(field).toHaveValue('')
+    else await expect(field).toHaveCount(0)
+    const allowed = new Set(['patient_list', 'related_party_list', 'behavior_list', 'indicator_catalog', 'agenda_list_series', 'agenda_history', 'agenda_occurrences', 'session_timeline', 'session_draft_list', 'session_addendum_list', 'case_context_list', 'auto_backup_status', 'plugin:resources|close'])
+    const operations = await page.evaluate(start => window.settingsFixture.calls.slice(start).map(call => call.command), before)
+    expect(operations.filter(name => !allowed.has(name))).toEqual([])
+  })
+}
 
 test('atualização não descarta cadastro aberto sem confirmação explícita por voz', async ({ page }) => {
   await openApp(page, true)
