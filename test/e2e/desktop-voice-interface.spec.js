@@ -410,6 +410,24 @@ test('botões repetidos da mesma ocorrência não tornam a voz ambígua', async 
   await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toBeVisible()
 })
 
+test('texto visível Adicionar adendo abre o único alvo após confirmar e cancela sem gravar', async ({ page }) => {
+  await openApp(page)
+  await page.evaluate(() => { window.voiceTimeline = [
+    { id: 'only', patientId: 'ana', sessionDate: '2026-10-03', start: '15:00', end: '15:50', modality: 'Presencial', behaviors: [], indicators: [] },
+  ] })
+  await command(page, 'Abrir evolução de Ana Clara')
+  await propose(page, 'Clicar em Adicionar adendo')
+  await expect(page.locator('.voice-command-preview')).toContainText('Adicionar adendo de Ana Clara em 2026-10-03 às 15:00–15:50')
+  await expect(page.locator('#addendum-only')).toHaveCount(0)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await propose(page, 'confirmar')
+  await expect(page.locator('#addendum-only')).toBeVisible()
+  await command(page, 'Preencher Texto do adendo com Complemento fictício a descartar')
+  await command(page, 'Clicar em Cancelar')
+  await expect(page.locator('#addendum-only')).toHaveCount(0)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+})
+
 test('adendo por voz identifica o horário entre duas sessões no mesmo dia', async ({ page }) => {
   await openApp(page)
   await page.evaluate(() => { window.voiceTimeline = [
@@ -419,6 +437,10 @@ test('adendo por voz identifica o horário entre duas sessões no mesmo dia', as
   await command(page, 'Abrir Sessões')
   await command(page, 'Selecionar Paciente para evolução e sessões como Ana Clara')
   await command(page, 'Clicar em Evolução e escalas registradas · Adicionar adendo')
+  await propose(page, 'Clicar em Adicionar adendo')
+  await expect(page.locator('.voice-command-error')).toContainText('Há mais de uma opção')
+  await expect(page.locator('#addendum-afternoon')).toHaveCount(0)
+  await expect(page.locator('#addendum-morning')).toHaveCount(0)
   await command(page, 'Clicar em Adicionar adendo de Ana Clara em 2026-10-03 às 15:00–15:50')
   await expect(page.locator('#addendum-afternoon')).toBeVisible()
   await expect(page.locator('#addendum-morning')).toHaveCount(0)

@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Complemento executado: alias visível do adendo
+
+`Clicar em Adicionar adendo` reconhece o texto do botão, preservando o rótulo detalhado. Gateway existente exige alvo único e fingerprint de registro. Novo E2E abre adendo da única sessão após confirmar e cancela sem escrever; cenário com duas sessões foi ampliado para recusar o alias e abrir só a sessão da tarde mediante nome completo. **2/2 em24,1s**, regressão **29/29 interface/workflows em2,1min**, JS232/232 e lint/build/guard/diff aprovados; revisão independente sem achado novo. Componentes/backend sintéticos, sem microfone/banco nativo ou novo pacote. [Auditoria e próximas rotas](voz-pendencias-usabilidade-0.2.47.md): biblioteca/contexto/adendo natural específico ainda não concluídos. Instalado0.2.47 anterior a este alias.
+
 ## Complemento executado: abrir edição do modelo de comportamento
 
 Pedido `Editar comportamento Pede ajuda` sem mudanças prepara `behavior.edit.open` por ID exato ativo; não é uma observação atribuída a paciente. Após confirmação, o componente consulta a biblioteca novamente, valida ID ativo e versão positiva, abre o formulário normal com campos preservados e só salva quando solicitado. Teste unitário cobre verbos/recusas e título literal `Pede ajuda para o adulto`. Novos E2E em `desktop-voice-interface.spec.js` comprovam captura/transcrição simulada, abertura da edição correta, Cancelar sem escrita, preenchimento separado e único `behavior_update` com ID/versão/título/descrição exatos, sem `session_draft_save`; modelo removido após preparar é recusado sem abrir outro/gravar.

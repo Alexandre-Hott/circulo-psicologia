@@ -1,5 +1,9 @@
 # Melhoria contínua de voz
 
+## Incremento após0.2.47: texto visível para Adicionar adendo
+
+Auditoria independente identificou três fricções concretas de acesso natural, não bugs de persistência. [Pendências e prioridade](voz-pendencias-usabilidade-0.2.47.md). Corrigida primeira parte: `Clicar em Adicionar adendo` usa alias explícito, único alvo mostra registro completo/abre após confirmar; dois alvos recusam e exigem rótulo específico. Cancelar não grava.2/2 específicos em24,1s; regressão **29/29 E2E interface/workflows em2,1min**, **232/232JS**, lint/build/guard/diff aprovados (avisos anteriores). Revisor confirmou alias sem escolha arbitrária, sem achado novo. Rotas naturais de biblioteca, contexto e adendo com paciente/data ainda pendentes. Nenhum dado real/banco/Rust/microfone físico ou novo instalador; instalado47 não contém alias. Meta ativa.
+
 ## Entrega instalada0.2.47 — 03/10/2026
 
 [Pacote e evidência](validacao-voz-0.2.47.md). Consolidadas aberturas de edição natural de paciente/comportamento.232/232JS e guard repetidos; build NSIS offline/locked, auditoria e instalaçãoexit0. Versão47, recursos de voz e quatro arquivos de perfil preservados conferidos; snapshot0247 verificado. Sem abertura visual/microfone humano/Release/assinatura updater; app fechado. Referências abaixo a incrementos ainda não empacotados agora são históricas: incluídos na47. Meta ativa.
