@@ -1,5 +1,9 @@
 # Melhoria contínua de voz
 
+## Incremento após 0.2.43: navegação e gavetas administrativas
+
+Cabeçalhos semanal/diário da Agenda usam Ver dia AAAA-MM-DD como o mensal, sem alterar layout/handlers. 28/28 E2E conjuntos em 2,3 min e 229/229 JS aprovados; lint/guard/build aprovados com avisos anteriores. Comprovados seleção de dia, Voltar do encerramento sem escrita, recolher gavetas administrativas e Fechar vínculos. [Matriz](voz-cobertura-interface.md). Mudança de cabeçalhos ainda não no instalador0.2.43; consolidar com retries explícitos no próximo pacote. Sem nova prova nativa/microfone; meta ativa.
+
 ## Incremento após 0.2.43: retries com alvo explícito
 
 [Implementação e provas](voz-retries-explicitos.md). Recarregar agenda/análises, Verificar atualizações e Tentar instalação novamente identificam a operação na tela e na voz; não exige navegar quando dois erros aparecem juntos. Aliases antigos continuam válidos só quando únicos. 20/20 E2E conjuntos em 58,2 s e 229/229 JS aprovados; lint/guard/build também, com avisos anteriores. Ainda não empacotado no NSIS instalado 0.2.43. Meta ativa.

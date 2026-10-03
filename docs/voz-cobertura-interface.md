@@ -120,11 +120,21 @@ A rodada intermediária teve 5/6 por uma expectativa incorreta de título na fix
 
 20/20 E2E conjuntos em 58,2 s e 229/229 JS aprovados, lint/guard/build frontend aprovados com avisos anteriores. Dois erros simultâneos: comandos explícitos verificaram apenas seus próprios contadores, sem trocar de área, baixar ou instalar. Microfone humano e instalação nativa não repetidos.
 
+## Atualização: dias da semana, gavetas e fechamento de vínculos
+
+28/28 E2E conjuntos em 2,3 min (Agenda mutations + interface, porta5196); 229/229 JS, lint, guard e build frontend passaram, com avisos anteriores. Cabeçalhos semanal e diário agora têm nome acessível Ver dia AAAA-MM-DD, igual ao mensal; layout e handlers não mudaram. Incremento ainda não empacotado no instalado0.2.43.
+
+- `E`: selecionar dia por voz no quadro semanal abre Dia com a data correta; acionar o cabeçalho diário mantém a data.
+- `E`: abrir encerramento de série, preencher corte e Voltar fecha sem escrever nem alterar série/histórico; abrir/recolher Compromissos persistidos e Histórico administrativo preserva estado.
+- `E`: Fechar vínculos por voz remove a seção e retorna o botão Pessoas vinculadas, sem gravação.
+
+Componentes reais e backend/armazenamento sintéticos. Sem teste novo de microfone humano, instalação, Rust ou arquivos reais. As lacunas correspondentes `S` da matriz inicial ficam substituídas por estas provas, não homologação de todas as variantes.
+
 ## Prioridades restantes para o agente principal
 
 Homologação dos testes novos de homônimos, identidade de seleção e helper: **concluída pelo principal**, conforme nota de execução. Não é mais prioridade pendente.
 
-1. **Fechar navegação restante por voz:** Fechar vínculos, demais CTAs de Sessões e cabeçalhos semanais; demonstração sintética com recusa. Início/Ver pacientes/Ver agenda/retry da prévia foram comprovados acima. Os cenários por mouse não substituem essa evidência.
-2. **Cobrir caminhos ainda só `S`:** Voltar do encerramento de série e recolher gavetas administrativas. Selects/comando local da Agenda e caminhos de evolução/âncoras/paciente arquivado foram comprovados nas atualizações acima. Usar dados sintéticos e verificar alvo/payload, sem adicionar funções.
+1. **Fechar navegação restante por voz:** demais CTAs de Sessões e demonstração sintética com recusa. Fechar vínculos e cabeçalhos semanal/diário foram comprovados, assim como Início/Ver pacientes/Ver agenda/retry da prévia. Os cenários por mouse não substituem essa evidência.
+2. **Empacotar incrementos recentes:** retries explícitos e nomes acessíveis dos cabeçalhos do calendário. Voltar e recolher gavetas administrativas, selects/comando local da Agenda e caminhos de evolução/âncoras/paciente arquivado foram comprovados nas atualizações acima. Não declarar que já estão no instalado0.2.43.
 3. **Cobrir descarte de outros formulários do updater:** vínculo, Agenda, contexto, adendo e biblioteca, sem instalação real. Os retries check-error/forms-open e prévia do Início foram comprovados; rótulos simultâneos foram simplificados no código e precisam do próximo empacotamento. Não confundir alcance pelo código com prova específica de voz.
 4. **Fechar evidência nativa e decidir a lacuna do cofre bloqueado:** anexar resultados do principal para microfone físico/reconhecimento no Windows, chooser cancelado e arquivos reais de backup/exportação em destino de teste autorizado. Mocks não validam essas etapas; não executar recuperação/substituição/limpeza nesta auditoria. O cofre bloqueado tem controles existentes sem acesso por voz porque não monta o assistente; senha permanece manual. Essa é uma lacuna real de cobertura, e uma implementação para atendê-la exige decisão explícita, sem presumir que esteja automaticamente fora do objetivo.

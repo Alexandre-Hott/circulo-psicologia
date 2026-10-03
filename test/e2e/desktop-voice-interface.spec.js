@@ -187,6 +187,9 @@ test('pedidos naturais abrem registros e vínculos do paciente sem criar dados',
   await command(page, 'Abrir vínculos de Ana Clara')
   await expect(page.getByRole('region', { name: 'Pessoas vinculadas ao paciente' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Vínculos de Ana Clara' })).toBeVisible()
+  await command(page, 'Clicar em Fechar vínculos')
+  await expect(page.getByRole('region', { name: 'Pessoas vinculadas ao paciente' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Pessoas vinculadas', exact: true })).toBeVisible()
   await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(0)
 })
 

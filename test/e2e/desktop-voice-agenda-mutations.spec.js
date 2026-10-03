@@ -306,6 +306,33 @@ test('voz remarca ocorrência e cancela com recusa e aceite preservando motivo e
   await expect(history).toContainText(`Motivo administrativo: ${reason}`)
 })
 
+test('dias semanal/diário, Voltar e gavetas administrativas por voz não alteram série', async ({ page }) => {
+  await openApp(page)
+  const before = await state(page)
+  await command(page, 'Mostrar agenda da semana de 05/10/2026')
+  await expect(page.getByRole('region', { name: 'Calendário semana' })).toBeVisible()
+  await command(page, 'Clicar em Ver dia 2026-10-05')
+  await expect(page.getByRole('region', { name: 'Calendário dia' })).toBeVisible()
+  await expect(page.getByLabel('Data de referência')).toHaveValue('2026-10-05')
+  await command(page, 'Clicar em Ver dia 2026-10-05')
+  await expect(page.getByLabel('Data de referência')).toHaveValue('2026-10-05')
+  await command(page, 'Clicar em Compromissos persistidos')
+  const persisted = page.getByRole('region', { name: 'Compromissos persistidos' })
+  await command(page, 'Clicar em Encerrar série de Ana Clara · série series-ana')
+  await command(page, 'Preencher Primeira data excluída com 2026-10-19')
+  await command(page, 'Clicar em Voltar')
+  await expect(page.getByRole('form', { name: 'Encerrar série recorrente' })).toHaveCount(0)
+  await command(page, 'Clicar em Compromissos persistidos')
+  await expect(persisted.getByRole('button', { name: 'Compromissos persistidos' })).toHaveAttribute('aria-expanded', 'false')
+  await command(page, 'Clicar em Histórico administrativo')
+  const history = page.getByRole('region', { name: 'Histórico administrativo', exact: true })
+  await expect(history.locator('li')).toHaveCount(1)
+  await command(page, 'Clicar em Histórico administrativo')
+  await expect(history.locator('li')).toHaveCount(0)
+  expect(await state(page)).toEqual(before)
+  expect(await page.evaluate(() => window.agendaWorkflow.writes)).toEqual([])
+})
+
 for (const [label, endDate] of [['encerrar série sem término', null], ['antecipar término existente', '2026-11-30']]) {
   test(`voz ${label}: recusa preserva estado e aceite envia primeira data excluída`, async ({ page }) => {
     await openApp(page, { endDate })
