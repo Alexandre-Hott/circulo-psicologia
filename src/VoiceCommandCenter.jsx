@@ -151,6 +151,8 @@ export function VoiceCommandCenter({
       <li>“Cancelar sessão de Ana Clara amanhã às três da tarde” abre o formulário</li>
       <li>“Clicar em Novo compromisso”</li>
       <li>“Preencher Nome com Ana Clara”</li>
+      <li>“Preencher Data do compromisso com dez de outubro de 2026”</li>
+      <li>“Preencher Horário inicial com três da tarde”</li>
       <li>“Limpar Nome” ou “Limpar Busca”</li>
       <li>“Selecionar Modalidade como Online”</li>
       <li>“Marcar Pede ajuda” ou “Desmarcar Pede ajuda” na sessão</li>

@@ -135,6 +135,38 @@ test.afterEach(async ({ page }) => {
   expect(page.unexpectedAgendaBoundary).toEqual([])
 })
 
+test('datas e horários falados preenchem agenda apenas após confirmação e recusam ambiguidade', async ({ page }) => {
+  await openApp(page, { seed: false })
+  await command(page, 'Abrir agenda')
+  await command(page, 'Clicar em Novo compromisso')
+  const form = page.getByRole('form', { name: 'Novo compromisso', exact: true })
+  await propose(page, 'Preencher Data do compromisso com dez de outubro de dois mil e vinte e seis')
+  await expect(page.locator('.voice-command-preview')).toContainText('2026-10-10')
+  await expect(form.getByLabel('Data do compromisso')).toHaveValue('2026-10-03')
+  await propose(page, 'confirmar')
+  await page.clock.runFor(32)
+  await expect(form.getByLabel('Data do compromisso')).toHaveValue('2026-10-10')
+  await command(page, 'Preencher Horário inicial com vinte horas e três')
+  await expect(form.getByLabel('Horário inicial')).toHaveValue('20:03')
+  await command(page, 'Preencher Horário final com vinte e uma horas e trinta minutos')
+  await expect(form.getByLabel('Horário final')).toHaveValue('21:30')
+  await command(page, 'Preencher Horário inicial com três da tarde')
+  await command(page, 'Preencher Horário final com três e cinquenta da tarde')
+  await expect(form.getByLabel('Horário inicial')).toHaveValue('15:00')
+  await expect(form.getByLabel('Horário final')).toHaveValue('15:50')
+  for (const request of ['Preencher Horário inicial com três horas', 'Preencher Data do compromisso com trinta e um de fevereiro de 2026']) {
+    await propose(page, request)
+    await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+    await expect(form.getByLabel('Horário inicial')).toHaveValue('15:00')
+    await expect(form.getByLabel('Data do compromisso')).toHaveValue('2026-10-10')
+  }
+  expect(await writes(page, 'agenda_create_series')).toEqual([])
+  await command(page, 'Clicar em Criar compromisso avulso')
+  await expect.poll(() => writes(page, 'agenda_create_series')).toEqual([{ command: 'agenda_create_series', args: { input: {
+    patientId: 'ana', weekday: 6, frequency: 'Avulsa', startDate: '2026-10-10', endDate: '2026-10-10', start: '15:00', end: '15:50', modality: 'Presencial', meetingLink: null,
+  } } }])
+})
+
 test('seletores diretos de agenda por voz preservam campos e salvam o payload escolhido', async ({ page }) => {
   await openApp(page, { seed: false })
   await command(page, 'Abrir agenda')

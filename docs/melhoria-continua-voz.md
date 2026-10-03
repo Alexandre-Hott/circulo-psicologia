@@ -1,5 +1,11 @@
 # Melhoria contínua de voz
 
+## Incremento de código após o instalador 0.2.42 — datas e horários
+
+[Formatos e limites](voz-datas-horarios.md). Campos de data/hora aceitam datas completas faladas e horários explícitos em português; a proposta mostra o valor convertido e mantém confirmação/eventos normais. Textos livres não são reescritos. Revisão encontrou e corrigiu separação errada de “vinte horas e três” e rejeição de horas compostas; preservados formatos numéricos com segundos quando o campo permite. 229/229 JS aprovados. Rodada de 24 E2E passou antes dos ajustes finais da revisão; teste específico ampliado está sendo reexecutado. Lint/guard/build passaram, com avisos anteriores.
+
+Após a revisão, o teste específico ampliado passou em 20,8 s, verificando também 20:03 e 21:30 no formulário. Ainda não incluído no NSIS 0.2.42; próximo empacotamento deve consolidar este incremento. Microfone humano e persistência nativa não foram testados nesta rodada. Meta continua ativa.
+
 ## Estado atual: instalado 0.2.42 — 03/10/2026
 
 [Evidência atual](validacao-voz-0.2.42.md). Pacientes e vínculos homônimos têm opções distintas e identidade/revisão; seletores de paciente nas três áreas usam o mesmo helper. Pode dizer “opção dois”, sem ponto separador. Seleção confirmada revalida valor/rótulo disponível. 225 JS, 20 E2E de regressão/seleção e quatro E2E de homônimos passaram. NSIS instalado, perfil preservado e smoke de processo aprovado. Sem Release/updater assinado nem teste de microfone humano.

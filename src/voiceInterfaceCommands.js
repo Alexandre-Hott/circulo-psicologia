@@ -1,3 +1,5 @@
+import { normalizeVoiceFieldValue } from './voiceFieldValue.js'
+
 // The voice shortcut uses the same visible controls and validation as a click.
 // No hidden control, arbitrary selector or backend command can be requested.
 const optionNumbers = { um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10 }
@@ -115,9 +117,9 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
       if (options.length !== 1) return refusal(`Para “${item.name}”, escolha: ${[...item.element.options].filter(option => !option.disabled).map(option => option.textContent).join(', ')}.`)
       value = options[0].value
       optionLabel = options[0].textContent
-    } else if (item.element.type === 'date' && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(value)) {
-      const [day, month, year] = value.split('/')
-      value = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+    } else if (['date', 'time'].includes(item.element.type)) {
+      value = normalizeVoiceFieldValue(item.element.type, value)
+      if (value === null) return refusal(`Valor inválido para “${item.name}”. Diga a data completa com ano ou um horário exato com manhã/tarde/noite. Também pode usar AAAA-MM-DD ou HH:MM.`)
     }
     if (item.element.maxLength > 0 && value.length > item.element.maxLength) return refusal(`O campo “${item.name}” aceita até ${item.element.maxLength} caracteres.`)
     if (item.element.tagName === 'INPUT') {
