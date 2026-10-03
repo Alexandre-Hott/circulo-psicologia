@@ -33,7 +33,10 @@ async function openApp(page, update = false) {
         }
         if (command === 'backup_restore') {
           if (window.settingsFixture.backupRestoreError) throw new Error(window.settingsFixture.backupRestoreError)
-          if (window.settingsFixture.backupRestoreResult && window.settingsFixture.backupRestorePatients) window.settingsFixture.patients = structuredClone(window.settingsFixture.backupRestorePatients)
+          if (window.settingsFixture.backupRestoreResult) {
+            hasVault = true; unlocked = true
+            if (window.settingsFixture.backupRestorePatients) window.settingsFixture.patients = structuredClone(window.settingsFixture.backupRestorePatients)
+          }
           return window.settingsFixture.backupRestoreResult
         }
         if (command === 'plugin:updater|check') {
@@ -81,6 +84,83 @@ async function selectSyntheticBackup(page) {
   await command(page, 'Clicar em Selecionar e verificar backup')
   await expect(page.getByText(/Backup verificado · formato v1/)).toBeVisible()
 }
+
+async function openFreshRestore(page) {
+  await openApp(page, { initiallyLocked: true, initialized: false })
+  await command(page, 'Clicar em Opções avançadas de restauração')
+  await command(page, 'Clicar em Restaurar backup existente')
+  await expect(page.locator('#vault-password')).toHaveCount(0)
+  await expect(page.locator('#fresh-backup-password')).toBeVisible()
+}
+
+async function verifyFreshBackup(page) {
+  await page.locator('#fresh-backup-password').fill('backup-ficticio-2026')
+  await page.evaluate(() => { window.settingsFixture.backupPreview = { schemaVersion: 5, createdAt: 1791039600, sizeBytes: 4096, profileState: 'empty', replacesExisting: false } })
+  await command(page, 'Clicar em Selecionar e verificar backup')
+  await expect(page.locator('#fresh-local-password')).toBeVisible()
+}
+
+test('restauração inicial por comando: cancelamento e Voltar não criam cofre', async ({ page }) => {
+  await openFreshRestore(page)
+  await propose(page, 'Preencher Senha independente do backup com backup-ficticio-2026')
+  await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+  await expect(page.locator('#fresh-backup-password')).toHaveValue('')
+  await page.locator('#fresh-backup-password').fill('backup-ficticio-2026')
+  await command(page, 'Clicar em Selecionar e verificar backup')
+  await expect(page.getByText('Seleção de backup cancelada.')).toBeVisible()
+  await command(page, 'Clicar em Voltar à criação de cofre')
+  await expect(page.locator('#vault-password')).toBeVisible()
+  await expect(page.locator('#fresh-backup-password')).toHaveCount(0)
+  await command(page, 'Clicar em Restaurar backup existente')
+  await expect(page.locator('#fresh-backup-password')).toHaveValue('')
+  expect(await calls(page, 'vault_create')).toHaveLength(0)
+  expect(await calls(page, 'backup_restore')).toHaveLength(0)
+  expect(await calls(page, 'patient_list')).toHaveLength(0)
+})
+
+test('restauração inicial por comando: mudar senha manual invalida prévia e nova senha local', async ({ page }) => {
+  await openFreshRestore(page)
+  await verifyFreshBackup(page)
+  await page.locator('#fresh-local-password').fill('local-ficticio-2026')
+  await page.locator('#fresh-backup-password').fill('outro-backup-ficticio-2026')
+  await expect(page.getByText(/Backup verificado · formato v1/)).toHaveCount(0)
+  await expect(page.locator('#fresh-local-password')).toHaveCount(0)
+  await propose(page, 'Clicar em Confirmar restauração')
+  await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+  await command(page, 'Clicar em Selecionar e verificar backup')
+  await expect(page.locator('#fresh-local-password')).toHaveValue('')
+  expect((await calls(page, 'backup_select')).at(-1).args).toEqual({ password: 'outro-backup-ficticio-2026' })
+  expect(await calls(page, 'backup_restore')).toHaveLength(0)
+})
+
+for (const restored of [true, false]) test(`restauração inicial por comando: recusa não restaura; aceite ${restored ? 'abre perfil fictício' : 'cancelado mantém entrada vazia'}`, async ({ page }) => {
+  await openFreshRestore(page)
+  await verifyFreshBackup(page)
+  await page.evaluate(restored => {
+    window.settingsFixture.backupRestoreResult = restored
+    window.settingsFixture.backupRestorePatients = [{ id: 'fresh-lia', name: 'Lia do Backup Fictício', age: 22, revision: 1, archivedAt: null }]
+  }, restored)
+  await page.locator('#fresh-local-password').fill('local-ficticio-2026')
+  await command(page, 'Clicar em Confirmar restauração')
+  await expect(page.getByRole('alertdialog')).toContainText('criar um cofre local vazio')
+  await propose(page, 'voltar')
+  expect(await calls(page, 'backup_restore')).toHaveLength(0)
+  await expect(page.locator('#fresh-local-password')).toHaveValue('local-ficticio-2026')
+  await command(page, 'Clicar em Confirmar restauração')
+  await propose(page, 'confirmar')
+  expect(await calls(page, 'backup_restore')).toEqual([{ command: 'backup_restore', args: { backupPassword: 'backup-ficticio-2026', localPassword: 'local-ficticio-2026', confirmed: true, quarantineConfirmed: false } }])
+  expect(await calls(page, 'vault_create')).toHaveLength(0)
+  if (restored) {
+    await expect(page.getByText('Restauração concluída. O cofre local está desbloqueado.')).toBeVisible()
+    await command(page, 'Abrir pacientes')
+    await expect(page.locator('[data-voice-record="patient:fresh-lia"]')).toContainText('Lia do Backup Fictício')
+    await expect(page.locator('[data-voice-record="patient:ana"]')).toHaveCount(0)
+  } else {
+    await expect(page.getByText('Restauração cancelada. Nenhum cofre foi criado.')).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Espaços do Círculo' })).toHaveCount(0)
+    expect(await calls(page, 'patient_list')).toHaveLength(0)
+  }
+})
 
 test('backup por comando: controle desabilitado e chooser cancelado nunca restauram', async ({ page }) => {
   await openApp(page)

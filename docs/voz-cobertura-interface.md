@@ -1,5 +1,11 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Complemento executado: restauração inicial pelo assistente
+
+Em `desktop-voice-settings.spec.js`, quatro cenários `restauração inicial por comando` exercitam os componentes reais com perfil inicialmente vazio e backend simulado: abrir opções avançadas/restauração; seletor cancelado e Voltar sem criar/restaurar; alteração manual da senha invalidando prévia/nova senha; recusa preservando entrada; aceite com payload das duas senhas manuais, `confirmed: true` e `quarantineConfirmed: false`. Sucesso simulado torna o cofre pronto e mostra apenas Lia do Backup Fictício; retorno falso não anuncia sucesso nem carrega pacientes. Nenhum caminho chama `vault_create`.
+
+**Execução:** quatro novos testes **4/4 em28,6s**; regressão Ajustes **23** + transições **7**, total **30/30 em1,7min**; JavaScript **229/229**, lint e diff check aprovados (avisos anteriores). Prova `E/N`: comandos digitados no assistente, chooser/RPC simulados; não testa microfone, arquivo de backup real, persistência Rust nem restauração no Windows. Somente testes/documentação nesta rodada, sem novo pacote ou alteração do perfil. Limpeza e compatibilidade de backups antigos permanecem fora do escopo.
+
 Escopo: ações existentes em `DesktopVault`, `DesktopAgenda`, `DesktopSessions`, `DesktopAnalytics`, `VoiceCommandCenter` e gateway `voiceInterfaceCommands`. Esta auditoria só cria este documento; implementação, execução de testes e empacotamento pertencem ao agente principal.
 
 **Critério de evidência:** `E` = fonte E2E contém comando e asserção específicos; `S` = alcançável pelo código, sem cenário de voz específico localizado; `NV` = não acessível por voz na interface atual; `N` = etapa física/nativa/filesystem não validada por esses E2E. Para helpers unitários, `E` identifica asserções específicas de unidade, não uma jornada E2E. A presença de `E` sozinha não declara execução verde; os resultados confirmados nesta rodada estão na nota abaixo.

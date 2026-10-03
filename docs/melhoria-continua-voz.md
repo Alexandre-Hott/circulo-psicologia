@@ -1,5 +1,9 @@
 # Melhoria contínua de voz
 
+## Cobertura após0.2.45: restauração inicial pelo assistente
+
+Quatro cenários novos aprovados; regressão de Ajustes e transições **30/30 em1,7min**, JavaScript **229/229**, lint e diff check aprovados (quatro avisos anteriores). Comandos abrem a restauração no perfil vazio; cancelar/voltar não cria cofre; alterar a senha invalida a prévia; recusar não restaura; sucesso simulado abre apenas os pacientes fictícios restaurados; retorno cancelado mantém a entrada vazia. Senhas continuam manuais. [Evidência e limites](voz-cobertura-interface.md). Esta rodada altera somente testes/documentação: nenhum arquivo real, perfil Windows, microfone, backend Rust ou instalador foi testado/alterado. Instalado permanece0.2.45; correção de proposta do incremento anterior ainda aguarda próximo pacote. Meta ativa, sem ampliar para limpeza ou backups antigos.
+
 ## Incremento após0.2.45: transições e proposta antiga
 
 35/35 E2E em1,6min e229/229JS, lint/guard/build/diff check aprovados (avisos anteriores). Cenários novos comprovaram RPC de entrada atrasado/falhando sem aceitar transcrição antiga e interrupção de track/AudioContext durante gravação ao bloquear/trocar área, sem reconhecimento. Teste adicional reproduziu botão de proposta antiga persistindo após desbloqueio manual (red0/1); corrigido limpando intenção/aviso na entrada, antes do RPC, green na regressão35/35. [Evidência e limites](voz-cobertura-interface.md). Mídia/RPC/relógio sintéticos, nenhum arquivo de perfil ou dado real acessado. Correção de proposta ainda não no instalado0.2.45; consolidar no próximo pacote junto ao trabalho restante. Meta ativa, sem novas provas nativas/microfone ou alterações de recovery/legados.
