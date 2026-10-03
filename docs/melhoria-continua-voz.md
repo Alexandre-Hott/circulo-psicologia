@@ -1,5 +1,9 @@
 # Melhoria contínua de voz
 
+## Pacote Windows0.2.46 — 03/10/2026
+
+[Instalador e limites](validacao-voz-0.2.46.md). Consolidados prompt/variantes de navegação e limpeza de proposta antiga após desbloqueio.230/230JS e guard repetidos; build NSIS offline/locked e auditoria PE/hash aprovados, avisos anteriores. Sem instalação/abertura/perfil alterado nesta rodada: instalado permanece0.2.45. Sem Release ou assinatura updater. Referências abaixo a não empacotado são histórico incluído agora na46. Meta ativa, captura humana ainda não homologada.
+
 ## Incremento após0.2.45: reconhecimento de comandos de navegação
 
 Prompt nativo ampliado com ações existentes. Repetição do corpus português corrigido: Rust1/1,12 WAVs,20,60s; melhoraram Novo cadastro, Abrir pacientes e o título de comportamento sem “e” extra. Parser aceita `seções` apenas no substantivo de navegação e `análise` singular, sem correção de nomes/textos. Novo teste de IDs/período/recusa/preservação literal; **230/230JS**, **13/13Rust de voz**, **21/21E2E interface em1,4min**, lint/build/guard/diff aprovados (avisos anteriores). [Evidências e pendências](voz-audio-sintetico-20261003.md). Edição sem atributos continua recusada e não homologada. Sem microfone humano/perfil real/novo instalador; próximo pacote deve consolidar este incremento e a limpeza de proposta anterior. Meta ativa.
