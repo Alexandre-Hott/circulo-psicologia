@@ -110,17 +110,17 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   useEffect(() => {
     const intent = voiceCommandDraft
     if (!intent?.commandId || appliedVoiceDraftRef.current === intent.commandId) return
-    if (intent.type === 'behavior.create' || intent.type === 'behavior.update') {
+    if (intent.type === 'behavior.create' || intent.type === 'behavior.update' || intent.type === 'behavior.edit.open') {
       appliedVoiceDraftRef.current = intent.commandId
       const applyBehaviorDraft = async () => {
-        const draft = intent.draft
+        const draft = intent.type === 'behavior.edit.open' ? {} : intent.draft
         if (!draft || (draft.title !== undefined && typeof draft.title !== 'string') || (draft.description !== undefined && typeof draft.description !== 'string')) throw new Error('Campos de comportamento incompatíveis com o formulário.')
         let template = null
-        if (intent.type === 'behavior.update') {
-          if (typeof intent.target?.behaviorId !== 'string' || !intent.target.behaviorId || (draft.title === undefined && draft.description === undefined)) throw new Error('Informe o comportamento e os campos que deseja editar.')
+        if (intent.type === 'behavior.update' || intent.type === 'behavior.edit.open') {
+          if (typeof intent.target?.behaviorId !== 'string' || !intent.target.behaviorId || (intent.type === 'behavior.update' && draft.title === undefined && draft.description === undefined)) throw new Error('Informe o comportamento e os campos que deseja editar.')
           const nextTemplates = await invoke('behavior_list')
           if (!mountedRef.current || appliedVoiceDraftRef.current !== intent.commandId) return
-          template = nextTemplates.find(item => item.id === intent.target.behaviorId)
+          template = nextTemplates.find(item => item.id === intent.target.behaviorId && item.archivedAt == null)
           if (!template || !Number.isInteger(template.version) || template.version < 1) throw new Error('Não encontrei uma versão válida do comportamento solicitado. Atualize a biblioteca e tente novamente.')
           setTemplates(nextTemplates)
         } else if (typeof draft.title !== 'string' || typeof draft.description !== 'string') throw new Error('Informe título e descrição para criar o comportamento.')

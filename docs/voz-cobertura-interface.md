@@ -1,5 +1,11 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Complemento executado: abrir edição do modelo de comportamento
+
+Pedido `Editar comportamento Pede ajuda` sem mudanças prepara `behavior.edit.open` por ID exato ativo; não é uma observação atribuída a paciente. Após confirmação, o componente consulta a biblioteca novamente, valida ID ativo e versão positiva, abre o formulário normal com campos preservados e só salva quando solicitado. Teste unitário cobre verbos/recusas e título literal `Pede ajuda para o adulto`. Novos E2E em `desktop-voice-interface.spec.js` comprovam captura/transcrição simulada, abertura da edição correta, Cancelar sem escrita, preenchimento separado e único `behavior_update` com ID/versão/título/descrição exatos, sem `session_draft_save`; modelo removido após preparar é recusado sem abrir outro/gravar.
+
+**232/232JS**, **28/28E2E interface/biblioteca em1,9min**, lint/build/guard/diff aprovados; revisão independente sem achado concreto. Primeira tentativa1/2 por asserção da mensagem sem prefixo Error, corrigida após consultar snapshot (erro já estava visível). Prova E/N: componentes reais, áudio/backend simulados; sem microfone físico, arquivo de perfil ou persistência nativa. Código posterior ao pacote0.2.46, ainda não incluído nele. Biblioteca e registro de comportamento na sessão continuam fluxos distintos.
+
 ## Complemento executado: abrir edição pelo nome
 
 `Editar paciente Ana Clara` sem atributos agora prepara abertura, não atualização: `patient.edit.open` com ID do paciente ativo exato. Aceita pontuação da pausa após a palavra `paciente`, não dentro do nome; não adivinha nomes, não seleciona arquivados/homônimos. Confirmação abre formulário normal com campos atuais; Salvar continua separado. Teste unitário cobre variantes/recusas e E2E `voz abre edição pelo nome e preserva os campos até salvar explicitamente` compara ID, ausência de gravação antecipada e payload completo após idade9/Salvar.

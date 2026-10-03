@@ -273,7 +273,7 @@ export default function DesktopVault() {
       setQuickStart(false)
       setAgendaOpen(true)
       setSpace('agenda')
-    } else if (intent.type === 'behavior.create' || intent.type === 'behavior.update') {
+    } else if (intent.type === 'behavior.create' || intent.type === 'behavior.update' || intent.type === 'behavior.edit.open') {
       if (sessionsRef.current?.hasOtherUnsavedEditors() && !await confirmAction('Substituir os campos não salvos da biblioteca pelo pedido de voz?')) return
       setSessionVoiceDraft({ ...intent, commandId: crypto.randomUUID() })
       setSessionsOpen(true)

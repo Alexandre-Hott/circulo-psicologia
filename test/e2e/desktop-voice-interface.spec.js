@@ -39,7 +39,7 @@ async function openApp(page, { emptyLibrary = false, archivedPatient = false } =
       if (command === 'auto_backup_status') return { available: false, dirty: false }
       if (command === 'patient_list') return patients.filter(patient => args?.includeArchived || patient.archivedAt == null)
       if (command === 'related_party_list') return []
-      if (command === 'behavior_list') return behaviors
+      if (command === 'behavior_list') return window.voiceBehaviorCatalog ?? behaviors
       if (command === 'indicator_catalog') return []
       if (command === 'voice_transcribe') return window.deferVoice ? await new Promise(resolve => { window.resolveVoice = resolve }) : window.voiceTranscript
       if (command === 'agenda_occurrences') return (window.voiceOccurrences || [occurrence]).filter(item => item.date >= args.from && item.date <= args.to)
@@ -256,6 +256,44 @@ test('limpar campos por voz altera apenas o formulário e não grava ou escolhe 
   await command(page, 'Limpar Descrição opcional')
   await expect(page.getByLabel('Descrição opcional')).toHaveValue('')
   await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(0)
+})
+
+test('voz abre modelo de comportamento e cancela ou salva versão sem registrar em sessão', async ({ page }) => {
+  await openApp(page)
+  const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
+  await page.evaluate(() => { window.voiceTranscript = 'Editar comportamento Pede ajuda.' })
+  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await expect(page.locator('.voice-command-preview')).toContainText('Abrir edição do comportamento Pede ajuda')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await page.evaluate(() => { window.voiceTranscript = 'confirmar' })
+  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  const form = page.getByRole('form', { name: 'Comportamento reutilizável' })
+  await expect(form).toHaveAttribute('data-voice-record', 'behavior:help')
+  await expect(form).toHaveAttribute('data-voice-epoch', '1')
+  await expect(form.getByLabel('Título descritivo')).toHaveValue('Pede ajuda')
+  await expect(form.getByLabel('Descrição opcional')).toHaveValue('')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await command(page, 'Clicar em Cancelar edição')
+  await expect(form).toHaveAttribute('data-voice-record', 'behavior:new')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await command(page, 'Editar comportamento Pede ajuda')
+  await command(page, 'Preencher Descrição opcional com Solicita apoio durante atividades')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await command(page, 'Clicar em Salvar versão do comportamento')
+  await expect.poll(() => page.evaluate(() => window.writes)).toEqual([
+    { command: 'behavior_update', args: { id: 'help', version: 1, title: 'Pede ajuda', description: 'Solicita apoio durante atividades' } },
+  ])
+})
+
+test('modelo desaparecido após preparar edição não abre outro nem grava', async ({ page }) => {
+  await openApp(page)
+  await propose(page, 'Editar comportamento Pede ajuda')
+  await expect(page.locator('.voice-command-preview')).toContainText('Abrir edição')
+  await page.evaluate(() => { window.voiceBehaviorCatalog = [] })
+  await propose(page, 'confirmar')
+  await expect(page.getByRole('alert')).toContainText('Não encontrei uma versão válida do comportamento solicitado. Atualize a biblioteca e tente novamente.')
+  await expect(page.getByRole('button', { name: 'Salvar versão do comportamento', exact: true })).toHaveCount(0)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
 })
 
 test('voz abre edição pelo nome e preserva os campos até salvar explicitamente', async ({ page }) => {

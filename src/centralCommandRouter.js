@@ -286,9 +286,12 @@ const parseBehaviorManagement = (text, context) => {
     return draft({ type: 'behavior.create', draft: { title: patch.title, description: patch.description ?? '' } },
       `Rascunho de comportamento: ${patch.title}.`, ['Título e descrição mantidos literalmente, sem interpretação clínica.'])
   }
-  if (!Object.keys(patch).length) return refuse('Informe uma descrição ou um novo título para o comportamento.')
   const result = exactTarget(titleOrTarget, availableBehaviors, 'modelo de comportamento', item => item.title)
   if (result.error) return refuse(result.error)
+  if (!Object.keys(patch).length) {
+    return draft({ type: 'behavior.edit.open', target: { behaviorId: result.entity.id } },
+      `Abrir edição do comportamento ${result.entity.title}.`, ['Apenas abre a biblioteca; nenhum comportamento ou registro de sessão será salvo.'])
+  }
   return draft({ type: 'behavior.update', target: { behaviorId: result.entity.id }, draft: patch },
     `Rascunho de alteração do comportamento ${result.entity.title}.`, ['Texto mantido literalmente, sem interpretação clínica.'])
 }

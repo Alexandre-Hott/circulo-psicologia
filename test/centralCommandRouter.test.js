@@ -17,6 +17,21 @@ const indicators = [
 const session = { id: 'session-draft-ana-001', patientId: 'patient-ana', patientName: 'Ana Clara', originalDate: '2026-09-30' }
 const context = { patients, behaviors, indicators, activeSessionDraft: session }
 
+test('editar comportamento sem alterações abre modelo exato sem preparar versão nova', () => {
+  for (const text of ['Editar comportamento Pede ajuda.', 'Edite o comportamento Pede ajuda', 'Atualizar comportamento Pede ajuda']) {
+    assert.deepEqual(parseCentralCommand({ text, context }).intent,
+      { type: 'behavior.edit.open', target: { behaviorId: 'behavior-regulation' } })
+  }
+  for (const list of [[{ id: 'x', title: 'Pede ajuda', archivedAt: 1 }],
+    [{ id: 'x', title: 'Pede ajuda' }, { id: 'y', title: 'Pede ajuda' }]]) {
+    assert.equal(parseCentralCommand({ text: 'Editar comportamento Pede ajuda', context: { behaviors: list } }).status, 'clarification')
+  }
+  assert.equal(parseCentralCommand({ text: 'Editar comportamento Pede', context }).status, 'clarification')
+  const literal = { behaviors: [{ id: 'literal', title: 'Pede ajuda para o adulto' }] }
+  assert.deepEqual(parseCentralCommand({ text: 'Editar comportamento Pede ajuda para o adulto', context: literal }).intent,
+    { type: 'behavior.edit.open', target: { behaviorId: 'literal' } })
+})
+
 test('editar paciente sem atributos abre formulário por ID, não prepara gravação', () => {
   for (const text of ['Editar paciente Ana Clara.', 'Editar paciente. Ana Clara.', 'Editar paciente, Ana Clara.', 'Edite o paciente Ana Clara', 'Atualizar paciente Ana Clara']) {
     const result = parseCentralCommand({ text, context })
@@ -537,7 +552,7 @@ test('edita descrição e título de comportamento com alvo delimitado pelo cat�
   assert.deepEqual(parseCentralCommand({ text: 'Editar comportamento Pede ajuda para Solicita Apoio! com descrição Pede apoio ao adulto.', context }).intent,
     { type: 'behavior.update', target: { behaviorId: 'behavior-regulation' }, draft: { title: 'Solicita Apoio!', description: 'Pede apoio ao adulto.' } })
   assert.deepEqual(parseCentralCommand({ text: 'Editar comportamento Pede ajuda para Espera a vez', context }).intent.draft, { title: 'Espera a vez' })
-  for (const text of ['Editar comportamento Pede com descrição Apoio', 'Editar comportamento Pede ajuda e Espera a vez com descrição Apoio', 'Editar comportamento Pede ajuda', 'Criar comportamento Pede ajuda com descrição']) {
+  for (const text of ['Editar comportamento Pede com descrição Apoio', 'Editar comportamento Pede ajuda e Espera a vez com descrição Apoio', 'Criar comportamento Pede ajuda com descrição']) {
     assert.equal(parseCentralCommand({ text, context }).status, 'clarification', text)
   }
   const duplicate = { ...context, behaviors: [...behaviors, { id: 'duplicate', title: 'Pede ajuda' }] }

@@ -1,5 +1,9 @@
 # Melhoria contínua de voz
 
+## Incremento após0.2.46: abrir edição de comportamento pelo título
+
+`Editar comportamento Pede ajuda` prepara `behavior.edit.open`; confirmar abre o modelo atual da biblioteca, sem criar comportamento, versão ou registro em sessão. Formulário normal preserva título/descrição/versão; Cancelar edição não grava, Salvar versão permanece separado. Biblioteca é consultada novamente e modelo ausente/arquivado/versão inválida não é aberto. Parser recusa homônimos, título parcial e arquivados, preserva título literal contendo “para”. **232/232JS**, **28/28E2E interface/biblioteca em1,9min**, lint/build/guard/diff aprovados (avisos anteriores). Revisor independente Ampere não encontrou achado concreto no escopo. Tentativa inicial1/2: erro nativo simulado era mostrado com prefixo Error; ajustada somente asserção para alert/contém mensagem. Sem nova prova Rust/microfone humano/banco ou novo instalador. Pacote46 não contém esta abertura nem a abertura de paciente anterior; consolidar no próximo pacote. Meta ativa.
+
 ## Incremento após0.2.46: abrir edição do paciente sem ditar alterações
 
 Pedido natural `Editar paciente Ana Clara` prepara `patient.edit.open`, confirma a abertura e reutiliza formulário/validações/gravação normais. Pausa transcrita como ponto/vírgula após `paciente` é aceita apenas no prefixo; nome continua exato. Arquivados, homônimos e nomes parciais são recusados. **231/231JS**, **22/22E2E interface em1,5min**, lint/build/guard/diff aprovados com avisos anteriores. Novo E2E usa captura/transcrição simulada para abrir Ana por ID, preservar campos, preencher idade e gravar uma única atualização somente após Salvar alterações. Primeira execução falhou na expectativa incompleta do payload (ciclo de vida derivado e solicitante null); conferido handler normal e corrigida asserção, sem mudar a normalização. Sem banco/microfone físico/Rust/novo instalador nesta rodada; pacote46 não contém este incremento. Meta ativa.
