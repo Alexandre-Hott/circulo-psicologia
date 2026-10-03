@@ -1,5 +1,9 @@
 # Melhoria contínua de voz
 
+## Áudio sintético offline: corpus de doze frases
+
+[Resultados e falhas](voz-audio-sintetico-20261003.md). Corrigida leitura ANSI do roteiro português no PowerShell5.1; teste nativo expandido de três para doze WAVs. Reexecução Rust1/1,12 transcrições não vazias em20,44s; JS229/229 e guard aprovados. Avaliação dos textos pelo parser revelou navegação recusada e título de comportamento divergente: transporte verde não significa compreensão verde. Sem microfone humano, persistência ou novo instalador. Meta ativa: próxima correção deve atacar entendimento do áudio, não apenas aumentar testes de comandos digitados.
+
 ## Cobertura após0.2.45: restauração inicial pelo assistente
 
 Quatro cenários novos aprovados; regressão de Ajustes e transições **30/30 em1,7min**, JavaScript **229/229**, lint e diff check aprovados (quatro avisos anteriores). Comandos abrem a restauração no perfil vazio; cancelar/voltar não cria cofre; alterar a senha invalida a prévia; recusar não restaura; sucesso simulado abre apenas os pacientes fictícios restaurados; retorno cancelado mantém a entrada vazia. Senhas continuam manuais. [Evidência e limites](voz-cobertura-interface.md). Esta rodada altera somente testes/documentação: nenhum arquivo real, perfil Windows, microfone, backend Rust ou instalador foi testado/alterado. Instalado permanece0.2.45; correção de proposta do incremento anterior ainda aguarda próximo pacote. Meta ativa, sem ampliar para limpeza ou backups antigos.

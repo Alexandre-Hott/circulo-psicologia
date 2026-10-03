@@ -1,4 +1,6 @@
-param([string]$VoiceDirectory)
+﻿param([string]$VoiceDirectory)
+
+# Keep the UTF-8 BOM: Windows PowerShell 5.1 otherwise reads Portuguese text as ANSI.
 
 $ErrorActionPreference = 'Stop'
 
@@ -44,7 +46,12 @@ try {
         'Criar comportamento Espera a vez.',
         'Abrir agenda.',
         'Clicar em Novo cadastro.',
-        'Confirmar comando.'
+        'Confirmar comando.',
+        'Abrir pacientes.',
+        'Abrir sessões de Ana Clara.',
+        'Abrir análises deste mês.',
+        'Abrir ajustes.',
+        'Editar paciente Ana Clara.'
     )
     $results = foreach ($index in 0..($commands.Count - 1)) {
         $wav = Join-Path $testDirectory "synthetic-command-$index.wav"
@@ -70,13 +77,14 @@ try {
         if (-not (Test-Path -LiteralPath $transcriptPath -PathType Leaf)) { throw 'whisper.cpp não produziu uma transcrição.' }
         [pscustomobject]@{
             IntendedCommand = $commands[$index]
-            Transcript = (Get-Content -LiteralPath $transcriptPath -Raw).Trim()
+            Transcript = (Get-Content -LiteralPath $transcriptPath -Raw -Encoding UTF8).Trim()
             InferenceSeconds = [math]::Round($clock.Elapsed.TotalSeconds, 2)
             AudioBytes = (Get-Item -LiteralPath $wav).Length
         }
     }
     $env:CIRCULO_SYNTHETIC_WAV_DIRECTORY = $testDirectory
     $env:CIRCULO_TEST_VOICE_RESOURCES = $sourceVoiceDirectory
+    $env:CIRCULO_SYNTHETIC_WAV_COUNT = [string]$commands.Count
     Push-Location (Join-Path $repoRoot 'src-tauri')
     try {
         cargo test --release --offline native_voice::tests::transcribes_synthetic_wav_through_the_same_local_backend_as_the_app -- --ignored --nocapture
@@ -86,6 +94,7 @@ try {
         Pop-Location
         Remove-Item Env:CIRCULO_SYNTHETIC_WAV_DIRECTORY -ErrorAction SilentlyContinue
         Remove-Item Env:CIRCULO_TEST_VOICE_RESOURCES -ErrorAction SilentlyContinue
+        Remove-Item Env:CIRCULO_SYNTHETIC_WAV_COUNT -ErrorAction SilentlyContinue
     }
     [pscustomobject]@{ Voice = $voice.Voice.GetDescription(); NetworkUsed = $false; Cases = @($results) } | ConvertTo-Json -Depth 4 -Compress
 }

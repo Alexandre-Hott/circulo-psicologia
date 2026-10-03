@@ -501,7 +501,11 @@ mod tests {
         let resources = std::env::var_os("CIRCULO_TEST_VOICE_RESOURCES")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/voice"));
-        for index in 0..3 {
+        let count = std::env::var("CIRCULO_SYNTHETIC_WAV_COUNT")
+            .map(|value| value.parse::<usize>().expect("quantidade inteira de WAVs"))
+            .unwrap_or(3);
+        assert!((1..=20).contains(&count), "quantidade de WAVs entre 1 e 20");
+        for index in 0..count {
             let wav_path = wav_directory.join(format!("synthetic-command-{index}.wav"));
             let bytes = fs::read(&wav_path).expect("ler áudio WAV sintético");
             assert!(bytes.len() >= 44, "WAV sintético truncado");
