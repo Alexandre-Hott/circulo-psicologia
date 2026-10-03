@@ -2,7 +2,7 @@ import { addCivilDays, parseCivilDate } from './calendarDate.js'
 import { inSupportedRange } from './analyticsRange.js'
 import { normalizeVoiceFieldValue } from './voiceFieldValue.js'
 
-const normalize = value => String(value ?? '')
+const normalize = (value, preserveTerminal = false) => String(value ?? '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
   .toLocaleLowerCase('pt-BR')
@@ -23,7 +23,7 @@ const normalize = value => String(value ?? '')
   // Whisper sometimes hears a clipped “às” as “toda” before a numeric time.
   .replace(/\btoda (?=\d{1,2}\s*horas?\b)/g, 'as ')
   .replace(/\s+/g, ' ')
-  .replace(/[.!?;,:]+$/u, '')
+  .replace(/[.!?;,:]+$/u, match => preserveTerminal ? match : '')
   .trim()
 
 const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -554,8 +554,14 @@ const parseSingleAppointment = ({ text, context, referenceDate }) => {
     [/\b(?:online|presencial)\b/u.test(match[3]) ? 'Modalidade identificada explicitamente no comando.' : 'A modalidade presencial foi preenchida pelo padrão atual do formulário.'])
 }
 
-const resolveSessionTarget = (text, context) => {
-  const patientResult = uniqueEntity(text, (context.patients || []).filter(patient => patient.archivedAt == null), 'paciente')
+const unwrapArgument = value => {
+  const text = value.trim()
+  const pairs = [['"', '"'], ['“', '”'], ["'", "'"]]
+  return pairs.some(([start, end]) => text.length >= 2 && text.startsWith(start) && text.endsWith(end)) ? text.slice(1, -1) : text
+}
+
+const resolveSessionTarget = (patientQuery, context) => {
+  const patientResult = exactTarget(patientQuery, (context.patients || []).filter(patient => patient.archivedAt == null), 'paciente')
   if (patientResult.error) return { error: patientResult.error }
   const session = context.activeSessionDraft
   if (!session?.id || !session?.patientId) return { error: 'Abra primeiro um rascunho de sessão específico. Não vou associar registros a um paciente sem sessão selecionada.' }
@@ -563,25 +569,47 @@ const resolveSessionTarget = (text, context) => {
   return { patient: patientResult.entity, session }
 }
 
+const sessionTargetFrom = target => ({
+  patientId: target.patient.id, patientName: target.patient.name,
+  sessionDraftId: target.session.id, sessionDate: target.session.originalDate || target.session.date || null,
+})
+
+const chooseSessionCandidate = (candidates, context, fallback) => {
+  const valid = [], errors = []
+  for (const candidate of candidates) {
+    const patients = (context.patients || []).filter(item => item.archivedAt == null)
+    const argumentsToMatch = [candidate.patientQuery, unwrapArgument(candidate.patientQuery)]
+    const matches = patients.filter(item => argumentsToMatch.some(query => normalize(item.name) === normalize(cleanArgument(query))))
+    if (matches.length > 1) return { error: 'Encontrei mais de um paciente com esse nome. Informe um nome único.' }
+    if (!matches.length || candidate.error) errors.push(candidate.error || 'Não encontrei paciente com esse nome. Confira o nome completo no cadastro.')
+    else valid.push({ ...candidate, patientQuery: matches[0].name })
+  }
+  if (valid.length === 1) {
+    const target = resolveSessionTarget(valid[0].patientQuery, context)
+    return target.error ? target : { ...valid[0], target }
+  }
+  if (valid.length > 1) return { error: 'Encontrei mais de um registro compatível. Informe modelo, valor e paciente sem ambiguidade.' }
+  return { error: errors[0] || fallback }
+}
+
+const catalogPattern = name => `(?:["“])?${escapeRegExp(normalize(name, true))}(?:["”])?`
+
 const parseSessionDraft = ({ text, rawText, context }) => {
   if (!/\b(?:sessao|rascunho)\b/u.test(text) || !/\b(?:comportamento|indicador|observacao|evolucao|procedimento|resultado|encaminhamento|fechamento|decisao)\b/u.test(text)) return null
-  const target = resolveSessionTarget(text, context)
-  if (target.error) return refuse(target.error)
-  const sessionTarget = {
-    patientId: target.patient.id,
-    patientName: target.patient.name,
-    sessionDraftId: target.session.id,
-    sessionDate: target.session.originalDate || target.session.date || null,
-  }
-
-  const behaviorCommand = /^(?:selecionar|marcar|adicionar|registrar)\s+(?:o\s+)?comportamento\s+(.+?)\s+(?:para|na sessao de|na sessao do|na sessao da)\s+(.+?)\s+na sessao$/u.exec(text)
-    || /^(?:selecionar|marcar|adicionar)\s+(?:o\s+)?comportamento\s+(.+?)\s+na sessao de\s+(.+?)\s*$/u.exec(text)
+  const behaviorCommand = /^(?:selecionar|marcar|adicionar|registrar)\s+(?:o\s+)?comportamento\s+(.+)$/u.exec(text)
   if (behaviorCommand) {
-    const behaviorResult = exactTarget(behaviorCommand[1], (context.behaviors || []).filter(item => item.archivedAt == null), 'modelo de comportamento', item => item.title)
-    if (behaviorResult.error) return refuse(behaviorResult.error)
-    const patientInCommand = exactTarget(behaviorCommand[2], [target.patient], 'paciente')
-    if (patientInCommand.error) return refuse(patientInCommand.error)
-    const behavior = behaviorResult.entity
+    const candidates = (context.behaviors || []).filter(item => item.archivedAt == null).flatMap(behavior => {
+      const title = catalogPattern(behavior.title)
+      const matches = [
+        new RegExp(`^${title}\\s+(?:para|na sessao de|na sessao do|na sessao da)\\s+(.+)\\s+na sessao$`, 'u').exec(behaviorCommand[1]),
+        new RegExp(`^${title}\\s+na sessao de\\s+(.+)$`, 'u').exec(behaviorCommand[1]),
+      ]
+      return matches.filter(Boolean).map(match => ({ behavior, patientQuery: match[1] }))
+    })
+    const result = chooseSessionCandidate(candidates, context, uniqueEntity(text, context.patients || [], 'paciente').error || 'Informe o título completo de um modelo ativo e o paciente exato da sessão.')
+    if (result.error) return refuse(result.error)
+    const { target, behavior } = result
+    const sessionTarget = sessionTargetFrom(target)
     return draft(
       { type: 'session.draft.update', target: sessionTarget, patch: { field: 'behaviorIds', operation: 'add', value: behavior.id, label: behavior.title } },
       `Rascunho: selecionar “${behavior.title}” como comportamento observado na sessão de ${target.patient.name}${sessionTarget.sessionDate ? ` (${sessionTarget.sessionDate})` : ''}.`,
@@ -589,16 +617,22 @@ const parseSessionDraft = ({ text, rawText, context }) => {
     )
   }
 
-  const indicatorCommand = /\b(?:definir|registrar|marcar)\s+(?:o\s+)?indicador\s+(.+?)\s+(?:como|em)\s+(.+?)\s+na sessao de\s+(.+?)\s*$/u.exec(text)
+  const indicatorCommand = /^(?:definir|registrar|marcar)\s+(?:o\s+)?indicador\s+(.+)$/u.exec(text)
   if (indicatorCommand) {
-    const indicatorResult = uniqueEntity(indicatorCommand[1], context.indicators || [], 'indicador')
-    if (indicatorResult.error) return refuse(indicatorResult.error)
-    const indicator = indicatorResult.entity
-    const label = indicator.labels?.find(item => normalize(item) === normalize(indicatorCommand[2]))
-    if (!label) return refuse(`Esse valor não existe na escala “${indicator.name}”. Use uma das opções do catálogo.`)
-    const patientInCommand = uniqueEntity(indicatorCommand[3], [target.patient], 'paciente')
-    if (patientInCommand.error) return refuse(patientInCommand.error)
-    const value = indicator.labels.indexOf(label)
+    const candidates = (context.indicators || []).filter(item => item.archivedAt == null).flatMap(indicator => {
+      const name = catalogPattern(indicator.name)
+      const matches = (indicator.labels || []).flatMap((label, value) => {
+        const match = new RegExp(`^${name}\\s+(?:como|em)\\s+${catalogPattern(label)}\\s+na sessao de\\s+(.+)$`, 'u').exec(indicatorCommand[1])
+        return match ? [{ indicator, label, value, patientQuery: match[1] }] : []
+      })
+      if (matches.length) return matches
+      const invalidValue = new RegExp(`^${name}\\s+(?:como|em)\\s+.+\\s+na sessao de\\s+(.+)$`, 'u').exec(indicatorCommand[1])
+      return invalidValue ? [{ patientQuery: invalidValue[1], error: `Esse valor não existe na escala “${indicator.name}”. Use uma das opções do catálogo.` }] : []
+    })
+    const result = chooseSessionCandidate(candidates, context, 'Informe o indicador completo, um rótulo do catálogo e o paciente exato da sessão.')
+    if (result.error) return refuse(result.error)
+    const { target, indicator, label, value } = result
+    const sessionTarget = sessionTargetFrom(target)
     return draft(
       { type: 'session.draft.update', target: sessionTarget, patch: { field: 'indicators', operation: 'set', value: { id: indicator.id, value, label } } },
       `Rascunho: registrar “${label}” em ${indicator.name} na sessão de ${target.patient.name}${sessionTarget.sessionDate ? ` (${sessionTarget.sessionDate})` : ''}.`,
@@ -606,16 +640,22 @@ const parseSessionDraft = ({ text, rawText, context }) => {
     )
   }
 
-  const fieldCommand = /\b(?:preencher|anotar|registrar)\s+(observa(?:ção|cao)|evolu(?:ção|cao)|procedimentos?|resultado|decis(?:ão|ao)|encaminhamento|fechamento)\s+(?:da|do)\s+sess(?:ão|ao)\s+de\s+(.+?)\s+com\s+(.+)$/iu.exec(rawText)
+  const fieldCommand = /^(?:preencher|anotar|registrar)\s+(observa(?:ção|cao)|evolu(?:ção|cao)|procedimentos?|resultado|decis(?:ão|ao)|encaminhamento|fechamento)\s+(?:da|do)\s+sess(?:ão|ao)\s+de\s+(.+)$/iu.exec(rawText)
   if (fieldCommand) {
     const field = normalize(fieldCommand[1])
     const fieldMap = {
       observacao: 'observation', evolucao: 'observation', procedimento: 'procedures', procedimentos: 'procedures',
       resultado: 'outcomeDecision', decisao: 'outcomeDecision', encaminhamento: 'referralClosure', fechamento: 'referralClosure',
     }
-    const patientInCommand = uniqueEntity(fieldCommand[2], [target.patient], 'paciente')
-    if (patientInCommand.error) return refuse(patientInCommand.error)
-    const exactText = fieldCommand[3].trim().replace(/^[\u0027\u201c\u0022]|[\u0027\u201d\u0022]$/g, '')
+    const candidates = [...fieldCommand[2].matchAll(/\s+com\s+/giu)].map(separator => ({
+      patientQuery: fieldCommand[2].slice(0, separator.index),
+      content: fieldCommand[2].slice(separator.index + separator[0].length),
+    }))
+    const result = chooseSessionCandidate(candidates, context, 'Informe o paciente exato da sessão e o texto após “com”.')
+    if (result.error) return refuse(result.error)
+    const { target } = result
+    const sessionTarget = sessionTargetFrom(target)
+    const exactText = unwrapArgument(result.content)
     if (!exactText || exactText.length > 1000) return refuse('O texto do campo deve ter entre 1 e 1000 caracteres.')
     const key = fieldMap[field]
     return draft(

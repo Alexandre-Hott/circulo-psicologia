@@ -3,15 +3,19 @@ import { readFileSync } from 'node:fs'
 
 const nativeVoiceCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-20261003.json', import.meta.url), 'utf8'))
 
-async function openApp(page, { emptyLibrary = false, archivedPatient = false } = {}) {
+async function openApp(page, { emptyLibrary = false, archivedPatient = false, specialCatalog = false } = {}) {
   await page.clock.install({ time: new Date('2026-10-03T15:00:00Z') })
-  await page.addInitScript(({ emptyLibrary, archivedPatient }) => {
+  await page.addInitScript(({ emptyLibrary, archivedPatient, specialCatalog }) => {
     window.writes = []
     window.voiceTranscript = ''
     window.analyticsRequests = []
     window.voiceNativeCalls = []
     const patients = [{ id: 'ana', name: 'Ana Clara', age: 8, revision: 1, preferredModality: 'Presencial', archivedAt: null }]
     const behaviors = [{ id: 'help', title: 'Pede ajuda', description: '', version: 1 }]
+    if (specialCatalog) {
+      behaviors.push({ id: 'long-title', title: 'Pede ajuda para o adulto', description: '', version: 1 })
+      patients.push({ id: 'caio', name: 'Caio Fictício', age: 11, revision: 1, archivedAt: null })
+    }
     if (emptyLibrary) behaviors.length = 0
     if (archivedPatient) patients.push({ id: 'archived', name: 'Bia Arquivada', age: 30, revision: 1, preferredModality: 'Online', archivedAt: '2026-09-01' })
     const occurrence = { id: 'occ', seriesId: 'series', patientId: 'ana', date: '2026-10-03', originalDate: '2026-10-03', start: '15:00', end: '15:50', frequency: 'Avulsa', modality: 'Presencial', status: 'scheduled' }
@@ -43,7 +47,7 @@ async function openApp(page, { emptyLibrary = false, archivedPatient = false } =
       if (command === 'patient_list') return patients.filter(patient => args?.includeArchived || patient.archivedAt == null)
       if (command === 'related_party_list') return []
       if (command === 'behavior_list') return window.voiceBehaviorCatalog ?? behaviors
-      if (command === 'indicator_catalog') return []
+      if (command === 'indicator_catalog') return specialCatalog ? [{ id: 'group', name: 'Participação em grupo como apoio', version: 1, labels: ['Com apoio em grupo', 'Sem apoio'] }] : []
       if (command === 'voice_transcribe') return window.deferVoice ? await new Promise(resolve => { window.resolveVoice = resolve }) : window.voiceTranscript
       if (command === 'agenda_occurrences') return (window.voiceOccurrences || [occurrence]).filter(item => item.date >= args.from && item.date <= args.to)
       if (command === 'session_draft_start') return draft
@@ -65,7 +69,7 @@ async function openApp(page, { emptyLibrary = false, archivedPatient = false } =
       if (command === 'plugin:updater|check') return null
       return null
     } }
-  }, { emptyLibrary, archivedPatient })
+  }, { emptyLibrary, archivedPatient, specialCatalog })
   await page.goto('/')
   await expect(page.getByRole('region', { name: 'Comando do Círculo' })).toBeVisible()
 }
@@ -80,6 +84,27 @@ async function command(page, text) {
   await expect(page.locator('.voice-command-preview')).toBeVisible()
   await propose(page, 'confirmar')
 }
+
+test('registro natural preserva modelo completo e texto literal após confirmação', async ({ page }) => {
+  await openApp(page, { specialCatalog: true })
+  await command(page, 'Mostrar agenda de hoje')
+  await command(page, 'Clicar em Detalhes e ações')
+  await command(page, 'Clicar em Iniciar sessão de Ana Clara em 2026-10-03 às 15:00–15:50')
+  const form = page.getByRole('form', { name: 'Rascunho de sessão' })
+  await expect(form).toBeVisible()
+  await propose(page, 'Registrar comportamento Pede ajuda para o adulto para Ana Clara na sessão')
+  await expect(page.locator('.voice-command-preview')).toContainText('Pede ajuda para o adulto')
+  await expect(form.getByRole('checkbox', { name: /^Pede ajuda para o adulto · v1$/ })).not.toBeChecked()
+  await propose(page, 'confirmar')
+  await expect(form.getByRole('checkbox', { name: /^Pede ajuda para o adulto · v1$/ })).toBeChecked()
+  const literal = 'Caio Fictício disse "sim"'
+  await propose(page, `Preencher observação da sessão de Ana Clara com ${literal}`)
+  await expect(form.getByLabel('Observações descritivas')).toHaveValue('')
+  await propose(page, 'confirmar')
+  await expect(form.getByLabel('Observações descritivas')).toHaveValue(literal)
+  await command(page, 'Registrar indicador Participação em grupo como apoio como Com apoio em grupo na sessão de Ana Clara')
+  await expect(form.getByRole('combobox', { name: /^Participação em grupo como apoio · v1$/ })).toHaveValue('0')
+})
 
 test('evolução por voz sem rascunho abre Agenda para o paciente sem criar dados', async ({ page }) => {
   await openApp(page)

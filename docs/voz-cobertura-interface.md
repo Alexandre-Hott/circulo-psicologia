@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Complemento após0.2.49: registros de sessão com alvos completos
+
+Comportamentos/indicadores respeitam títulos e rótulos completos, delimitadores e pontuação. Interpretações ambíguas são recusadas antes de validar o rascunho aberto. Texto de observação pode mencionar outro paciente e preserva aspas internas. **243/243JS e57/57E2E em3,8min** no snapshot final; revisão independente sem achado novo (135 checks em memória). Build/lint/guard aprovados com avisos anteriores. Captura/RPC simulados, não microfone físico. Fonte posterior ao instalador49, ainda não empacotada/instalada; detalhes de falhas intermediárias e limites em [registro](melhoria-continua-voz.md). Meta ativa.
+
 ## Complemento executado e empacotado0.2.49: transcrições nativas e alvos exatos
 
 Dois defeitos observados no áudio sintético corrigidos: sufixo biblioteca `comportamentos, utilizáveis` e data completa falada no adendo. Registro de modelo não aceita sufixo desconhecido/título ou paciente apenas contido. Corpus Rust17 capturado e avaliado com intents completas:15 correspondentes/0 divergentes/2 dependentes de UI. Três E2E fazem replay de textos realmente coletados (biblioteca, adendo/data/foco e botão Novo cadastro + confirmar), com captura/RPC simulados e nenhuma escrita. **240/240JS, 56/56E2E em3,9min, 83Rust release aprovados/1 ignorado**; opt-in17WAVs executado separadamenteexit0. [Avaliação detalhada](voz-audio-sintetico-20261003.md) e [pacote](melhoria-continua-voz.md). Instalador49 local/auditado, não instalado/publicado; sem microfone humano nem prova universal de fala.

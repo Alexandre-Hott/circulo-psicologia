@@ -17,6 +17,50 @@ const indicators = [
 const session = { id: 'session-draft-ana-001', patientId: 'patient-ana', patientName: 'Ana Clara', originalDate: '2026-09-30' }
 const context = { patients, behaviors, indicators, activeSessionDraft: session }
 
+test('registro respeita títulos com delimitadores e nomes de outros pacientes no texto literal', () => {
+  const special = { ...context, behaviors: [...behaviors, { id: 'long-title', title: 'Pede ajuda para o adulto' }], indicators: [{ id: 'group', name: 'Participação em grupo como apoio', labels: ['Com apoio em grupo', 'Sem apoio'] }] }
+  const behavior = parseCentralCommand({ text: 'Registrar comportamento Pede ajuda para o adulto para Ana Clara na sessão', context: special })
+  assert.equal(behavior.status, 'draft')
+  assert.equal(behavior.intent.patch.value, 'long-title')
+  const indicator = parseCentralCommand({ text: 'Registrar indicador Participação em grupo como apoio como Com apoio em grupo na sessão de Ana Clara', context: special })
+  assert.equal(indicator.status, 'draft')
+  assert.equal(indicator.intent.patch.value.id, 'group')
+  assert.equal(indicator.intent.patch.value.value, 0)
+  const literal = 'Caio Fictício participou da atividade com Ana Clara; não abrir agenda'
+  const field = parseCentralCommand({ text: `Preencher observação da sessão de Ana Clara com ${literal}`, context })
+  assert.equal(field.status, 'draft')
+  assert.equal(field.intent.target.patientId, 'patient-ana')
+  assert.equal(field.intent.patch.value, literal)
+  const quotation = parseCentralCommand({ text: 'Preencher observação da sessão de Ana Clara com Ele disse "sim"', context })
+  assert.equal(quotation.intent.patch.value, 'Ele disse "sim"')
+})
+
+test('registro recusa interpretações múltiplas sem usar a sessão aberta para escolher uma', () => {
+  const literalQuote = { ...context, patients: [...patients, { id: 'literal-quote', name: '"Ana Clara"' }] }
+  for (const patientId of ['patient-ana', 'literal-quote']) assert.equal(parseCentralCommand({ text: 'Preencher observação da sessão de "Ana Clara" com Observado.', context: { ...literalQuote, activeSessionDraft: { id: 'd', patientId } } }).status, 'clarification')
+  const ambiguous = { patients: [{ id: 'ana-tail', name: 'Ana para Maria' }, { id: 'maria', name: 'Maria' }], behaviors: [{ id: 'short', title: 'Pede ajuda' }, { id: 'long', title: 'Pede ajuda para Ana' }] }
+  for (const patientId of ['ana-tail', 'maria']) assert.equal(parseCentralCommand({ text: 'Registrar comportamento Pede ajuda para Ana para Maria na sessão', context: { ...ambiguous, activeSessionDraft: { id: 'd', patientId } } }).status, 'clarification')
+  const withCom = { ...context, patients: [...patients, { id: 'with-com', name: 'Ana Clara com Silva' }] }
+  assert.equal(parseCentralCommand({ text: 'Preencher observação da sessão de Ana Clara com Silva com conteúdo fictício', context: withCom }).status, 'clarification')
+  const quoted = parseCentralCommand({ text: 'Preencher observação da sessão de "Ana Clara com Silva" com conteúdo fictício com outras palavras', context: { ...withCom, activeSessionDraft: { id: 'quoted', patientId: 'with-com' } } })
+  assert.equal(quoted.status, 'draft')
+  assert.equal(quoted.intent.patch.value, 'conteúdo fictício com outras palavras')
+  for (const patientId of ['bia', 'bia-tail']) {
+    const alternate = { ...context, patients: [{ id: 'bia', name: 'Bia' }, { id: 'bia-tail', name: 'Bia na sessão' }], activeSessionDraft: { id: 'd', patientId } }
+    assert.equal(parseCentralCommand({ text: 'Selecionar comportamento Pede ajuda na sessão de Bia na sessão', context: alternate }).status, 'clarification')
+  }
+  const duplicateLabels = { ...context, indicators: [{ id: 'dup', name: 'Participação', labels: ['Sem apoio', 'sem apoio'] }] }
+  assert.equal(parseCentralCommand({ text: 'Registrar indicador Participação como Sem apoio na sessão de Ana Clara', context: duplicateLabels }).status, 'clarification')
+})
+
+test('registro mantém pontuação dos títulos e rótulos do catálogo', () => {
+  for (const punctuation of ['!', '.', ':', '?', ';']) {
+    const punctuated = { ...context, behaviors: [{ id: 'punctuated', title: `Pede ajuda${punctuation}` }], indicators: [{ id: 'punctuated', name: `Participação${punctuation}`, labels: [`Com apoio${punctuation}`] }] }
+    assert.equal(parseCentralCommand({ text: `Registrar comportamento Pede ajuda${punctuation} para Ana Clara na sessão`, context: punctuated }).intent.patch.value, 'punctuated')
+    assert.equal(parseCentralCommand({ text: `Registrar indicador Participação${punctuation} como Com apoio${punctuation} na sessão de Ana Clara`, context: punctuated }).intent.patch.value.id, 'punctuated')
+  }
+})
+
 test('registro de comportamento exige título e paciente completos, modelo ativo e sessão compatível', () => {
   const text = 'Registrar comportamento Pede ajuda para Ana Clara na sessão'
   assert.equal(parseCentralCommand({ text, context }).status, 'draft')

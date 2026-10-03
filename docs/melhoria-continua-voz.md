@@ -1,5 +1,15 @@
 # Melhoria contínua de voz
 
+## Incremento após0.2.49 — alvos e texto dos registros de sessão
+
+Comandos de comportamento e indicador passam a usar título, rótulo e paciente completos do catálogo, inclusive títulos com delimitadores como “para”, “em” e “como” e pontuação final. Todas as interpretações sintáticas são enumeradas antes de verificar a sessão aberta; ambiguidades entre pacientes/modelos/rótulos são recusadas, não resolvidas pela sessão atualmente selecionada. Nomes entre aspas consideram tanto o nome literal cadastrado quanto as aspas como delimitador, recusando quando correspondem a pacientes diferentes.
+
+Observações podem mencionar outro paciente sem mudar o alvo. Aspas pertencentes ao texto, como `Ele disse "sim"`, são preservadas; somente um par envolvendo todo o argumento é removido. Não foram criados campos clínicos novos nem ampliado o escopo de recuperação.
+
+Lógica **243/243 testes aprovada**, lint exit0 com cinco avisos anteriores, build/guard aprovados (chunk>500KiB anterior). Revisão independente:243 testes e135 checks em memória aprovados, sem achado novo na revisão final; E2E do revisor somente estático. Falhas intermediárias: teste de nome entre aspas falhou antes da correção; novo E2E falhou por seletor que não incluía `· v1`, corrigido no teste e aprovado1/1 em18,8s. A revisão também identificou interpretação oculta por `regex1 || regex2`, perda de aspa literal, remoção de aspas escolhendo paciente errado e perda de pontuação de catálogo; todos reproduzidos/cobertos e corrigidos.
+
+Primeira regressão57/57 em3,9min aprovada, mas houve alteração do parser durante essa execução: não usada como prova final do snapshot. Repetição na porta5198 teve timeout30s em page.goto antes do primeiro fluxo, seguida de8 aprovações; encerrada de forma dirigida na árvore do processo Playwright verificada, sem afetar aplicativo/perfil. **Repetição final isolada na porta5197:57/57 E2E em3,8min, exit0**, snapshot estável. Incremento ainda não empacotado: instalador0.2.49 anterior não contém estas alterações; aplicativo instalado continua0.2.47. Microfone físico e janela instalada não validados nesta rodada, captura/RPC dos E2E simulados. Nenhum perfil ou dado real alterado. Meta permanece ativa.
+
 ## Entrega local0.2.49 — compreensão do áudio nativo
 
 Pacote local `Círculo_0.2.49_x64-setup.exe`, **135.877.292 bytes**, SHA-256 `cb4aea88e3459b3462fac7d4f0fc27e2aa01a519222aa48e5f291754fb4b6033`. Build NSIS offline/locked exit0; override temporário removido após terminal, configuração oficial updater preservada. Auditoria `%TEMP%\\circulo-0249-audit-20261003.json`: PE0.2.49/x64/NotSigned, tamanho/hash conferidos. Não instalado nem aberto nesta rodada; instalado permanece0.2.47. Sem Release, assinatura updater/Authenticode ou alteração de perfil.
