@@ -130,11 +130,15 @@ A rodada intermediária teve 5/6 por uma expectativa incorreta de título na fix
 
 Componentes reais e backend/armazenamento sintéticos. Sem teste novo de microfone humano, instalação, Rust ou arquivos reais. As lacunas correspondentes `S` da matriz inicial ficam substituídas por estas provas, não homologação de todas as variantes.
 
+## Consolidação do instalador 0.2.44
+
+[Entrega e limites](validacao-voz-0.2.44.md). Retries explícitos e cabeçalhos semanal/diário agora estão no pacote instalado0.2.44; referências anteriores a não empacotado são histórico. Build offline/locked e audit aprovados, instalaçãoexit0, versão44 e perfil preservado/snapshot verificado. 229/229 JS e guard repetidos. Não houve nova abertura, microfone humano ou suíte Rust; não ampliar o alcance das provas anteriores.
+
 ## Prioridades restantes para o agente principal
 
 Homologação dos testes novos de homônimos, identidade de seleção e helper: **concluída pelo principal**, conforme nota de execução. Não é mais prioridade pendente.
 
 1. **Fechar navegação restante por voz:** demais CTAs de Sessões e demonstração sintética com recusa. Fechar vínculos e cabeçalhos semanal/diário foram comprovados, assim como Início/Ver pacientes/Ver agenda/retry da prévia. Os cenários por mouse não substituem essa evidência.
-2. **Empacotar incrementos recentes:** retries explícitos e nomes acessíveis dos cabeçalhos do calendário. Voltar e recolher gavetas administrativas, selects/comando local da Agenda e caminhos de evolução/âncoras/paciente arquivado foram comprovados nas atualizações acima. Não declarar que já estão no instalado0.2.43.
-3. **Cobrir descarte de outros formulários do updater:** vínculo, Agenda, contexto, adendo e biblioteca, sem instalação real. Os retries check-error/forms-open e prévia do Início foram comprovados; rótulos simultâneos foram simplificados no código e precisam do próximo empacotamento. Não confundir alcance pelo código com prova específica de voz.
+2. **Manter regressão dos caminhos comprovados:** pacote instalado0.2.44 consolida retries e cabeçalhos. Não tomar os testes já aprovados como prova dos caminhos ainda pendentes nem repetir build sem mudança de produção.
+3. **Cobrir descarte de outros formulários do updater:** vínculo, Agenda, contexto, adendo e biblioteca, sem instalação real. Os retries check-error/forms-open e prévia do Início foram comprovados e empacotados. Não confundir alcance pelo código com prova específica de voz.
 4. **Fechar evidência nativa e decidir a lacuna do cofre bloqueado:** anexar resultados do principal para microfone físico/reconhecimento no Windows, chooser cancelado e arquivos reais de backup/exportação em destino de teste autorizado. Mocks não validam essas etapas; não executar recuperação/substituição/limpeza nesta auditoria. O cofre bloqueado tem controles existentes sem acesso por voz porque não monta o assistente; senha permanece manual. Essa é uma lacuna real de cobertura, e uma implementação para atendê-la exige decisão explícita, sem presumir que esteja automaticamente fora do objetivo.

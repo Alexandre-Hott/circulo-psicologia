@@ -1,5 +1,9 @@
 # Melhoria contínua de voz
 
+## Entrega instalada 0.2.44 — 03/10/2026
+
+[Pacote e evidência](validacao-voz-0.2.44.md). Consolidou retries explícitos e cabeçalhos semanal/diário. 229/229 JS e guard aprovados novamente; build offline/locked, audit e consistência do pacote. Instalaçãoexit0, versão44 e quatro arquivos principais do perfil preservados, snapshot0244 verificado. Sem nova abertura/microfone humano, Release ou assinatura updater. Referências abaixo a incrementos não empacotados são histórico agora incluído na44; meta continua ativa.
+
 ## Incremento após 0.2.43: navegação e gavetas administrativas
 
 Cabeçalhos semanal/diário da Agenda usam Ver dia AAAA-MM-DD como o mensal, sem alterar layout/handlers. 28/28 E2E conjuntos em 2,3 min e 229/229 JS aprovados; lint/guard/build aprovados com avisos anteriores. Comprovados seleção de dia, Voltar do encerramento sem escrita, recolher gavetas administrativas e Fechar vínculos. [Matriz](voz-cobertura-interface.md). Mudança de cabeçalhos ainda não no instalador0.2.43; consolidar com retries explícitos no próximo pacote. Sem nova prova nativa/microfone; meta ativa.

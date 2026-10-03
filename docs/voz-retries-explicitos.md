@@ -1,6 +1,6 @@
 # Novas tentativas com alvo explícito
 
-Incremento posterior ao instalador 0.2.43, ainda não empacotado.
+Consolidado no instalador local 0.2.44. [Pacote e evidência](validacao-voz-0.2.44.md).
 
 Os rótulos visíveis identificam a operação; funcionam como comandos “Clicar em …”:
 
