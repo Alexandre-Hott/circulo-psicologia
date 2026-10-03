@@ -1,5 +1,9 @@
 # Melhoria contínua de voz
 
+## Entrega instalada0.2.47 — 03/10/2026
+
+[Pacote e evidência](validacao-voz-0.2.47.md). Consolidadas aberturas de edição natural de paciente/comportamento.232/232JS e guard repetidos; build NSIS offline/locked, auditoria e instalaçãoexit0. Versão47, recursos de voz e quatro arquivos de perfil preservados conferidos; snapshot0247 verificado. Sem abertura visual/microfone humano/Release/assinatura updater; app fechado. Referências abaixo a incrementos ainda não empacotados agora são históricas: incluídos na47. Meta ativa.
+
 ## Incremento após0.2.46: abrir edição de comportamento pelo título
 
 `Editar comportamento Pede ajuda` prepara `behavior.edit.open`; confirmar abre o modelo atual da biblioteca, sem criar comportamento, versão ou registro em sessão. Formulário normal preserva título/descrição/versão; Cancelar edição não grava, Salvar versão permanece separado. Biblioteca é consultada novamente e modelo ausente/arquivado/versão inválida não é aberto. Parser recusa homônimos, título parcial e arquivados, preserva título literal contendo “para”. **232/232JS**, **28/28E2E interface/biblioteca em1,9min**, lint/build/guard/diff aprovados (avisos anteriores). Revisor independente Ampere não encontrou achado concreto no escopo. Tentativa inicial1/2: erro nativo simulado era mostrado com prefixo Error; ajustada somente asserção para alert/contém mensagem. Sem nova prova Rust/microfone humano/banco ou novo instalador. Pacote46 não contém esta abertura nem a abertura de paciente anterior; consolidar no próximo pacote. Meta ativa.
