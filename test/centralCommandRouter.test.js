@@ -17,6 +17,19 @@ const indicators = [
 const session = { id: 'session-draft-ana-001', patientId: 'patient-ana', patientName: 'Ana Clara', originalDate: '2026-09-30' }
 const context = { patients, behaviors, indicators, activeSessionDraft: session }
 
+test('transcrições nativas: variantes de navegação não reescrevem nomes ou títulos', () => {
+  const sessions = parseCentralCommand({ text: 'Abrir seções de Ana Clara.', context })
+  assert.deepEqual(sessions.intent, { type: 'patient.workspace.open', target: { patientId: 'patient-ana', space: 'sessions' } })
+  for (const text of ['Abrir análise deste mes.', 'Abrir a análise deste mês.', 'Abrir análises deste mês.']) {
+    assert.deepEqual(parseCentralCommand({ text, context, referenceDate: '2026-10-03' }).intent,
+      { type: 'analytics.view', target: { patientId: '', from: '2026-10-01', to: '2026-10-31', view: 'month' } })
+  }
+  assert.equal(parseCentralCommand({ text: 'Abrir seções de Anaclara.', context }).status, 'clarification')
+  assert.equal(parseCentralCommand({ text: 'Abrir seções de Ana Clara e abrir ajustes.', context }).status, 'clarification')
+  assert.equal(parseCentralCommand({ text: 'Criar comportamento e espera a vez.', context }).intent.draft.title, 'e espera a vez.')
+  assert.equal(parseCentralCommand({ text: 'Cadastrar paciente Seções com nove anos.', context }).intent.draft.name, 'Seções')
+})
+
 test('navegação do paciente prepara registros, sessões, evolução e vínculos', () => {
   for (const verb of ['Abrir', 'Abra', 'Abre']) {
     for (const [section, space] of [['registros', 'sessions'], ['sessões', 'sessions'], ['evolução', 'evolution'], ['vínculos', 'links']]) {

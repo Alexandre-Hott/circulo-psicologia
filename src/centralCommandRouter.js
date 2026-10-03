@@ -373,7 +373,9 @@ const parseOccurrenceAction = (text, context, referenceDate) => {
 }
 
 const parsePatientWorkspaceNavigation = (text, context) => {
-  const match = /^(?:abrir|abra|abre)\s+(?:(?:o|a|os|as)\s+)?(registros|sessoes|evolucao|vinculos)\s+(?:de|do|da)\s+(.+)$/u.exec(text)
+  // Whisper may spell the spoken navigation noun as “seções”; accept it only
+  // here, leaving the delimited patient name and literal fields untouched.
+  const match = /^(?:abrir|abra|abre)\s+(?:(?:o|a|os|as)\s+)?(registros|sessoes|secoes|evolucao|vinculos)\s+(?:de|do|da)\s+(.+)$/u.exec(text)
   if (!match) return null
   const result = exactTarget(match[2], (context.patients || []).filter(patient => patient.archivedAt == null), 'paciente')
   if (result.error) return refuse(result.error)
@@ -391,7 +393,7 @@ const analyticsMonthEnd = start => {
 }
 
 const parseAnalyticsNavigation = (text, context, referenceDate) => {
-  const command = /^(?:mostrar|mostre|mostra|abrir|abra|abre)\s+(?:(?:as|os)\s+)?(?:analises|graficos)(?:\s+(.+))?$/u.exec(text)
+  const command = /^(?:mostrar|mostre|mostra|abrir|abra|abre)\s+(?:(?:a|o|as|os)\s+)?(?:analise|analises|graficos)(?:\s+(.+))?$/u.exec(text)
   if (!command) return null
   let argument = command[1] || ''
   const period = /(?:^|\s+)(hoje|deste mes|neste mes|dos ultimos 12 meses|nos ultimos 12 meses|de (\d{2}\/\d{2}\/\d{4}) ate (\d{2}\/\d{2}\/\d{4}))$/u.exec(argument)

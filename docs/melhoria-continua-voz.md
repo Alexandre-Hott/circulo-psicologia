@@ -1,5 +1,9 @@
 # Melhoria contínua de voz
 
+## Incremento após0.2.45: reconhecimento de comandos de navegação
+
+Prompt nativo ampliado com ações existentes. Repetição do corpus português corrigido: Rust1/1,12 WAVs,20,60s; melhoraram Novo cadastro, Abrir pacientes e o título de comportamento sem “e” extra. Parser aceita `seções` apenas no substantivo de navegação e `análise` singular, sem correção de nomes/textos. Novo teste de IDs/período/recusa/preservação literal; **230/230JS**, **13/13Rust de voz**, **21/21E2E interface em1,4min**, lint/build/guard/diff aprovados (avisos anteriores). [Evidências e pendências](voz-audio-sintetico-20261003.md). Edição sem atributos continua recusada e não homologada. Sem microfone humano/perfil real/novo instalador; próximo pacote deve consolidar este incremento e a limpeza de proposta anterior. Meta ativa.
+
 ## Áudio sintético offline: corpus de doze frases
 
 [Resultados e falhas](voz-audio-sintetico-20261003.md). Corrigida leitura ANSI do roteiro português no PowerShell5.1; teste nativo expandido de três para doze WAVs. Reexecução Rust1/1,12 transcrições não vazias em20,44s; JS229/229 e guard aprovados. Avaliação dos textos pelo parser revelou navegação recusada e título de comportamento divergente: transporte verde não significa compreensão verde. Sem microfone humano, persistência ou novo instalador. Meta ativa: próxima correção deve atacar entendimento do áudio, não apenas aumentar testes de comandos digitados.

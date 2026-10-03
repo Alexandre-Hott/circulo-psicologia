@@ -39,3 +39,20 @@ Falhas/limites observados:
 **Próximo trabalho:** melhorar reconhecimento/navegação com corpus conhecido e comparação de intenção, mantendo confirmação e identidade exata, sem adivinhar nomes. Não declarar cobertura universal da voz por este teste. Microfone humano, ruído, diferentes sotaques e jornada física permanecem não validados.
 
 JavaScript **229/229**, repository guard e diff check aprovados. Não há nova versão/instalador nesta rodada; instalado permanece0.2.45. Não houve limpeza de recovery nem trabalho de compatibilidade de backups antigos.
+
+## Incremento de produção: contexto de comandos e variantes de navegação
+
+O prompt nativo foi ampliado com o vocabulário de navegação, cadastro/edição, biblioteca e confirmação. Não é uma lista de ações a executar: apenas contexto de transcrição. O mesmo corpus SAPI foi repetido pelo caminho Rust: **1/1**, doze transcrições não vazias, **20,60s**, exit0. Na comparação com a execução anterior:
+
+- `Criar comportamento e espera a vez.` passou a `Criar comportamento espera a vez.`;
+- `Flicar em novo cadastro.` passou a `Clicar em Novo cadastro.`;
+- `Abri-se pacientes.` passou a `Abrir pacientes.`;
+- sessões passou a `Abrir seções de Ana Clara.`; análises passou a `Abrir análise deste mes.`;
+- agendamento, cadastro, comportamento observado, Agenda, confirmação e Ajustes continuaram transcritos de forma reconhecível;
+- edição saiu como `Editar paciente. Ana Clara.`: continua insuficiente para especificar uma alteração e não está homologada como comando de edição.
+
+O parser agora aceita `seções` somente como substantivo da navegação do paciente e `análise` singular na navegação das análises. Não normaliza nomes/títulos para essa finalidade. Novo teste compara IDs/período exatos, recusa nome divergente e múltiplas ações, e preserva nomes/títulos literais. **230/230 JS**, **13/13 Rust de voz**, lint/build aprovados com avisos anteriores. O teste sintético mede uma voz sintetizada e uma execução, não confiabilidade estatística, áudio humano ou execução completa pela interface. O CLI direto mantém o prompt antigo para comparação e seu JSON não deve ser confundido com o resultado nativo atualizado.
+
+Alterações de produção ainda não incluídas no instalador0.2.45: consolidar prompt, variantes e limpeza de proposta pendente no próximo pacote Windows. Senhas e seletores de arquivo continuam manuais.
+
+Regressão dos componentes reais com backend simulado: **21/21 E2E interface em1,4min**. Não substitui teste de captura física nem execução nativa dos comandos transcritos. Guard/diff check aprovados; nenhuma alteração de recovery/legados.

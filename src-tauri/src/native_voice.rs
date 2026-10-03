@@ -12,7 +12,7 @@ const MAX_SECONDS: f64 = 12.0;
 const MIN_INPUT_RATE: u32 = 8_000;
 const MAX_INPUT_RATE: u32 = 192_000;
 const INFERENCE_TIMEOUT: Duration = Duration::from_secs(60);
-const INITIAL_PROMPT: &str = "Agenda de sessões. Cadastrar paciente. Sessão semanal. Registrar comportamento na sessão. Observação, evolução e indicador.";
+const INITIAL_PROMPT: &str = "Abrir agenda. Abrir pacientes. Abrir sessões. Abrir análises deste mês. Abrir ajustes. Clicar em Novo cadastro. Confirmar comando. Cadastrar paciente. Editar paciente. Marcar sessão semanal. Criar comportamento. Registrar comportamento na sessão. Observação, evolução e indicador.";
 
 pub fn transcribe(
     resources: &Path,
