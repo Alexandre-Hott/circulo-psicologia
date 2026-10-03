@@ -89,6 +89,35 @@ test('evolução por voz sem rascunho abre Agenda para o paciente sem criar dado
   expect(await page.evaluate(() => window.voiceNativeCalls.filter(call => call.command === 'session_draft_start'))).toEqual([])
 })
 
+test('atalho do paciente por comando abre compromisso avulso com seu ID sem iniciar sessão', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Abrir registros de Ana Clara')
+  await command(page, 'Clicar em Escolher compromisso na Agenda')
+  const form = page.getByRole('form', { name: 'Novo compromisso', exact: true })
+  await expect(form).toBeVisible()
+  await expect(form.getByLabel('Paciente', { exact: true })).toHaveValue('ana')
+  await expect(form.getByLabel('Tipo', { exact: true })).toHaveValue('Avulsa')
+  await expect(form.getByLabel('Tipo', { exact: true })).toBeDisabled()
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  expect(await page.evaluate(() => window.voiceNativeCalls.filter(call => call.command === 'session_draft_start'))).toEqual([])
+})
+
+test('atalho geral de sessões por comando abre Agenda com formulário padrão sem iniciar ou criar dados', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Abrir Sessões')
+  await command(page, 'Clicar em Criar compromisso avulso ou escolher agendado')
+  await expect(page.getByRole('group', { name: 'Visualização da Agenda' })).toBeVisible()
+  await command(page, 'Clicar em Novo compromisso')
+  const form = page.getByRole('form', { name: 'Novo compromisso', exact: true })
+  await expect(form).toBeVisible()
+  // emptyForm selects the first active patient for mouse and voice alike.
+  await expect(form.getByLabel('Paciente', { exact: true })).toHaveValue('ana')
+  await expect(form.getByLabel('Tipo', { exact: true })).toBeEnabled()
+  await expect(form.getByRole('button', { name: 'Criar compromisso avulso', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  expect(await page.evaluate(() => window.voiceNativeCalls.filter(call => call.command === 'session_draft_start'))).toEqual([])
+})
+
 test('evolução por voz retoma rascunho e âncoras não criam nem gravam outra sessão', async ({ page }) => {
   await openApp(page)
   await page.evaluate(() => { window.voiceDrafts = [{ id: 'resume', patientId: 'ana', seriesId: 'resume-series', originalDate: '2026-10-02', observation: 'Observação fictícia preservada', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicators: [] }] })

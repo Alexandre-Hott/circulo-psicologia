@@ -142,11 +142,23 @@ Cada caso preenche por comando confirmado, verifica bloqueio da instalação por
 
 Estado simulado apenas em memória, inclusive sessão finalizada usada para preparar o adendo. Nenhum dado real/perfil Windows alterado. Produção não mudou; instalado permanece0.2.44, sem novo build/instalação/Rust/microfone. A lacuna de voz do descarte desses editores fica substituída por estas provas; não é instalação real validada.
 
+## Atualização: entrada de sessões e demonstração pelo assistente
+
+**59/59 E2E** de interface/shell em2,7min, porta5196; **229/229JS**, lint e diff check aprovados (quatro avisos anteriores). Após reforçar as comparações integrais de pacientes/modelos/séries, os dois cenários de demonstração passaram novamente: **2/2 em20,8s**. A primeira rodada específica teve4/5 pela expectativa incorreta descrita abaixo; a regressão final corrigida passou.
+
+- `E`: “Clicar em Escolher compromisso na Agenda” abre o formulário avulso com o ID do paciente selecionado, sem criar compromisso nem iniciar rascunho.
+- `E`: “Clicar em Criar compromisso avulso ou escolher agendado” abre a Agenda geral. Ao abrir Novo compromisso, mantém o formulário normal, com Tipo editável e o primeiro paciente ativo pré-selecionado pelo `emptyForm`, igual ao mouse. Não grava nem inicia sessão automaticamente.
+- `E`: “Clicar em Carregar exemplos de demonstração” exige confirmação da proposta e depois confirmação da ação. “Voltar” preserva integralmente o estado fictício. Aceitar adiciona três pacientes, dois modelos, três séries e quatro sessões de exemplo; repetir no mesmo processo/dia não duplica nem altera os registros criados. O cadastro fictício preexistente permanece intacto. O mesmo cenário continua verificado por mouse.
+
+Comandos digitados na entrada do assistente, componentes reais e backend estritamente simulado na demonstração. Não comprova transcrição de microfone humano nem gravação em banco nativo. Repetição em outro processo/dia não está homologada por este teste: a proteção de origem do seeder continua recusando registros sem procedência verificável. Não houve alteração de produção, perfil Windows ou instalador0.2.44.
+
+Uma expectativa inicial incorreta exigiu paciente vazio no atalho geral. A execução mostrou Ana pré-selecionada; `emptyForm` confirmou ser o padrão da interface. Corrigido apenas o teste, sem mudar o aplicativo ou permitir gravação antecipada.
+
 ## Prioridades restantes para o agente principal
 
 Homologação dos testes novos de homônimos, identidade de seleção e helper: **concluída pelo principal**, conforme nota de execução. Não é mais prioridade pendente.
 
-1. **Fechar navegação restante por voz:** demais CTAs de Sessões e demonstração sintética com recusa. Fechar vínculos e cabeçalhos semanal/diário foram comprovados, assim como Início/Ver pacientes/Ver agenda/retry da prévia. Os cenários por mouse não substituem essa evidência.
+1. **Continuar cobertura dos controles restantes:** entrada de Sessões, demonstração com recusa/repetição, fechamento de vínculos, cabeçalhos semanal/diário e navegação Início foram comprovados pelo assistente. Revisar itens ainda `S` sem suplemento `E`; comandos digitados e cenários por mouse não substituem reconhecimento físico ou banco nativo.
 2. **Manter regressão dos caminhos comprovados:** pacote instalado0.2.44 consolida retries e cabeçalhos. Não tomar os testes já aprovados como prova dos caminhos ainda pendentes nem repetir build sem mudança de produção.
 3. **Consolidar auditoria de Ajustes:** descarte por voz dos cinco editores foi comprovado, assim como cadastro, retries e confirmação de instalação na fronteira simulada. Ainda faltam provas específicas de selecionar/verificar/restaurar backup por voz, com senhas/chooser manuais; não investigar limpeza ou backups antigos. Não confundir mocks com arquivo nativo validado.
 4. **Fechar evidência nativa e decidir a lacuna do cofre bloqueado:** anexar resultados do principal para microfone físico/reconhecimento no Windows, chooser cancelado e arquivos reais de backup/exportação em destino de teste autorizado. Mocks não validam essas etapas; não executar recuperação/substituição/limpeza nesta auditoria. O cofre bloqueado tem controles existentes sem acesso por voz porque não monta o assistente; senha permanece manual. Essa é uma lacuna real de cobertura, e uma implementação para atendê-la exige decisão explícita, sem presumir que esteja automaticamente fora do objetivo.

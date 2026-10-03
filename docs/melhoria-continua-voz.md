@@ -1,5 +1,9 @@
 # Melhoria contínua de voz
 
+## Cobertura após0.2.44: entrada de sessões e demonstração pelo assistente
+
+59/59 E2E interface/shell em2,7min; 229/229JS e lint aprovados (avisos anteriores). Dois CTAs de Sessões abrem o fluxo correto sem gravação antecipada. Demonstração por comando exige proposta/confirmação; recusa preserva todos os registros, aceitar cria três pacientes/dois modelos/três séries/quatro sessões fictícias e repetir no mesmo processo/dia não duplica ou altera registros. Comparações integrais reforçadas e novamente comprovadas em2/2 cenários mouse/comando,20,8s. [Matriz e limites](voz-cobertura-interface.md). Expectativa inicial de paciente vazio corrigida após conferir o padrão `emptyForm`, sem mudança de produção. Nenhum novo instalador, banco nativo ou microfone físico testado; instalado permanece0.2.44, meta ativa. Próxima lacuna: seleção/verificação/restauração de backup pelo assistente, mantendo senhas e seletor nativo manuais e sem limpeza ou backups antigos.
+
 ## Cobertura após a entrega0.2.44: descarte por voz do updater
 
 12/12 E2E settings em1,0min, com cinco novos casos de vínculo, Agenda, contexto, adendo e biblioteca. Recusar mantém conteúdo; aceitar descarta pelo handler normal, sem gravar nem instalar, verificado por lista de operações permitidas. 229/229JS e lint aprovados (avisos anteriores). Sem mudanças de produção ou novo instalador, perfil/dados reais não tocados. [Matriz atualizada](voz-cobertura-interface.md). Microfone e instalação real não testados nesta rodada; meta ativa.

@@ -250,7 +250,30 @@ test('âncora final do rascunho deixa Salvar rascunho clicável com mouse, sem o
   await expect(page.getByText('Rascunho salvo no cofre cifrado.')).toBeVisible()
 })
 
-test('demonstração sintética exige CTA e confirmação, cria quatro sessões e repetir não duplica', async ({ page }) => {
+for (const input of ['mouse', 'comando']) test(`demonstração sintética por ${input} exige CTA e confirmação, cria quatro sessões e repetir não duplica`, async ({ page }) => {
+  const propose = async text => {
+    const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
+    await assistant.getByLabel('Seu comando').fill(text)
+    await assistant.getByRole('button', { name: 'Preparar rascunho' }).click()
+  }
+  const command = async text => {
+    await propose(text)
+    await expect(page.locator('.voice-command-preview')).toBeVisible()
+    await propose('confirmar')
+  }
+  const openDemo = async () => {
+    if (input === 'mouse') return demo.click()
+    await propose('Clicar em Carregar exemplos de demonstração')
+    await expect(page.locator('.voice-command-preview')).toBeVisible()
+    expect((await page.evaluate(() => window.demoProbe())).patients).toHaveLength(1)
+    await propose('confirmar')
+  }
+  const answer = async accept => {
+    if (input === 'mouse') return answerConfirmation(page, 'Carregar dados fictícios de demonstração', accept)
+    await expect(page.getByRole('alertdialog')).toContainText('Carregar dados fictícios de demonstração')
+    await propose(accept ? 'confirmar' : 'voltar')
+    await expect(page.getByRole('alertdialog')).toBeHidden()
+  }
   await page.clock.install({ time: new Date('2026-10-05T12:00:00Z') })
   await page.addInitScript(() => {
     const db = { patients: [{ id: 'existing', name: 'Cadastro preexistente fictício', archivedAt: null }], templates: [], series: [], drafts: [], sessions: [] }
@@ -281,26 +304,31 @@ test('demonstração sintética exige CTA e confirmação, cria quatro sessões 
   const demo = page.getByRole('button', { name: /Carregar exemplos de demonstração/ })
   await expect(demo).toBeVisible()
   expect((await page.evaluate(() => window.demoProbe())).patients).toHaveLength(1)
-  await demo.click()
-  await answerConfirmation(page, 'Carregar dados fictícios de demonstração', false)
-  expect((await page.evaluate(() => window.demoProbe())).patients).toHaveLength(1)
-  await demo.click()
-  await answerConfirmation(page, 'Carregar dados fictícios de demonstração')
+  const untouched = await page.evaluate(() => window.demoProbe())
+  await openDemo()
+  await answer(false)
+  expect(await page.evaluate(() => window.demoProbe())).toEqual(untouched)
+  await openDemo()
+  await answer(true)
   await expect.poll(() => page.evaluate(() => window.demoProbe().sessions.length)).toBe(4)
   const first = await page.evaluate(() => window.demoProbe())
   expect(first.patients).toHaveLength(4)
-  expect(first.patients[0].name).toBe('Cadastro preexistente fictício')
+  expect(first.patients[0]).toEqual(untouched.patients[0])
   expect(first.templates).toHaveLength(2)
   expect(first.series).toHaveLength(3)
   expect(first.sessions.every(item => item.observation.startsWith('EXEMPLO DEMO —') && item.indicators.length === 2)).toBe(true)
-  await page.getByRole('navigation', { name: 'Espaços do Círculo' }).getByRole('button', { name: 'Início' }).click()
-  await demo.click()
-  await answerConfirmation(page, 'Carregar dados fictícios de demonstração')
+  if (input === 'mouse') await page.getByRole('navigation', { name: 'Espaços do Círculo' }).getByRole('button', { name: 'Início' }).click()
+  else await command('Abrir Início')
+  if (input === 'mouse') await demo.click()
+  else await command('Clicar em Carregar exemplos de demonstração')
+  await answer(true)
   await expect(page.getByText(/Demonstração disponível: 0 paciente\(s\), 0 modelo\(s\), 0 compromisso\(s\) e 0 sessão\(ões\) adicionados/)).toBeVisible()
   const second = await page.evaluate(() => window.demoProbe())
-  expect(second.patients).toHaveLength(4)
-  expect(second.templates).toHaveLength(2)
-  expect(second.series).toHaveLength(3)
+  expect(second.patients).toEqual(first.patients)
+  expect(second.templates).toEqual(first.templates)
+  expect(second.series).toEqual(first.series)
+  expect(second.sessions).toEqual(first.sessions)
+  expect(second.drafts).toEqual([])
 })
 
 test('calendário sintético: anterior, hoje, próximo, limite de mês e clique no dia', async ({ page }) => {
