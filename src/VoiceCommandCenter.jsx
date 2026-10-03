@@ -145,6 +145,8 @@ export function VoiceCommandCenter({
       <li>“Agendar sessão para Ana Clara amanhã às três da tarde”</li>
       <li>“Abrir Agenda” ou “Abrir Análises”</li>
       <li>“Mostrar agenda de hoje”, “desta semana” ou “deste mês”</li>
+      <li>“Abrir registros de Ana Clara” ou “Abrir vínculos de Ana Clara”</li>
+      <li>“Mostrar análises de Ana Clara neste mês”</li>
       <li>“Iniciar sessão de Ana Clara hoje às 15 horas”</li>
       <li>“Cancelar sessão de Ana Clara amanhã às três da tarde” abre o formulário</li>
       <li>“Clicar em Novo compromisso”</li>

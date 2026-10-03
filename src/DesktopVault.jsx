@@ -67,6 +67,7 @@ export default function DesktopVault() {
   const [agendaVoiceDraft, setAgendaVoiceDraft] = useState(null)
   const [agendaVoiceView, setAgendaVoiceView] = useState(null)
   const [agendaVoiceAction, setAgendaVoiceAction] = useState(null)
+  const [analyticsVoiceRequest, setAnalyticsVoiceRequest] = useState(null)
   const [sessionVoiceDraft, setSessionVoiceDraft] = useState(null)
   const [voiceNotice, setVoiceNotice] = useState('')
   const [confirmation, setConfirmation] = useState(null)
@@ -190,6 +191,32 @@ export default function DesktopVault() {
       if (destination === 'agenda') { setAgendaOpen(true); setQuickStart(false); setAgendaRecordPatientId('') }
       if (destination === 'sessions') setSessionsOpen(true)
       setSpace(destination)
+      return
+    }
+    if (intent.type === 'analytics.view') {
+      setAnalyticsVoiceRequest({ ...intent.target, commandId: crypto.randomUUID() })
+      setSpace('analytics')
+      return
+    }
+    if (intent.type === 'patient.workspace.open') {
+      const patient = patients.find(item => item.id === intent.target.patientId && item.archivedAt == null)
+      if (!patient) { setVoiceNotice('O paciente não está mais disponível. Atualize a lista e prepare o pedido novamente.'); return }
+      if (intent.target.space === 'sessions' || intent.target.space === 'evolution') {
+        await openPatientSessions(patient.id)
+        if (intent.target.space === 'evolution') window.requestAnimationFrame(() => {
+          const panel = document.querySelector('details[aria-label="Evolução descritiva somente leitura"]')
+          if (panel) { panel.open = true; panel.scrollIntoView({ block: 'start', behavior: 'smooth' }); panel.querySelector('summary')?.focus({ preventScroll: true }) }
+        })
+        return
+      }
+      if (partyPatientId && (partyForm.name.trim() || editingParty) && !await confirmAction('Substituir o vínculo que está sendo preenchido?')) return
+      setSpace('patients')
+      await selectPartyPatient(patient.id)
+      window.requestAnimationFrame(() => {
+        const panel = document.querySelector('.vault-parties')
+        panel?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+        panel?.querySelector('input')?.focus({ preventScroll: true })
+      })
       return
     }
     if (intent.type === 'agenda.view') {
@@ -539,6 +566,7 @@ export default function DesktopVault() {
     setAgendaVoiceDraft(null)
     setAgendaVoiceView(null)
     setAgendaVoiceAction(null)
+    setAnalyticsVoiceRequest(null)
     setSessionVoiceDraft(null)
     setVoiceNotice('')
     voiceCaptureRef.current?.abort()
@@ -854,7 +882,7 @@ export default function DesktopVault() {
           </div>
           <div className="vault-home-preview"><section><h3>Pacientes</h3>{patients.filter(item => item.archivedAt == null).length ? <ul>{patients.filter(item => item.archivedAt == null).slice(0, 3).map(item => <li key={item.id}>{item.name}</li>)}</ul> : <p>Nenhum paciente cadastrado ainda.</p>}<button type="button" className="vault-secondary" onClick={() => setSpace('patients')}>Ver pacientes</button></section><section><h3>Agenda de hoje</h3>{homeAgenda.state === 'loading' ? <p>Carregando compromissos...</p> : homeAgenda.state === 'error' ? <><p>Não foi possível consultar a agenda agora.</p><button type="button" className="vault-secondary" onClick={() => { setHomeAgenda({ state: 'loading', items: [] }); setHomeAgendaRetry(value => value + 1) }}>Tentar novamente</button></> : homeAgenda.items.length ? <ul>{homeAgenda.items.slice(0, 3).map(item => <li key={item.id}>{item.start} · {patients.find(patient => patient.id === item.patientId)?.name || 'Paciente'}{item.status === 'completed' ? ' · realizado' : ''}</li>)}</ul> : <p>Nenhum compromisso para hoje.</p>}<button type="button" className="vault-secondary" onClick={() => { setAgendaOpen(true); setSpace('agenda') }}>Ver agenda</button></section></div>
         </section>}
-        {space === 'analytics' && <section className="vault-panel" aria-label="Análises"><div className="vault-section-heading"><div><p className="vault-eyebrow">ANÁLISES</p><h2>Análises</h2></div></div><DesktopAnalytics /></section>}
+        {space === 'analytics' && <section className="vault-panel" aria-label="Análises"><div className="vault-section-heading"><div><p className="vault-eyebrow">ANÁLISES</p><h2>Análises</h2></div></div><DesktopAnalytics voiceRequest={analyticsVoiceRequest} onVoiceRequestApplied={commandId => setAnalyticsVoiceRequest(current => current?.commandId === commandId ? null : current)} /></section>}
         <section className="vault-panel" hidden={space !== 'patients'} aria-label="Pacientes"><div className="vault-section-heading"><div><p className="vault-eyebrow">PACIENTES</p><h2>Pacientes</h2></div><button type="button" onClick={() => setPatientFormOpen(true)}>Novo cadastro</button></div>
         <p>Cadastre e consulte pacientes. Arquivar é reversível.</p>
         {patientFormOpen && <form data-voice-record={editing?.id || "new-patient"} className="vault-form-panel" onSubmit={submitPatient} aria-label={editing ? 'Editar cadastro' : 'Novo cadastro'}>

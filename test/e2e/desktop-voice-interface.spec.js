@@ -5,6 +5,7 @@ async function openApp(page) {
   await page.addInitScript(() => {
     window.writes = []
     window.voiceTranscript = ''
+    window.analyticsRequests = []
     const patients = [{ id: 'ana', name: 'Ana Clara', age: 8, revision: 1, preferredModality: 'Presencial', archivedAt: null }]
     const behaviors = [{ id: 'help', title: 'Pede ajuda', description: '', version: 1 }]
     const occurrence = { id: 'occ', seriesId: 'series', patientId: 'ana', date: '2026-10-03', originalDate: '2026-10-03', start: '15:00', end: '15:50', frequency: 'Avulsa', modality: 'Presencial', status: 'scheduled' }
@@ -33,6 +34,7 @@ async function openApp(page) {
       if (command === 'vault_status') return { initialized: true, unlocked: true, profileState: 'ready' }
       if (command === 'auto_backup_status') return { available: false, dirty: false }
       if (command === 'patient_list') return patients.filter(patient => args?.includeArchived || patient.archivedAt == null)
+      if (command === 'related_party_list') return []
       if (command === 'behavior_list') return behaviors
       if (command === 'indicator_catalog') return []
       if (command === 'voice_transcribe') return window.deferVoice ? await new Promise(resolve => { window.resolveVoice = resolve }) : window.voiceTranscript
@@ -48,7 +50,7 @@ async function openApp(page) {
       if (command === 'session_draft_save') { draft = { ...draft, ...args.input }; window.writes.push({ command, args }); return draft }
       if (command === 'session_finalize') { window.writes.push({ command, args }); return null }
       if (command === 'agenda_create_series') { window.writes.push({ command, args }); return { id: 'series-2', ...args.input } }
-      if (command === 'analytics_overview') return { totalSessions: 0, uniquePatients: 0, dailyCounts: [], monthlyCounts: [], behaviorCounts: [] }
+      if (command === 'analytics_overview') { window.analyticsRequests.push(args); return { totalCompletedSessions: 0, uniquePatients: 0, dailyCounts: [], monthlyCounts: [], behaviorCounts: [] } }
       if (command === 'plugin:updater|check') return null
       return null
     } }
@@ -112,6 +114,37 @@ test('campos, opções e gavetas são controláveis de qualquer área; ocultos e
   await command(page, 'Abrir Análises')
   await command(page, 'Clicar em Hoje')
   await expect(page.getByRole('button', { name: 'Hoje', exact: true })).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('pedidos naturais abrem registros e vínculos do paciente sem criar dados', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Abrir registros de Ana Clara')
+  await expect(page.getByLabel('Paciente para evolução e sessões')).toHaveValue('ana')
+  await command(page, 'Abrir evolução de Ana Clara')
+  await expect(page.locator('details[aria-label="Evolução descritiva somente leitura"]')).toHaveAttribute('open', '')
+  await command(page, 'Abrir vínculos de Ana Clara')
+  await expect(page.getByRole('region', { name: 'Pessoas vinculadas ao paciente' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Vínculos de Ana Clara' })).toBeVisible()
+  await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(0)
+})
+
+test('pedidos naturais filtram análises por paciente e período e removem filtro anterior', async ({ page }) => {
+  await openApp(page)
+  for (const [text, from, to, patientId] of [
+    ['Mostrar análises de Ana Clara neste mês', '2026-10-01', '2026-10-31', 'ana'],
+    ['Mostrar análises de Ana Clara hoje', '2026-10-03', '2026-10-03', 'ana'],
+    ['Mostrar gráficos dos últimos 12 meses', '2025-11-01', '2026-10-31', ''],
+    ['Mostrar análises de Ana Clara de 01/09/2026 até 30/09/2026', '2026-09-01', '2026-09-30', 'ana'],
+    ['Mostrar análises deste mês', '2026-10-01', '2026-10-31', ''],
+  ]) {
+    await command(page, text)
+    const filters = page.locator('.analytics-filters')
+    await expect(filters.getByLabel('De', { exact: true })).toHaveValue(from)
+    await expect(filters.getByLabel('Até', { exact: true })).toHaveValue(to)
+    await expect(filters.getByLabel('Paciente', { exact: true })).toHaveValue(patientId)
+    await expect.poll(() => page.evaluate(() => window.analyticsRequests.at(-1))).toEqual({ from, to, patientId: patientId || null })
+  }
+  await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(0)
 })
 
 test('limpar campos por voz altera apenas o formulário e não grava ou escolhe opção', async ({ page }) => {

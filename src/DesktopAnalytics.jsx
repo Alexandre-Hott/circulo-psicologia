@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { AGENDA_TIME_ZONE, currentCivilDate } from './calendarDate.js'
 import { inSupportedRange } from './analyticsRange.js'
@@ -27,15 +27,29 @@ function CountChart({ title, rows, label, empty }) {
   </section>
 }
 
-export default function DesktopAnalytics() {
-  const [from, setFrom] = useState(() => monthStart(todayInSaoPaulo()))
-  const [to, setTo] = useState(() => monthEnd(todayInSaoPaulo()))
-  const [patientId, setPatientId] = useState('')
-  const [view, setView] = useState('month')
+export default function DesktopAnalytics({ voiceRequest = null, onVoiceRequestApplied } = {}) {
+  const [from, setFrom] = useState(() => voiceRequest?.from || monthStart(todayInSaoPaulo()))
+  const [to, setTo] = useState(() => voiceRequest?.to || monthEnd(todayInSaoPaulo()))
+  const [patientId, setPatientId] = useState(() => voiceRequest?.patientId || '')
+  const [view, setView] = useState(() => voiceRequest?.view || 'month')
   const [retry, setRetry] = useState(0)
   const [result, setResult] = useState({ phase: 'loading' })
   const [patients, setPatients] = useState([])
   const requestKey = `${from}|${to}|${patientId}|${retry}`
+  const appliedVoiceRequest = useRef('')
+
+  useEffect(() => {
+    if (!voiceRequest?.commandId || appliedVoiceRequest.current === voiceRequest.commandId || !inSupportedRange(voiceRequest.from, voiceRequest.to)) return
+    const frame = window.requestAnimationFrame(() => {
+      appliedVoiceRequest.current = voiceRequest.commandId
+      setFrom(voiceRequest.from)
+      setTo(voiceRequest.to)
+      setPatientId(voiceRequest.patientId || '')
+      setView(voiceRequest.view)
+      onVoiceRequestApplied?.(voiceRequest.commandId)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [voiceRequest, onVoiceRequestApplied])
 
   useEffect(() => {
     let active = true
@@ -73,7 +87,7 @@ export default function DesktopAnalytics() {
       <div className="analytics-presets" role="group" aria-label="Período rápido">{[['day', 'Hoje'], ['month', 'Este mês'], ['year', '12 meses']].map(([key, title]) => <button key={key} type="button" className="vault-secondary" aria-pressed={view === key} onClick={() => chooseRange(key)}>{title}</button>)}</div>
       <label>De <input type="date" value={from} onChange={event => { setView('custom'); setFrom(event.target.value) }} /></label>
       <label>Até <input type="date" value={to} onChange={event => { setView('custom'); setTo(event.target.value) }} /></label>
-      <label>Paciente <select value={patientId} onChange={event => setPatientId(event.target.value)}><option value="">Todos os pacientes</option>{patients.map(item => <option key={item.id} value={item.id}>{item.name}{item.archivedAt ? ' (arquivado)' : ''}</option>)}</select></label>
+      <label>Paciente <select aria-label="Paciente" value={patientId} onChange={event => setPatientId(event.target.value)}><option value="">Todos os pacientes</option>{patients.map(item => <option key={item.id} value={item.id}>{item.name}{item.archivedAt ? ' (arquivado)' : ''}</option>)}</select></label>
     </div>
     {!valid ? <p role="alert">Escolha um período válido, em ordem cronológica e de até cinco anos.</p> : phase === 'loading' ? <p role="status">Carregando análises…</p> : phase === 'error' ? <div role="alert"><p>Não foi possível carregar as análises. Seus dados não foram alterados.</p><button type="button" onClick={() => setRetry(value => value + 1)}>Tentar novamente</button></div> : <>
       <div className="analytics-summary"><section><span>Sessões finalizadas no período</span><strong>{data.totalCompletedSessions}</strong></section><section><span>Pacientes distintos</span><strong>{data.uniquePatients}</strong></section></div>

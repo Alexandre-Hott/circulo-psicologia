@@ -1,3 +1,6 @@
+import { addCivilDays, parseCivilDate } from './calendarDate.js'
+import { inSupportedRange } from './analyticsRange.js'
+
 const normalize = value => String(value ?? '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -369,6 +372,71 @@ const parseOccurrenceAction = (text, context, referenceDate) => {
     [action === 'start' ? 'Após confirmar, o sistema cria ou retoma o rascunho da sessão existente.' : 'Apenas abre o formulário; informe o motivo e confirme na tela para salvar a alteração.'])
 }
 
+const parsePatientWorkspaceNavigation = (text, context) => {
+  const match = /^(?:abrir|abra|abre)\s+(?:(?:o|a|os|as)\s+)?(registros|sessoes|evolucao|vinculos)\s+(?:de|do|da)\s+(.+)$/u.exec(text)
+  if (!match) return null
+  const result = exactTarget(match[2], (context.patients || []).filter(patient => patient.archivedAt == null), 'paciente')
+  if (result.error) return refuse(result.error)
+  const space = match[1] === 'vinculos' ? 'links' : match[1] === 'evolucao' ? 'evolution' : 'sessions'
+  return draft({ type: 'patient.workspace.open', target: { patientId: result.entity.id, space } },
+    `Abrir ${space === 'links' ? 'vínculos' : 'registros'} de ${result.entity.name}.`)
+}
+
+// Month boundaries are civil dates, including leap years and the four-digit
+// year limits. Advance from day 28 so no out-of-range next month is needed.
+const analyticsMonthEnd = start => {
+  let end = `${start.slice(0, 7)}-28`
+  while (parseCivilDate(`${start.slice(0, 7)}-${Number(end.slice(-2)) + 1}`)) end = addCivilDays(end, 1)
+  return end
+}
+
+const parseAnalyticsNavigation = (text, context, referenceDate) => {
+  const command = /^(?:mostrar|mostre|mostra|abrir|abra|abre)\s+(?:(?:as|os)\s+)?(?:analises|graficos)(?:\s+(.+))?$/u.exec(text)
+  if (!command) return null
+  let argument = command[1] || ''
+  const period = /(?:^|\s+)(hoje|deste mes|neste mes|dos ultimos 12 meses|nos ultimos 12 meses|de (\d{2}\/\d{2}\/\d{4}) ate (\d{2}\/\d{2}\/\d{4}))$/u.exec(argument)
+  if (period) argument = argument.slice(0, period.index).trim()
+  let patientId = ''
+  let label = 'todos os pacientes'
+  if (argument && !/^(?:(?:de|para)\s+)?todos os pacientes$/u.test(argument)) {
+    const name = /^(?:de|do|da)\s+(.+)$/u.exec(argument)
+    if (!name) return refuse('Informe um paciente pelo nome exato e um período: hoje, neste mês, últimos 12 meses ou de DD/MM/AAAA até DD/MM/AAAA.')
+    const result = exactTarget(name[1], (context.patients || []).filter(patient => patient.archivedAt == null), 'paciente')
+    if (result.error) return refuse(result.error)
+    patientId = result.entity.id
+    label = result.entity.name
+  }
+  let from
+  let to
+  let view
+  if (period?.[2]) {
+    from = period[2].split('/').reverse().join('-')
+    to = period[3].split('/').reverse().join('-')
+    view = 'custom'
+  } else {
+    const reference = parseCivilDate(referenceDate)
+    if (!reference) return refuse('Informe uma data civil de referência válida (AAAA-MM-DD).')
+    if (period?.[1] === 'hoje') {
+      from = to = referenceDate
+      view = 'day'
+    } else {
+      from = `${referenceDate.slice(0, 7)}-01`
+      to = analyticsMonthEnd(from)
+      view = 'month'
+      if (period?.[1].includes('12 meses')) {
+        const monthIndex = reference.year * 12 + reference.month - 1 - 11
+        from = `${String(Math.floor(monthIndex / 12)).padStart(4, '0')}-${String(monthIndex % 12 + 1).padStart(2, '0')}-01`
+        view = 'year'
+      }
+    }
+  }
+  if (!parseCivilDate(from) || !parseCivilDate(to) || !inSupportedRange(from, to)) {
+    return refuse('Informe um período válido, em ordem cronológica e de até cinco anos.')
+  }
+  return draft({ type: 'analytics.view', target: { patientId, from, to, view } },
+    `Mostrar análises de ${label}: ${from.split('-').reverse().join('/')} a ${to.split('-').reverse().join('/')}.`)
+}
+
 const parseWorkspaceNavigation = text => {
   const match = /^(?:abrir|abra|abre)\s+(?:(?:a|o|as|os)\s+)?(.+)$/u.exec(text)
   if (!match) return null
@@ -540,7 +608,8 @@ export function parseCentralCommand({ text, context = {}, referenceDate } = {}) 
     return refuse('O pedido contém uma negação. Informe um único comando afirmativo.')
   }
   if (/(?:\s+e\s+|;\s*|\s+depois\s+)(?:iniciar|remarcar|cancelar|cadastrar|cadastre|cadastra|criar|crie|cria|adicionar|adicione|adiciona|editar|edite|mudar|mude|renomear|arquivar|arquive|restaurar|restaure|agendar|agende|marcar|marque|abrir|abra|abre|mostrar|mostre|mostra|finalizar|excluir)\b/u.test(commandRegion)
-    || /(?:\s+ou\s+|,\s*|\s+em seguida\s+)(?:iniciar|remarcar|cancelar)\s+sessao\b/u.test(commandRegion)) {
+    || /(?:\s+ou\s+|,\s*|\s+em seguida\s+)(?:iniciar|remarcar|cancelar)\s+sessao\b/u.test(commandRegion)
+    || /(?:\s+ou\s+|,\s*|\s+em seguida\s+)(?:abrir|abra|abre|mostrar|mostre|mostra)\s+(?:(?:a|o|as|os)\s+)?(?:analises|graficos|registros|sessoes|evolucao|vinculos)\b/u.test(commandRegion)) {
     return refuse('Informe apenas uma ação por comando.')
   }
   const occurrence = parseOccurrenceAction(normalized, context, referenceDate)
@@ -559,6 +628,13 @@ export function parseCentralCommand({ text, context = {}, referenceDate } = {}) 
   if (behavior) return behavior
   const agendaNavigation = parseAgendaNavigation(normalized, referenceDate)
   if (agendaNavigation) return agendaNavigation
+  const patientNavigation = parsePatientWorkspaceNavigation(normalized, context)
+  if (patientNavigation) return patientNavigation
+  // Bare “abrir análises/gráficos” retains the existing workspace contract.
+  if (!/^(?:abrir|abra|abre)\s+(?:(?:as|os)\s+)?(?:analises|graficos)$/u.test(normalized)) {
+    const analyticsNavigation = parseAnalyticsNavigation(normalized, context, referenceDate)
+    if (analyticsNavigation) return analyticsNavigation
+  }
   const navigation = parseWorkspaceNavigation(normalized)
   if (navigation) return navigation
   const session = parseSessionDraft({ text: normalized, rawText, context })

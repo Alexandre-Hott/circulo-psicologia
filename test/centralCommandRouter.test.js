@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { formatCentralCommandPreview, parseCentralCommand } from '../src/centralCommandRouter.js'
+import { inSupportedRange } from '../src/analyticsRange.js'
 
 const patients = [
   { id: 'patient-ana', name: 'Ana Clara', age: 8, archivedAt: null },
@@ -15,6 +16,140 @@ const indicators = [
 ]
 const session = { id: 'session-draft-ana-001', patientId: 'patient-ana', patientName: 'Ana Clara', originalDate: '2026-09-30' }
 const context = { patients, behaviors, indicators, activeSessionDraft: session }
+
+test('navegação do paciente prepara registros, sessões, evolução e vínculos', () => {
+  for (const verb of ['Abrir', 'Abra', 'Abre']) {
+    for (const [section, space] of [['registros', 'sessions'], ['sessões', 'sessions'], ['evolução', 'evolution'], ['vínculos', 'links']]) {
+      const result = parseCentralCommand({ text: `${verb} ${section} de Ana Clara`, context })
+      assert.deepEqual(result.intent, { type: 'patient.workspace.open', target: { patientId: 'patient-ana', space } })
+      assert.equal(result.status, 'draft')
+      assert.equal(result.preview, `Abrir ${space === 'links' ? 'vínculos' : 'registros'} de Ana Clara.`)
+      assert.equal(formatCentralCommandPreview(result), result.preview)
+    }
+  }
+  assert.equal(parseCentralCommand({ text: '  ABRIR   OS VÍNCULOS DE ÁNA CLARA! ', context }).intent.target.space, 'links')
+})
+
+test('análises usam o contrato exato para filtros globais e de paciente', () => {
+  const cases = [
+    ['Mostrar análises deste mês', '', '2026-10-01', '2026-10-31', 'month'],
+    ['Mostrar análises de Ana Clara neste mês', 'patient-ana', '2026-10-01', '2026-10-31', 'month'],
+    ['Mostrar análises de Ana Clara hoje', 'patient-ana', '2026-10-03', '2026-10-03', 'day'],
+    ['Mostrar gráficos dos últimos 12 meses', '', '2025-11-01', '2026-10-31', 'year'],
+    ['Mostrar análises de Ana Clara de 01/09/2026 até 30/09/2026', 'patient-ana', '2026-09-01', '2026-09-30', 'custom'],
+    ['Mostrar análises de 01/09/2026 até 30/09/2026', '', '2026-09-01', '2026-09-30', 'custom'],
+    ['Mostrar análises de todos os pacientes hoje', '', '2026-10-03', '2026-10-03', 'day'],
+    ['Mostrar gráficos para todos os pacientes neste mês', '', '2026-10-01', '2026-10-31', 'month'],
+    ['Mostrar análises todos os pacientes de 01/09/2026 até 30/09/2026', '', '2026-09-01', '2026-09-30', 'custom'],
+    ['Mostrar análises', '', '2026-10-01', '2026-10-31', 'month'],
+    ['Mostrar análises de Ana Clara', 'patient-ana', '2026-10-01', '2026-10-31', 'month'],
+    ['Mostrar análises de todos os pacientes', '', '2026-10-01', '2026-10-31', 'month'],
+    ['Abrir gráficos de Ana Clara dos últimos 12 meses', 'patient-ana', '2025-11-01', '2026-10-31', 'year'],
+  ]
+  for (const [text, patientId, from, to, view] of cases) {
+    const result = parseCentralCommand({ text, context, referenceDate: '2026-10-03' })
+    assert.equal(result.status, 'draft', text)
+    assert.deepEqual(result.intent, { type: 'analytics.view', target: { patientId, from, to, view } }, text)
+    assert.equal(inSupportedRange(from, to), true)
+    assert.equal(result.preview, `Mostrar análises de ${patientId ? 'Ana Clara' : 'todos os pacientes'}: ${from.split('-').reverse().join('/')} a ${to.split('-').reverse().join('/')}.`)
+    assert.equal(formatCentralCommandPreview(result), result.preview)
+  }
+  for (const verb of ['mostre', 'mostra', 'abra', 'abre']) {
+    assert.equal(parseCentralCommand({ text: `${verb} as análises hoje`, referenceDate: '2026-10-03' }).intent.target.view, 'day')
+  }
+  for (const text of ['abrir análises', 'abra os gráficos', 'abre as análises']) {
+    assert.deepEqual(parseCentralCommand({ text }).intent, { type: 'workspace.open', target: { space: 'analytics' } })
+  }
+})
+
+test('novas navegações exigem um único nome exato e ativo', () => {
+  for (const command of ['Abrir registros de', 'Abrir sessões de', 'Abrir evolução de', 'Abrir vínculos de', 'Mostrar análises de']) {
+    for (const name of ['Ana', 'Clara', 'Outra Pessoa', 'Ana Clara e Caio Fictício', 'Ana Clara por favor']) {
+      const result = parseCentralCommand({ text: `${command} ${name}`, context, referenceDate: '2026-10-03' })
+      assert.equal(result.status, 'clarification', `${command} ${name}`)
+      assert.equal(result.intent, undefined)
+    }
+    for (const patients of [[], [{ id: 'archived', name: 'Ana Clara', archivedAt: '2026-09-01' }],
+      [...context.patients, { id: 'duplicate', name: 'ÁNA CLARA' }]]) {
+      assert.equal(parseCentralCommand({ text: `${command} Ana Clara`, context: { patients }, referenceDate: '2026-10-03' }).status, 'clarification')
+    }
+    const expanded = { patients: [...patients, { id: 'short', name: 'Ana' }, { id: 'archived', name: 'Ana Clara', archivedAt: '2026-09-01' }] }
+    assert.equal(parseCentralCommand({ text: `${command} Ana Clara`, context: expanded, referenceDate: '2026-10-03' }).intent.target.patientId, 'patient-ana')
+  }
+})
+
+test('análises calculam períodos civis nas viradas de ano e em anos bissextos', () => {
+  for (const [referenceDate, from, to] of [
+    ['2026-01-31', '2025-02-01', '2026-01-31'],
+    ['2024-02-29', '2023-03-01', '2024-02-29'],
+    ['2026-02-28', '2025-03-01', '2026-02-28'],
+    ['2026-12-31', '2026-01-01', '2026-12-31'],
+    ['2000-02-29', '1999-03-01', '2000-02-29'],
+    ['2100-02-28', '2099-03-01', '2100-02-28'],
+  ]) {
+    assert.deepEqual(parseCentralCommand({ text: 'Mostrar gráficos dos últimos 12 meses', referenceDate }).intent.target,
+      { patientId: '', from, to, view: 'year' })
+    assert.equal(parseCentralCommand({ text: 'Mostrar análises neste mês', referenceDate }).intent.target.to, to)
+    assert.equal(parseCentralCommand({ text: 'Mostrar análises hoje', referenceDate }).intent.target.from, referenceDate)
+  }
+  assert.equal(parseCentralCommand({ text: 'Mostrar análises neste mês', referenceDate: '0001-02-01' }).intent.target.to, '0001-02-28')
+  assert.equal(parseCentralCommand({ text: 'Mostrar gráficos dos últimos 12 meses', referenceDate: '0001-01-01' }).status, 'clarification')
+  // Keep the shared range validator authoritative even at its upper year limit.
+  assert.equal(parseCentralCommand({ text: 'Mostrar gráficos dos últimos 12 meses', referenceDate: '9999-12-31' }).status, 'clarification')
+})
+
+test('análises recusam referências e intervalos inválidos sem adivinhar datas', () => {
+  for (const referenceDate of [undefined, null, '', '2026-02-30', '03/10/2026', '2026-10-03T00:00:00Z', '0000-01-01']) {
+    for (const suffix of ['', 'hoje', 'neste mês', 'dos últimos 12 meses']) {
+      assert.equal(parseCentralCommand({ text: `Mostrar análises ${suffix}`, referenceDate }).status, 'clarification')
+    }
+    assert.deepEqual(parseCentralCommand({ text: 'Mostrar análises de Ana Clara de 29/02/2024 até 01/03/2024', context, referenceDate }).intent.target,
+      { patientId: 'patient-ana', from: '2024-02-29', to: '2024-03-01', view: 'custom' })
+  }
+  for (const range of ['31/02/2026 até 01/03/2026', '29/02/2026 até 01/03/2026', '01/09/2026 até 31/09/2026',
+    '30/09/2026 até 01/09/2026', '01/01/2020 até 02/01/2025', '29/02/2020 até 01/03/2025',
+    '01/01/0000 até 01/01/0001', '1/09/2026 até 30/09/2026', '2026-09-01 até 2026-09-30']) {
+    assert.equal(parseCentralCommand({ text: `Mostrar análises de ${range}`, context, referenceDate: '2026-10-03' }).status, 'clarification', range)
+  }
+  for (const range of ['01/01/2020 até 01/01/2025', '29/02/2020 até 28/02/2025', '01/09/2026 até 01/09/2026']) {
+    assert.equal(parseCentralCommand({ text: `Mostrar análises de ${range}` }).status, 'draft', range)
+  }
+})
+
+test('novas navegações preservam recusas de conteúdo extra, negação e ações múltiplas', () => {
+  for (const text of ['Mostrar análises amanhã', 'Mostrar análises deste ano', 'Mostrar análises hoje e amanhã',
+    'Mostrar análises neste mês hoje', 'Mostrar gráficos dos últimos 6 meses',
+    'Mostrar análises de Ana Clara de 01/09/2026', 'Mostrar análises de Ana Clara hoje às 15:00',
+    'Mostrar análises de Ana Clara de 01/09/2026 até 30/09/2026 e 01/10/2026', 'Abrir vínculos de Ana Clara hoje']) {
+    assert.equal(parseCentralCommand({ text, context, referenceDate: '2026-10-03' }).status, 'clarification', text)
+  }
+  for (const command of ['abrir registros de Ana Clara', 'abrir vínculos de Ana Clara', 'mostrar análises de Ana Clara hoje']) {
+    for (const text of [`não ${command}`, `nunca ${command}`, `jamais ${command}`, `por favor, não ${command}`,
+      `${command} não`, `${command} e abrir pacientes`, `${command}; criar paciente Bia`,
+      ...['e', ';', 'depois', 'ou', ',', 'em seguida'].map(join => `criar paciente Bia ${join} ${command}`)]) {
+      const result = parseCentralCommand({ text, context, referenceDate: '2026-10-03' })
+      assert.equal(result.status, 'clarification', text)
+      assert.equal(result.intent, undefined, text)
+    }
+  }
+})
+
+test('novas navegações são somente leitura e não executam efeitos', () => {
+  const frozenContext = Object.freeze({
+    patients: Object.freeze(patients.map(patient => Object.freeze({ ...patient }))),
+    activeSessionDraft: Object.freeze({ ...session }),
+    invoke: () => assert.fail('Não pode chamar backend'),
+    save: () => assert.fail('Não pode salvar'),
+    navigate: () => assert.fail('Não pode navegar'),
+  })
+  const before = structuredClone({ patients: frozenContext.patients, session: frozenContext.activeSessionDraft })
+  for (const text of ['Abrir registros de Ana Clara', 'Abrir vínculos de Ana Clara', 'Mostrar análises de Ana Clara hoje', 'Mostrar gráficos dos últimos 12 meses']) {
+    const result = parseCentralCommand(Object.freeze({ text, context: frozenContext, referenceDate: '2026-10-03' }))
+    assert.equal(result.status, 'draft')
+    assert.deepEqual(Object.keys(result.intent).sort(), ['target', 'type'])
+    assert.deepEqual({ patients: frozenContext.patients, session: frozenContext.activeSessionDraft }, before)
+  }
+})
 
 test('prepara cadastro de paciente como intent tipada sem persistir', () => {
   const result = parseCentralCommand({ text: 'Cadastrar paciente Bia de Teste com 8 anos' })
