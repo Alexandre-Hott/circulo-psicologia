@@ -5,6 +5,7 @@ const baseURL = `http://127.0.0.1:${port}`
 
 export default defineConfig({
   testDir: './test/e2e',
+  outputDir: process.env.E2E_OUTPUT_DIR || (port === 5189 ? 'test-results' : `test-results-${port}`),
   fullyParallel: false,
   workers: 1,
   retries: 0,

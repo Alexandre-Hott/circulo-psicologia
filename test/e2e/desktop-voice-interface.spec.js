@@ -41,6 +41,8 @@ async function openApp(page) {
       if (command === 'agenda_occurrences') return (window.voiceOccurrences || [occurrence]).filter(item => item.date >= args.from && item.date <= args.to)
       if (command === 'session_draft_start') return draft
       if (command === 'session_timeline') return window.voiceTimeline || []
+      if (command === 'session_draft_list') return window.voiceDrafts || []
+      if (command === 'session_draft_cancel') { window.writes.push({ command, args }); window.voiceDrafts = (window.voiceDrafts || []).filter(item => item.id !== args.id); return null }
       if (['agenda_list_series', 'agenda_history', 'session_timeline', 'session_addendum_list', 'case_context_list', 'session_draft_list'].includes(command)) return []
       if (command === 'patient_create') { const saved = { id: 'bia', revision: 1, archivedAt: null, ...args.input }; patients.push(saved); window.writes.push({ command, args }); return saved }
       if (command === 'patient_update') { const index = patients.findIndex(item => item.id === args.id); patients[index] = { ...patients[index], ...args.input, revision: patients[index].revision + 1 }; window.writes.push({ command, args }); return patients[index] }
@@ -299,6 +301,28 @@ test('pedido natural não inicia compromisso ausente, realizado ou duplicado', a
   await expect(page.getByRole('alert')).toContainText('mais de um compromisso')
   await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toHaveCount(0)
   await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(0)
+})
+
+test('retomada distingue dois rascunhos do mesmo dia e cancelamento preserva o outro', async ({ page }) => {
+  await openApp(page)
+  await page.evaluate(() => { window.voiceDrafts = ['first', 'second'].map(id => ({ id, patientId: 'ana', seriesId: `series-${id}`, originalDate: '2026-10-03', observation: id, procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicators: [] })) })
+  await command(page, 'Abrir registros de Ana Clara')
+  await command(page, 'Clicar em Escolher rascunho para retomar')
+  await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toHaveCount(0)
+  await command(page, 'Clicar em Retomar rascunho 2026-10-03 · opção 2')
+  await expect(page.getByLabel('Observações descritivas')).toHaveValue('second')
+  await command(page, 'Clicar em Evolução descritiva')
+  await expect(page).toHaveURL(/#session-observation$/)
+  await command(page, 'Cancelar rascunho')
+  await expect(page.getByRole('alertdialog')).toBeVisible()
+  await propose(page, 'voltar')
+  await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toBeVisible()
+  await expect.poll(() => page.evaluate(() => window.writes.filter(item => item.command === 'session_draft_cancel').length)).toBe(0)
+  await command(page, 'Cancelar rascunho')
+  await propose(page, 'confirmar')
+  await expect.poll(() => page.evaluate(() => window.writes.filter(item => item.command === 'session_draft_cancel'))).toEqual([{ command: 'session_draft_cancel', args: { id: 'second' } }])
+  await expect.poll(() => page.evaluate(() => window.voiceDrafts.map(item => item.id))).toEqual(['first'])
+  await expect.poll(() => page.evaluate(() => window.writes.filter(item => item.command === 'session_finalize').length)).toBe(0)
 })
 
 test('agenda avulsa e sessão com comportamento podem ser preenchidas e finalizadas por comando', async ({ page }) => {

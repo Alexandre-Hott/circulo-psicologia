@@ -35,7 +35,7 @@ function inventory(root) {
   const dialog = root.querySelector('[role="alertdialog"]')
   const scope = dialog && visible(dialog) ? dialog : root
   const seenActions = new Set()
-  return [...scope.querySelectorAll('button, summary, input, textarea, select')]
+  return [...scope.querySelectorAll('button, summary, input, textarea, select, a[href^="#"]')]
     .filter(element => visible(element) && !element.closest('.voice-command-center') && !element.matches(':disabled') && element.type !== 'hidden')
     .map(element => ({ element, name: nameOf(element), context: contextOf(element) }))
     .filter(item => item.name)
@@ -55,7 +55,7 @@ function matches(query, entries) {
   const normalized = fold(query)
   const exact = entries.filter(item => fold(item.name) === normalized || fold(`${item.name} de ${item.context}`) === normalized || fold(`${item.name} em ${item.context}`) === normalized)
   if (exact.length) return exact
-  const aliases = entries.filter(item => fold(item.name.replace(/\s*·\s*v\d+\s*$/i, '').replace(/\s*\(opcional\)/i, '').replace(/\s+em anos\b/i, '')) === normalized)
+  const aliases = entries.filter(item => fold(item.name.replace(/\s*·\s*v\d+\s*$/i, '').replace(/\s*\(opcional\)/i, '').replace(/\s*\(at[eé]\s+\d+\s+caracteres\)/iu, '').replace(/\s+em anos\b/i, '')) === normalized)
   if (aliases.length) return aliases
   // Patient cards have short buttons; their context makes "Editar de Ana Clara" unique.
   return entries.filter(item => item.context && [fold(`${item.name} de ${item.context}`), fold(`${item.name} em ${item.context}`)].some(label => label.startsWith(normalized) && normalized.startsWith(fold(item.name) + ' ')))
@@ -88,7 +88,7 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   const candidates = inventory(root).filter(item => operation === 'fill'
     ? ['INPUT', 'TEXTAREA', 'SELECT'].includes(item.element.tagName) && !['checkbox', 'radio', 'password', 'file'].includes(item.element.type) && !item.element.readOnly
     : ['check', 'uncheck'].includes(operation) ? item.element.type === 'checkbox' || item.element.type === 'radio'
-      : item.element.matches('button, summary, input[type="radio"], input[type="checkbox"]'))
+      : item.element.matches('button, summary, a[href^="#"], input[type="radio"], input[type="checkbox"]'))
   let found = matches(query, candidates)
   if (fields.length) {
     const viable = fields.map(item => ({ ...item, found: matches(item.query, candidates) })).filter(item => item.found.length)

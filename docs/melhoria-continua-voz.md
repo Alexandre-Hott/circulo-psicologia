@@ -44,3 +44,17 @@ Não declarar cobertura completa enquanto persistirem estes pontos:
 - Validar o microfone humano. A evidência automatizada não substitui uma demonstração de ditado humano na instalação final.
 
 A meta permanece ativa. Todas as validações usam dados fictícios e as ações reutilizam os controles e validações existentes.
+
+## Auditoria de paridade e correções de retomada
+
+A auditoria de código separou ações com prova E2E de voz das que apenas parecem alcançáveis pelo gateway genérico. Prioridades restantes: CRUD de vínculos, catálogo não vazio de indicadores, contexto do caso, persistência de adendos, alterações de ocorrências/séries e ajustes/backup/updater. Abertura de uma tela não prova o salvamento correto de seu formulário.
+
+Correções no código após 0.2.39: rascunhos da mesma data exibem opções distintas e identidade de registro; com vários rascunhos, os botões principais mostram a escolha em vez de retomar arbitrariamente o primeiro. Teste específico passou: escolheu opção 2, navegou pelo atalho interno de evolução, recusou o primeiro cancelamento e confirmou o segundo; apenas o rascunho selecionado foi removido e nenhuma sessão finalizada foi criada. O gateway também aceita os links internos `href="#…"` das etapas e biblioteca; links externos não fazem parte desse inventário.
+
+Limites de paridade a manter explícitos: senha e escolha de arquivos Windows são manuais; o assistente só fica disponível com o cofre desbloqueado, portanto não cobre criação/desbloqueio/restauração na tela bloqueada. Controles desabilitados não são acionados: é preciso preencher seus pré-requisitos; a limpeza de recovery continua desabilitada por projeto. Registros finalizados e históricos são leitura, sem ação de editar. Nomes duplicados sem identificação distinta continuam exigindo escolha inequívoca.
+
+Não há novo instalador dessas últimas correções ainda. A versão distribuível segue 0.2.39 até consolidar os testes e gerar o próximo pacote.
+
+Novas provas de fluxo: quatro testes em `desktop-voice-workflows.spec.js` passaram com respostas Tauri sintéticas. Vínculos: criação/edição/arquivamento/restauração, três papéis, bloqueio de envio sem papel e isolamento entre dois pacientes. Indicadores: catálogo não vazio, valor e nota contextual, limpar e salvar/reset com conferência de payload. Contexto: duas revisões preservando a anterior. Adendos: salvar na sessão selecionada e cancelar outro texto, mantendo o registro original intacto. O teste avança frames explicitamente sem depender do autosave para comprovar a ação de salvamento.
+
+Regressão de voz: 22 casos passaram numa rodada de 23; o outro terminou com `ENOENT` ao fechar o contexto porque execuções paralelas compartilhavam a pasta de traces, não por falha de ação. Esse caso de cadastro/edição/comportamento passou isoladamente. A configuração agora separa resultados pela porta de execução (ou `E2E_OUTPUT_DIR`), mantendo a pasta padrão na porta padrão. O campo de adendo também aceita o nome sem repetir a instrução de limite “até N caracteres”; o limite real do campo continua validado.
