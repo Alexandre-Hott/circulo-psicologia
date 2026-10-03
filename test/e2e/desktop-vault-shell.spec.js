@@ -1,5 +1,13 @@
 import { test, expect } from '@playwright/test'
 
+const answerConfirmation = async (page, message, accept = true) => {
+  const dialog = page.getByRole('alertdialog', { name: 'Confirmar ação', exact: true })
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toContainText(message)
+  await dialog.getByRole('button', { name: accept ? 'Confirmar ação' : 'Voltar', exact: true }).click()
+  await expect(dialog).toBeHidden()
+}
+
 const openAgendaDetails = async page => {
   const toggle = page.getByRole('button', { name: 'Detalhes e ações' })
   if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click()
@@ -43,7 +51,6 @@ const installCalendarMock = async page => page.addInitScript(() => {
   const drafts = []
   const sessions = []
   window.calendarProbe = () => ({ queries, changes, starts, saves, templates, drafts, sessions })
-  window.confirm = () => true
   window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
     if (command === 'vault_status') return { initialized: true, unlocked: true, profileState: 'ready' }
     if (command === 'auto_backup_status') return { present: false, available: false, dirty: false }
@@ -222,6 +229,7 @@ test('paciente registra comportamento e evolução via Agenda Dia compacta em 39
   await expect.poll(() => page.evaluate(() => window.calendarProbe().drafts[0]?.behaviorIds)).toEqual(['calendar-template-1'])
   await expect.poll(() => page.evaluate(() => window.calendarProbe().drafts[0]?.observation)).toBe('Evolução descritiva fictícia')
   await draft.getByRole('button', { name: 'Finalizar sessão' }).click()
+  await answerConfirmation(page, 'Finalizar sessão do paciente')
   await expect.poll(() => page.evaluate(() => window.calendarProbe().sessions.length)).toBe(1)
   await page.getByText('Evolução e escalas registradas').click()
   await expect(page.getByText('Evolução descritiva fictícia')).toBeVisible()
@@ -247,10 +255,7 @@ test('demonstração sintética exige CTA e confirmação, cria quatro sessões 
   await page.addInitScript(() => {
     const db = { patients: [{ id: 'existing', name: 'Cadastro preexistente fictício', archivedAt: null }], templates: [], series: [], drafts: [], sessions: [] }
     let sequence = 0
-    let confirmed = false
-    window.confirm = () => confirmed
     window.demoProbe = () => ({ patients: db.patients, templates: db.templates, series: db.series, drafts: db.drafts, sessions: db.sessions })
-    window.confirmDemo = value => { confirmed = value }
     const plusSeven = date => { const value = new Date(`${date}T12:00:00Z`); value.setUTCDate(value.getUTCDate() + 7); return value.toISOString().slice(0, 10) }
     window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
       if (command === 'vault_status') return { initialized: true, unlocked: true, profileState: 'ready' }
@@ -277,9 +282,10 @@ test('demonstração sintética exige CTA e confirmação, cria quatro sessões 
   await expect(demo).toBeVisible()
   expect((await page.evaluate(() => window.demoProbe())).patients).toHaveLength(1)
   await demo.click()
+  await answerConfirmation(page, 'Carregar dados fictícios de demonstração', false)
   expect((await page.evaluate(() => window.demoProbe())).patients).toHaveLength(1)
-  await page.evaluate(() => window.confirmDemo(true))
   await demo.click()
+  await answerConfirmation(page, 'Carregar dados fictícios de demonstração')
   await expect.poll(() => page.evaluate(() => window.demoProbe().sessions.length)).toBe(4)
   const first = await page.evaluate(() => window.demoProbe())
   expect(first.patients).toHaveLength(4)
@@ -289,6 +295,7 @@ test('demonstração sintética exige CTA e confirmação, cria quatro sessões 
   expect(first.sessions.every(item => item.observation.startsWith('EXEMPLO DEMO —') && item.indicators.length === 2)).toBe(true)
   await page.getByRole('navigation', { name: 'Espaços do Círculo' }).getByRole('button', { name: 'Início' }).click()
   await demo.click()
+  await answerConfirmation(page, 'Carregar dados fictícios de demonstração')
   await expect(page.getByText(/Demonstração disponível: 0 paciente\(s\), 0 modelo\(s\), 0 compromisso\(s\) e 0 sessão\(ões\) adicionados/)).toBeVisible()
   const second = await page.evaluate(() => window.demoProbe())
   expect(second.patients).toHaveLength(4)
@@ -327,6 +334,7 @@ test('calendário sintético: período vazio, alteração e início continuam ac
   await page.getByLabel('Nova data efetiva').fill('2026-10-06')
   await page.getByLabel('Motivo administrativo (opcional)').fill('Ajuste sintético de horário')
   await page.getByRole('button', { name: 'Confirmar remarcação individual' }).click()
+  await answerConfirmation(page, 'Remarcar apenas a ocorrência original')
   await expect.poll(() => page.evaluate(() => window.calendarProbe().changes.length)).toBe(1)
   await expect(page.getByRole('button', { name: 'Ver ações de Rui Calendário em 2026-10-06 às 09:00–10:00' })).toBeVisible()
   await page.getByRole('button', { name: 'Iniciar sessão de Rui Calendário em 2026-10-06 às 09:00–10:00' }).click()
@@ -605,8 +613,8 @@ test('respostas tardias não atravessam bloqueio ou troca de paciente', async ({
   await expect(page.getByText('Vínculo A')).toHaveCount(0)
   await expect(page.getByLabel('Nome da pessoa ou instituição')).toHaveValue('')
   await page.getByRole('listitem').filter({ hasText: 'Paciente A' }).getByRole('button', { name: 'Editar', exact: true }).click()
-  page.once('dialog', dialog => dialog.accept())
   await page.getByRole('listitem').filter({ hasText: 'Paciente A' }).getByRole('button', { name: 'Arquivar' }).click()
+  await answerConfirmation(page, 'Arquivar o cadastro')
   await page.getByRole('button', { name: 'Novo cadastro' }).click()
   await expect(page.getByRole('form', { name: 'Novo cadastro' })).toBeVisible()
   await expect(page.getByLabel('Nome', { exact: true })).toHaveValue('')
@@ -657,12 +665,12 @@ test('identificação e vínculos sintéticos persistem e ficam restritos ao pac
   await expect(page.getByText('Guardião B')).toBeVisible()
   await expect(page.getByText('Escola Sintética')).toBeVisible()
   const school = page.getByRole('listitem').filter({ hasText: 'Escola Sintética' })
-  page.once('dialog', dialog => dialog.accept())
   await school.getByRole('button', { name: 'Arquivar vínculo' }).click()
+  await answerConfirmation(page, 'Arquivar o vínculo')
   await expect(page.getByText('Escola Sintética')).toHaveCount(0)
   await page.getByRole('checkbox', { name: 'Mostrar vínculos arquivados' }).check()
-  page.once('dialog', dialog => dialog.accept())
   await page.getByRole('listitem').filter({ hasText: 'Escola Sintética' }).getByRole('button', { name: 'Restaurar vínculo' }).click()
+  await answerConfirmation(page, 'Restaurar o vínculo')
   await expect(page.getByRole('status').filter({ hasText: 'Vínculo restaurado.' })).toBeVisible()
   await expect(page.getByRole('listitem').filter({ hasText: 'Escola Sintética' }).getByRole('button', { name: 'Arquivar vínculo' })).toBeVisible()
   await page.getByRole('button', { name: 'Bloquear' }).click()
@@ -691,10 +699,7 @@ test('identificação e vínculos sintéticos persistem e ficam restritos ao pac
 test('cópia legível exige confirmação e cancelamento não confirma arquivo', async ({ page }) => {
   await page.addInitScript(() => {
     let calls = 0
-    let confirmed = false
     window.exportProbe = () => calls
-    window.setExportConfirmation = value => { confirmed = value }
-    window.confirm = () => confirmed
     window.__TAURI_INTERNALS__ = { invoke: async (command, args) => {
       if (command === 'vault_status') return { initialized: true, unlocked: true, profileState: 'ready' }
       if (command === 'auto_backup_status') return { present: false, available: false, keyEnvelopePresent: true, dirty: false, error: null }
@@ -712,9 +717,10 @@ test('cópia legível exige confirmação e cancelamento não confirma arquivo',
   await page.getByText('Exportar cópia legível', { exact: true }).click()
   const button = page.getByRole('button', { name: 'Exportar cópia legível deste paciente' })
   await button.click()
+  await answerConfirmation(page, 'arquivo .txt sem criptografia com dados sensíveis', false)
   expect(await page.evaluate(() => window.exportProbe())).toBe(0)
-  await page.evaluate(() => window.setExportConfirmation(true))
   await button.click()
+  await answerConfirmation(page, 'arquivo .txt sem criptografia com dados sensíveis')
   expect(await page.evaluate(() => window.exportProbe())).toBe(1)
   await expect(page.getByText('Cópia legível criada.')).toHaveCount(0)
 })
@@ -798,13 +804,14 @@ test('contexto salva sem profissional local e preserva autoria histórica na evo
 })
 
 test('compromisso avulso cria uma ocorrência e permite remarcação e cancelamento', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-05T12:00:00Z') })
   await page.addInitScript(() => {
     const patient = { id: 'synthetic-patient', name: 'Paciente Sintético', revision: 1, archivedAt: null }
     const series = []
     const events = []
-    window.confirm = () => true
     window.oneOffProbe = () => ({ series, events })
     window.__TAURI_INTERNALS__ = { invoke: async (command, args) => {
+      if (command === 'behavior_list' || command === 'indicator_catalog') return []
       if (command === 'vault_status') return { initialized: true, unlocked: true, profileState: 'ready' }
       if (command === 'auto_backup_status') return { present: true, available: true, keyEnvelopePresent: true, dirty: false, error: null }
       if (command === 'patient_list') return [patient]
@@ -834,25 +841,28 @@ test('compromisso avulso cria uma ocorrência e permite remarcação e cancelame
   await page.getByLabel('Nova data efetiva').fill('2026-10-06')
   await page.getByLabel(/Motivo administrativo/).fill('motivo sintético da remarcação')
   await page.getByRole('button', { name: 'Confirmar remarcação individual' }).click()
+  await answerConfirmation(page, 'Remarcar apenas a ocorrência original')
   await page.getByLabel('Data de referência').fill('2026-10-06')
   await expect(page.locator('.agenda-detail-list')).toContainText('2026-10-06 · 14:00–14:50')
   await page.getByRole('button', { name: 'Alterar ocorrência de Paciente Sintético em 2026-10-06 às 14:00–14:50' }).click()
   await page.getByLabel('Ação explícita').selectOption('cancelar')
   await page.getByLabel(/Motivo administrativo/).fill('motivo sintético')
   await page.getByRole('button', { name: 'Confirmar cancelamento' }).click()
+  await answerConfirmation(page, 'Cancelar explicitamente a ocorrência original')
   await expect(page.getByText('Nenhum compromisso neste período.')).toBeVisible()
   expect((await page.evaluate(() => window.oneOffProbe())).events.map(event => event.action)).toEqual(['reschedule', 'cancel'])
 })
 
 test('encerramento de série persistida mostra conflito e atualiza calendário sem apagar histórico', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-01T12:00:00Z') })
   await page.addInitScript(() => {
     const patient = { id: 'synthetic-patient', name: 'Paciente Sintético', revision: 1, archivedAt: null }
     const series = [{ id: 'synthetic-series', patientId: patient.id, weekday: 4, start: '14:00', end: '14:50', frequency: 'Semanal', startDate: '2026-01-01', endDate: null, modality: 'Presencial', meetingLink: null }]
     const history = [{ id: 'synthetic-event', seriesId: series[0].id, action: 'reschedule', originalDate: '2026-01-01', effectiveDate: '2026-01-02', start: '14:00', end: '14:50', reason: 'sintético' }]
     let calls = 0
     window.endProbe = () => ({ calls, endDate: series[0].endDate, history: history.length })
-    window.confirm = () => true
     window.__TAURI_INTERNALS__ = { invoke: async (command, args) => {
+      if (command === 'behavior_list' || command === 'indicator_catalog') return []
       if (command === 'vault_status') return { initialized: true, unlocked: true, profileState: 'ready' }
       if (command === 'auto_backup_status') return { present: true, available: true, keyEnvelopePresent: true, dirty: false, error: null }
       if (command === 'patient_list') return [patient]
@@ -875,16 +885,20 @@ test('encerramento de série persistida mostra conflito e atualiza calendário s
   await page.getByRole('button', { name: 'Encerrar série de Paciente Sintético · série synthetic-series' }).click()
   await page.getByLabel('Primeira data excluída').fill('2026-10-01')
   await page.getByRole('button', { name: 'Confirmar encerramento' }).click()
+  await answerConfirmation(page, 'Encerrar a série')
   await expect(page.getByRole('alert')).toContainText('remarcada para 2026-10-08')
   await page.getByRole('button', { name: 'Confirmar encerramento' }).click()
+  await answerConfirmation(page, 'Encerrar a série')
   await expect(page.getByRole('alert')).toContainText('rascunho de sessão')
   await page.getByRole('button', { name: 'Confirmar encerramento' }).click()
+  await answerConfirmation(page, 'Encerrar a série')
   await expect(page.locator('.vault-agenda .vault-ok[role="status"]')).toContainText('histórico preservado')
   await expect(page.getByText('2026-09-30')).toBeVisible()
   expect(await page.evaluate(() => window.endProbe())).toEqual({ calls: 3, endDate: '2026-09-30', history: 1 })
 })
 
 test('séries persistidas permitem corte antes do início e antecipação com nomes acessíveis distintos', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-01T12:00:00Z') })
   await page.addInitScript(() => {
     const patients = [
       { id: 'p1', name: 'Paciente Sintético A', revision: 1, archivedAt: null },
@@ -896,8 +910,8 @@ test('séries persistidas permitem corte antes do início e antecipação com no
     ]
     const calls = []
     window.endProbe = () => ({ calls, series })
-    window.confirm = () => true
     window.__TAURI_INTERNALS__ = { invoke: async (command, args) => {
+      if (command === 'behavior_list' || command === 'indicator_catalog') return []
       if (command === 'vault_status') return { initialized: true, unlocked: true, profileState: 'ready' }
       if (command === 'auto_backup_status') return { present: true, available: true, keyEnvelopePresent: true, dirty: false, error: null }
       if (command === 'patient_list') return patients
@@ -922,10 +936,12 @@ test('séries persistidas permitem corte antes do início e antecipação com no
   await first.click()
   await page.getByLabel('Primeira data excluída').fill('2026-10-01')
   await page.getByRole('button', { name: 'Confirmar encerramento' }).click()
+  await answerConfirmation(page, 'Encerrar a série')
   await expect(page.getByText(/encerrada antes do início/)).toBeVisible()
   await second.click()
   await page.getByLabel('Primeira data excluída').fill('2026-10-01')
   await page.getByRole('button', { name: 'Confirmar encerramento' }).click()
+  await answerConfirmation(page, 'Encerrar a série')
   expect((await page.evaluate(() => window.endProbe())).calls).toEqual([
     { seriesId: 's-future', effectiveDate: '2026-10-01' },
     { seriesId: 's-bounded', effectiveDate: '2026-10-01' },
@@ -1013,13 +1029,13 @@ test('desktop synthetic registry is persistent-shaped, editable and isolated fro
   await page.getByLabel('Nome').fill('Paciente Fictício B')
   await page.getByRole('button', { name: 'Salvar alterações' }).click()
   await expect(page.getByText('Paciente Fictício B')).toBeVisible()
-  page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Arquivar' }).click()
+  await answerConfirmation(page, 'Arquivar o cadastro')
   await expect(page.getByText('Paciente Fictício B')).toHaveCount(0)
   await page.getByLabel('Mostrar arquivados').check()
   await expect(page.getByText('Paciente Fictício B')).toBeVisible()
-  page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Restaurar', exact: true }).click()
+  await answerConfirmation(page, 'Restaurar o cadastro')
   await expect(page.getByText('Paciente Fictício B')).toBeVisible()
   await page.getByRole('button', { name: 'Ajustes' }).click()
   await page.getByLabel('Senha independente do backup').fill('senha backup sintética longa')
@@ -1029,8 +1045,8 @@ test('desktop synthetic registry is persistent-shaped, editable and isolated fro
   await page.getByRole('button', { name: 'Selecionar e verificar backup' }).click()
   await expect(page.getByText('A restauração substituirá o único perfil local')).toBeVisible()
   await page.getByLabel('Senha atual do cofre local').fill('senha sintética longa')
-  page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Confirmar restauração' }).click()
+  await answerConfirmation(page, 'Confirmar restauração?')
   await expect(page.getByText(/Restauração concluída/)).toBeVisible()
   await page.getByRole('button', { name: 'Bloquear' }).click()
   await expect(page.getByLabel('Senha do cofre')).toBeVisible()
@@ -1070,12 +1086,12 @@ test('empty desktop vault restores a v5 backup with a new local password', async
   await page.getByRole('button', { name: 'Selecionar e verificar backup' }).click()
   await expect(page.getByText(/O backup será restaurado neste perfil vazio/i)).toBeVisible()
   await page.getByLabel('Nova senha local').fill('nova senha local sintética longa')
-  page.once('dialog', dialog => dialog.dismiss())
   await page.getByRole('button', { name: 'Confirmar restauração' }).click()
+  await answerConfirmation(page, 'Confirmar restauração?', false)
   await expect(page.getByText(/Restauração concluída/)).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Criar cofre cifrado' })).toHaveCount(0)
-  page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Confirmar restauração' }).click()
+  await answerConfirmation(page, 'Confirmar restauração?')
   await expect(page.getByText(/Restauração concluída/)).toBeVisible()
   await expect(page.getByRole('region', { name: 'Início' }).getByText('Paciente Importado Fictício')).toBeVisible()
   await page.getByRole('button', { name: 'Bloquear' }).click()
@@ -1106,8 +1122,8 @@ test('restauração local confirma desbloqueio, mostra pacientes e ignora lista 
   await page.getByText('Opções avançadas de backup e restauração').click()
   await page.getByLabel('Senha local para verificar cópia automática').fill('senha sintética longa')
   await page.getByRole('button', { name: 'Verificar cópia automática local' }).click()
-  page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Recuperar cópia automática local' }).click()
+  await answerConfirmation(page, 'Substituir o banco local pela última cópia automática cifrada?')
   await expect(page.getByRole('region', { name: 'Início' }).getByText('Paciente Recuperado')).toBeVisible()
   await page.getByRole('navigation', { name: 'Espaços do Círculo' }).getByRole('button', { name: 'Pacientes' }).click()
   await page.evaluate(() => window.delayPatientList())
@@ -1158,6 +1174,7 @@ test('desktop agenda creates a recurring series, moves one occurrence, then lock
       if (command === 'vault_unlock') { unlocked = true; return null }
       if (command === 'vault_lock') { unlocked = false; return null }
       if (!unlocked) throw new Error('Cofre bloqueado')
+      if (command === 'behavior_list' || command === 'indicator_catalog') return []
       if (command === 'patient_list') return args.includeArchived || patient.archivedAt == null ? [patient] : []
       if (command === 'patient_archive' || command === 'patient_restore') {
         patient.archivedAt = command === 'patient_archive' ? 1700000000 : null
@@ -1203,8 +1220,8 @@ test('desktop agenda creates a recurring series, moves one occurrence, then lock
   await openAgendaDetails(page)
   await expect(page.getByRole('button', { name: 'Alterar ocorrência de Paciente Fictício A em 2026-10-05 às 14:00–14:50' })).toBeVisible()
   await page.getByRole('button', { name: 'Pacientes' }).click()
-  page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Arquivar' }).click()
+  await answerConfirmation(page, 'Arquivar o cadastro')
   await page.getByRole('button', { name: 'Abrir Agenda' }).click()
   await openAgendaDetails(page)
   await page.getByRole('button', { name: 'Histórico administrativo' }).click()
@@ -1213,15 +1230,15 @@ test('desktop agenda creates a recurring series, moves one occurrence, then lock
   await expect(page.locator('#agenda-patient option', { hasText: 'Paciente Fictício A' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Pacientes' }).click()
   await page.getByLabel('Mostrar arquivados').check()
-  page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Restaurar', exact: true }).click()
+  await answerConfirmation(page, 'Restaurar o cadastro')
   await page.getByRole('button', { name: 'Abrir Agenda' }).click()
   await expect(page.locator('#agenda-patient option', { hasText: 'Paciente Fictício A' })).toHaveCount(1)
   await page.getByRole('button', { name: 'Alterar ocorrência de Paciente Fictício A em 2026-10-05 às 14:00–14:50' }).click()
   await page.getByLabel('Nova data efetiva').fill('2026-10-06')
   await page.getByLabel('Data de referência').fill('2026-10-06')
-  page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Confirmar remarcação individual' }).click()
+  await answerConfirmation(page, 'Remarcar apenas a ocorrência original')
   await expect(page.getByText('Ocorrência individual remarcada; data original preservada.')).toBeVisible()
   await expect(page.locator('.agenda-detail-list')).toContainText('Data original: 2026-10-05')
   await page.getByRole('button', { name: 'Bloquear' }).click()
@@ -1369,14 +1386,14 @@ test('desktop session draft persists through lock, finalizes with snapshot and i
   await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toBeHidden()
   await page.getByRole('button', { name: 'Abrir sessões' }).click()
   await expect(page.getByLabel('Observações descritivas')).toHaveValue('Rascunho A salvo antes da troca')
-  page.once('dialog', dialog => dialog.dismiss())
   await page.getByRole('button', { name: 'Cancelar rascunho' }).click()
+  await answerConfirmation(page, 'Cancelar e excluir o rascunho', false)
   await expect(page.getByLabel('Observações descritivas')).toHaveValue('Rascunho A salvo antes da troca')
   await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toBeVisible()
   await page.getByLabel('Observações descritivas').fill('Texto local que será descartado')
   await page.getByRole('checkbox', { name: /Participação sintética/ }).check()
-  page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Cancelar rascunho' }).click()
+  await answerConfirmation(page, 'Cancelar e excluir o rascunho')
   await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toHaveCount(0)
   await expect(page.getByText('Rascunho cancelado sem registro clínico final.')).toBeVisible()
   await expect(page.getByText('Texto local que será descartado')).toHaveCount(0)
@@ -1421,8 +1438,8 @@ test('desktop session draft persists through lock, finalizes with snapshot and i
   await expect(page.getByRole('heading', { name: 'Rascunho da ocorrência 2026-10-05' })).toBeVisible()
   await expect(page.getByLabel('Procedimentos realizados')).toHaveValue('')
   await expect.poll(() => page.evaluate(() => window.savedDraft()?.procedures)).toBe('Atividade sintética antes da troca de rascunho')
-  page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Cancelar rascunho' }).click()
+  await answerConfirmation(page, 'Cancelar e excluir o rascunho')
   await page.getByRole('button', { name: 'Retomar sessão de 2026-09-28' }).click()
   await page.getByLabel('Procedimentos realizados').fill('Atividade descritiva sintética')
   await expect(page.getByRole('button', { name: 'Finalizar sessão' })).toBeEnabled()
@@ -1456,8 +1473,8 @@ test('desktop session draft persists through lock, finalizes with snapshot and i
   await expect(page.getByLabel('Observações descritivas')).toHaveValue('Observação inventada e persistida')
   await expect(page.getByLabel('Regulação emocional · v1')).toHaveValue('0')
   await expect(page.getByLabel('Nota contextual opcional · Regulação emocional')).toHaveValue('Nota contextual inventada')
-  page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Finalizar sessão' }).click()
+  await answerConfirmation(page, 'Finalizar sessão do paciente')
   await expect(page.getByText('Sessão finalizada e salva.')).toBeVisible()
   await page.getByText('Evolução e escalas registradas').click()
   await expect(page.getByText('Identidade local declarada:')).toHaveCount(0)
@@ -1494,8 +1511,8 @@ test('desktop session draft persists through lock, finalizes with snapshot and i
   await expect(page.getByText('Error: Ocorrência já realizada')).toBeVisible()
   await page.getByLabel('Data de referência').fill('2026-10-05')
   await page.getByRole('button', { name: 'Iniciar sessão de Paciente Sintético A em 2026-10-05 às 14:00–14:50' }).click()
-  page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Cancelar rascunho' }).click()
+  await answerConfirmation(page, 'Cancelar e excluir o rascunho')
   await expect(page.getByText('Rascunho cancelado sem registro clínico final.')).toBeVisible()
   await page.getByText('Evolução e escalas registradas').click()
   await expect(page.getByText('Observação inventada e persistida')).toBeVisible()
@@ -1552,15 +1569,15 @@ test('automatic local backup exposes failure, retry and confirmed local recovery
   await page.getByLabel('Senha local para verificar cópia automática').fill('senha sintética longa')
   await page.getByRole('button', { name: 'Verificar cópia automática local' }).click()
   await expect(page.getByText('Cópia automática local validada.')).toBeVisible()
-  page.once('dialog', dialog => dialog.dismiss())
   await page.getByRole('button', { name: 'Recuperar cópia automática local' }).click()
+  await answerConfirmation(page, 'Substituir o banco local pela última cópia automática cifrada?', false)
   await expect(page.getByLabel('Senha local para verificar cópia automática')).toHaveValue('')
   await expect(page.getByRole('button', { name: 'Recuperar cópia automática local' })).toHaveCount(0)
   await page.getByLabel('Senha local para verificar cópia automática').fill('senha sintética longa')
   await page.getByRole('button', { name: 'Verificar cópia automática local' }).click()
   await expect(page.getByText('Cópia automática local validada.')).toBeVisible()
-  page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Recuperar cópia automática local' }).click()
+  await answerConfirmation(page, 'Substituir o banco local pela última cópia automática cifrada?')
   await expect(page.getByText('Cópia automática local restaurada e verificada.')).toBeVisible()
 })
 
@@ -1584,8 +1601,8 @@ test('incomplete profile with intact key can recover missing database from local
   await expect(page.getByText('Perfil local incompleto.')).toBeVisible()
   await page.getByLabel('Senha local para verificar cópia automática').fill('senha sintética longa')
   await page.getByRole('button', { name: 'Verificar cópia automática local' }).click()
-  page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Recuperar cópia automática local' }).click()
+  await answerConfirmation(page, 'Substituir o banco local pela última cópia automática cifrada?')
   await expect(page.getByText('Cópia automática local restaurada e verificada.')).toBeVisible()
   await page.getByRole('button', { name: 'Ajustes' }).click()
   await expect(page.getByText('Cofre desbloqueado neste dispositivo.')).toBeVisible()
@@ -1627,8 +1644,8 @@ test('present but invalid local copy never offers restore, and verification is p
   await page.getByRole('button', { name: 'Verificar cópia automática local' }).click()
   await expect(page.getByRole('button', { name: 'Recuperar cópia automática local' })).toBeVisible()
   await page.evaluate(() => window.makeAutoCopyInvalid())
-  page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Recuperar cópia automática local' }).click()
+  await answerConfirmation(page, 'Substituir o banco local pela última cópia automática cifrada?')
   await expect(page.getByText('Error: Cópia automática local inválida')).toBeVisible()
   await expect(page.getByLabel('Senha local para verificar cópia automática')).toHaveValue('')
   await expect(page.getByRole('button', { name: 'Recuperar cópia automática local' })).toHaveCount(0)

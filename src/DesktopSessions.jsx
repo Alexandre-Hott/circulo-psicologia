@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { groupIndicatorHistory } from './desktopIndicatorEvolution.js'
 import './DesktopSessions.css'
 
-export default function DesktopSessions({ ref, patientId, onPatientChange, activeDraft, voiceCommandDraft = null, onVoiceDraftApplied, onDraftChange, onChanged, onSessionMessage, onStartRecord }) {
+export default function DesktopSessions({ ref, patientId, onPatientChange, activeDraft, voiceCommandDraft = null, onVoiceDraftApplied, onDraftChange, onChanged, onSessionMessage, onStartRecord, onConfirm = async message => window.confirm(message) }) {
   const [patients, setPatients] = useState([])
   const [templates, setTemplates] = useState([])
   const [indicatorCatalog, setIndicatorCatalog] = useState([])
@@ -108,14 +108,48 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
 
   useEffect(() => {
     const intent = voiceCommandDraft
-    if (!intent?.commandId || appliedVoiceDraftRef.current === intent.commandId || !activeDraft || activeDraft.id !== intent.target?.sessionDraftId || activeDraft.patientId !== intent.target?.patientId || patientId !== activeDraft.patientId) return
+    if (!intent?.commandId || appliedVoiceDraftRef.current === intent.commandId) return
+    if (intent.type === 'behavior.create' || intent.type === 'behavior.update') {
+      appliedVoiceDraftRef.current = intent.commandId
+      const applyBehaviorDraft = async () => {
+        const draft = intent.draft
+        if (!draft || (draft.title !== undefined && typeof draft.title !== 'string') || (draft.description !== undefined && typeof draft.description !== 'string')) throw new Error('Campos de comportamento incompatíveis com o formulário.')
+        let template = null
+        if (intent.type === 'behavior.update') {
+          if (typeof intent.target?.behaviorId !== 'string' || !intent.target.behaviorId || (draft.title === undefined && draft.description === undefined)) throw new Error('Informe o comportamento e os campos que deseja editar.')
+          const nextTemplates = await invoke('behavior_list')
+          if (!mountedRef.current || appliedVoiceDraftRef.current !== intent.commandId) return
+          template = nextTemplates.find(item => item.id === intent.target.behaviorId)
+          if (!template || !Number.isInteger(template.version) || template.version < 1) throw new Error('Não encontrei uma versão válida do comportamento solicitado. Atualize a biblioteca e tente novamente.')
+          setTemplates(nextTemplates)
+        } else if (typeof draft.title !== 'string' || typeof draft.description !== 'string') throw new Error('Informe título e descrição para criar o comportamento.')
+        setEditingTemplate(template)
+        setTemplateTitle(draft.title ?? template?.title ?? '')
+        setTemplateDescription(draft.description ?? template?.description ?? '')
+        setError(''); setMessage('')
+        const details = document.getElementById('session-behaviors')
+        details?.setAttribute('open', '')
+        details?.scrollIntoView({ block: 'center' })
+        document.getElementById('behavior-title')?.focus({ preventScroll: true })
+        onSessionMessage?.('Comportamento preenchido. Confira o formulário e clique no botão de salvar para gravar.')
+      }
+      void applyBehaviorDraft().catch(reason => {
+        if (mountedRef.current && appliedVoiceDraftRef.current === intent.commandId) setError(String(reason))
+      }).finally(() => {
+        if (mountedRef.current && appliedVoiceDraftRef.current === intent.commandId) onVoiceDraftApplied?.(intent.commandId)
+      })
+      return
+    }
+    if ((intent.type && intent.type !== 'session.draft.update') || !activeDraft || activeDraft.id !== intent.target?.sessionDraftId || activeDraft.patientId !== intent.target?.patientId || patientId !== activeDraft.patientId) return
     appliedVoiceDraftRef.current = intent.commandId
     voiceVersionRef.current++
     voiceConfirmationPendingRef.current = true
     setVoiceConfirmationPending(true)
     const patch = intent.patch
-    if (patch?.field === 'behaviorIds' && patch.operation === 'add' && typeof patch.value === 'string') {
-      const next = valuesRef.current.behaviorIds.includes(patch.value) ? valuesRef.current.behaviorIds : [...valuesRef.current.behaviorIds, patch.value]
+    if (patch?.field === 'behaviorIds' && ['add', 'remove'].includes(patch.operation) && typeof patch.value === 'string') {
+      const next = patch.operation === 'remove'
+        ? valuesRef.current.behaviorIds.filter(id => id !== patch.value)
+        : valuesRef.current.behaviorIds.includes(patch.value) ? valuesRef.current.behaviorIds : [...valuesRef.current.behaviorIds, patch.value]
       setBehaviorIds(next); updateValues({ behaviorIds: next })
       onSessionMessage?.(`Comportamento preenchido. Confira o formulário e clique em “Salvar rascunho” para gravar.`)
     } else if (['observation', 'procedures', 'outcomeDecision', 'referralClosure'].includes(patch?.field) && patch.operation === 'replace' && typeof patch.value === 'string') {
@@ -209,7 +243,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   }
 
   const finalize = async () => {
-    if (!activeDraft || activeDraft.patientId !== patientId || !observation.trim() || !procedures.trim() || !outcomeDecision.trim() || !window.confirm(`Finalizar sessão do paciente ${patientId}, ocorrência original ${activeDraft.originalDate}?`)) return
+    if (!activeDraft || activeDraft.patientId !== patientId || !observation.trim() || !procedures.trim() || !outcomeDecision.trim() || !await onConfirm(`Finalizar sessão do paciente ${patientId}, ocorrência original ${activeDraft.originalDate}?`)) return
     if (voiceConfirmationPendingRef.current) { setError('Salve a alteração de voz em “Salvar rascunho” antes de finalizar.'); return }
     setBusy(true); setError(''); setMessage('')
     try {
@@ -223,7 +257,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   }
 
   const cancel = async () => {
-    if (!activeDraft || !window.confirm(`Cancelar e excluir o rascunho da ocorrência original ${activeDraft.originalDate}? Texto e comportamentos ainda não salvos também serão descartados. Nenhuma sessão finalizada será criada.`)) return
+    if (!activeDraft || !await onConfirm(`Cancelar e excluir o rascunho da ocorrência original ${activeDraft.originalDate}? Texto e comportamentos ainda não salvos também serão descartados. Nenhuma sessão finalizada será criada.`)) return
     setBusy(true); setError(''); setMessage('')
     try {
       clearTimeout(autosaveTimerRef.current)
@@ -313,7 +347,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     } finally { setBusy(false) }
   }
   const exportRecord = async () => {
-    if (!patientId || busy || !window.confirm('Esta cópia será um arquivo .txt sem criptografia com dados sensíveis. Escolha um destino local seguro; pastas sincronizadas podem enviar o arquivo à nuvem. Uma queda do aplicativo ou de energia durante a exportação pode deixar um arquivo temporário .circulo-record-*.tmp em texto puro no diretório escolhido. Revise o conteúdo antes de usar. Continuar?')) return
+    if (!patientId || busy || !await onConfirm('Esta cópia será um arquivo .txt sem criptografia com dados sensíveis. Escolha um destino local seguro; pastas sincronizadas podem enviar o arquivo à nuvem. Uma queda do aplicativo ou de energia durante a exportação pode deixar um arquivo temporário .circulo-record-*.tmp em texto puro no diretório escolhido. Revise o conteúdo antes de usar. Continuar?')) return
     setBusy(true); setError(''); setMessage('')
     try {
       const created = await invoke('record_copy_export', { patientId })
@@ -344,7 +378,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       {!activeDraft && !visibleDrafts.length && <p>Escolha ou crie um compromisso para este paciente; depois marque os comportamentos na sessão.</p>}
       {!activeDraft && !visibleDrafts.length && !onStartRecord && <p>Abra a Agenda para criar ou escolher um compromisso.</p>}
     </section>}
-    {activeDraft && activeDraft.patientId === patientId && <form id="session-draft" onSubmit={saveDraft} aria-label="Rascunho de sessão">
+    {activeDraft && activeDraft.patientId === patientId && <form id="session-draft" data-voice-record={activeDraft.id} onSubmit={saveDraft} aria-label="Rascunho de sessão">
       <h3>Rascunho da ocorrência {activeDraft.originalDate}</h3>
       <p>Paciente: <strong>{patients.find(patient => patient.id === patientId)?.name || patientId}</strong> · {activeDraft.originalDate}</p>
       <fieldset id="draft-behaviors" className="session-behavior-choices" tabIndex={-1} disabled={busy}><legend>Comportamentos desta sessão</legend>{templates.length ? templates.map(template => <label key={template.id} className="vault-checkbox"><input type="checkbox" checked={behaviorIds.includes(template.id)} onChange={event => { const next = event.target.checked ? [...behaviorIds, template.id] : behaviorIds.filter(id => id !== template.id); setBehaviorIds(next); updateValues({ behaviorIds: next }) }} /> {template.title} · v{template.version}</label>) : <p>Nenhum comportamento disponível. <a href="#session-behaviors" onClick={() => document.getElementById('session-behaviors')?.setAttribute('open', '')}>Criar na biblioteca</a>.</p>}</fieldset>

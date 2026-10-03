@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatCentralCommandPreview, parseCentralCommand } from './centralCommandRouter.js'
 import './VoiceCommandCenter.css'
 
@@ -16,30 +16,52 @@ export function VoiceCommandCenter({
   referenceDate,
   onDraft,
   onTranscribe,
+  parseCommand,
+  onApply,
+  onCancel,
+  autoInterpret = false,
+  compact = false,
+  pendingIntent,
 }) {
   const [command, setCommand] = useState('')
   const [result, setResult] = useState(null)
   const [transcribing, setTranscribing] = useState(false)
   const transcriptGeneration = useRef(0)
+  useEffect(() => {
+    if (pendingIntent === null) {
+      transcriptGeneration.current += 1
+      setResult(current => current?.status === 'draft' ? null : current)
+    }
+  }, [pendingIntent])
 
   const interpret = value => {
     transcriptGeneration.current += 1
-    const next = parseCentralCommand({
+    const request = {
       text: value,
       context: { patients, behaviors, indicators, activeSessionDraft },
       referenceDate,
-    })
+    }
+    const word = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[.!?]/g, '').trim()
+    if (onApply && result?.status === 'draft' && /^(?:confirmar|confirma|aplicar|aplica|confirmar comando)$/.test(word)) {
+      setCommand(value)
+      setResult(null)
+      void onApply()
+      return
+    }
+    if (onCancel && /^(?:descartar comando|cancelar comando)$/.test(word)) {
+      setResult(null); setCommand(''); onCancel(); return
+    }
+    const next = parseCommand ? parseCommand(request) : parseCentralCommand(request)
     setCommand(value)
     setResult(next)
     onDraft?.(next.status === 'draft' ? next.intent : null)
+    if (next.status === 'confirmation') { setResult(null); void onApply?.(next.intent) }
   }
 
   const transcribe = async () => {
     if (!onTranscribe || transcribing) return
     const generation = ++transcriptGeneration.current
     setTranscribing(true)
-    setResult(null)
-    onDraft?.(null)
     const patientNames = patients
       .filter(patient => patient && patient.archivedAt == null && typeof patient.name === 'string')
       .map(patient => patient.name)
@@ -50,24 +72,38 @@ export function VoiceCommandCenter({
         setResult({ status: 'clarification', message: 'Não recebi uma transcrição. Você pode digitar o comando.' })
         return
       }
-      setCommand(transcript.trim())
-      setResult({ status: 'transcript', message: 'Confira ou corrija o texto reconhecido. Depois clique em “Preparar rascunho”. Nada foi interpretado ou salvo.' })
+      if (autoInterpret) interpret(transcript.trim())
+      else {
+        setCommand(transcript.trim())
+        setResult({ status: 'transcript', message: 'Confira ou corrija o texto reconhecido. Depois clique em “Preparar rascunho”. Nada foi interpretado ou salvo.' })
+      }
     } catch (reason) {
       if (transcriptGeneration.current === generation) {
-        setResult({ status: 'clarification', message: reason?.message || 'Não foi possível transcrever agora. Digite o comando para continuar.' })
+        if (reason?.name === 'AbortError') { setResult(null); onDraft?.(null) }
+        else setResult({ status: 'clarification', message: reason?.message || 'Não foi possível transcrever agora. Digite o comando para continuar.' })
       }
     } finally {
       patientNames.fill('')
       setTranscribing(false)
     }
   }
+  useEffect(() => {
+    const shortcut = event => {
+      if (event.ctrlKey && event.shiftKey && event.code === 'Space' && !event.repeat && onTranscribe) {
+        event.preventDefault()
+        void transcribe()
+      }
+    }
+    window.addEventListener('keydown', shortcut)
+    return () => window.removeEventListener('keydown', shortcut)
+  })
 
-  return <section className="voice-command-center" aria-label="Comando do Círculo">
+  return <section className={`voice-command-center${compact ? ' voice-command-compact' : ''}`} aria-label="Comando do Círculo">
     <div className="voice-command-heading">
-      <div><p className="voice-command-eyebrow">ATALHO</p><h2>O que você quer fazer?</h2></div>
+      <div><p className="voice-command-eyebrow">ASSISTENTE</p><h2>O que você quer fazer?</h2></div>
       <span aria-hidden="true">✦</span>
     </div>
-    <p className="voice-command-description">Fale ou digite um pedido para Pacientes, Agenda ou uma sessão aberta. A voz é transcrita neste computador; confira o rascunho antes de aplicar.</p>
+    <p className="voice-command-description">Fale o pedido. Confira a proposta e diga “confirmar”.</p>
     <label htmlFor="voice-command-text">Seu comando</label>
     <textarea
       id="voice-command-text"
@@ -76,9 +112,13 @@ export function VoiceCommandCenter({
       value={command}
       onChange={event => {
         transcriptGeneration.current += 1
-        setCommand(event.target.value)
-        setResult(null)
-        onDraft?.(null)
+        const value = event.target.value
+        setCommand(value)
+        const word = value.toLowerCase().trim()
+        if (!word || !['confirmar', 'confirmar comando', 'aplicar', 'cancelar comando', 'descartar comando'].some(phrase => phrase.startsWith(word))) {
+          setResult(null)
+          onDraft?.(null)
+        }
       }}
       placeholder="Ex.: criar sessão semanal para Ana Clara toda quinta às 15:00"
       onKeyDown={event => {
@@ -87,18 +127,29 @@ export function VoiceCommandCenter({
     />
     <div className="voice-command-actions">
       <button type="button" onClick={() => interpret(command)}>Preparar rascunho</button>
-      {onTranscribe && <button type="button" className="voice-command-secondary" onClick={transcribe} disabled={transcribing}>
+      {onTranscribe && <button type="button" className="voice-command-secondary" onClick={transcribe} disabled={transcribing} title="Ctrl + Shift + Espaço" aria-keyshortcuts="Control+Shift+Space">
       {transcribing ? 'Ouvindo e transcrevendo aqui…' : '🎙 Ouvir e transcrever'}
       </button>}
     </div>
     {result?.status === 'clarification' && <p className="voice-command-error" role="status">{result.message}</p>}
     {result?.status === 'transcript' && <p className="voice-command-preview" role="status" aria-live="polite">{result.message}</p>}
     {result?.status === 'draft' && <div className="voice-command-preview" role="status" aria-live="polite">
-      <strong>Confira este rascunho</strong>
+      <strong>Confira a proposta</strong>
       <p>{formatCentralCommandPreview(result)}</p>
-      {result.notes?.map(note => <small key={note}>{note}</small>)}
-      <small>Nada foi salvo nem alterado. Esta proposta ainda precisa ser revisada na tela correspondente.</small>
+      {(compact ? result.notes?.filter(note => /apenas nesta sessão|somente ao rascunho|mantido literalmente/.test(note)) : result.notes)?.map(note => <small key={note}>{note}</small>)}
+      <small>{onApply ? 'Diga “confirmar” para aplicar ou “cancelar comando” para descartar.' : 'Nada foi salvo nem alterado. Revise na tela correspondente.'}</small>
     </div>}
+    <details className="voice-command-help"><summary>O que posso pedir?</summary><ul>
+      <li>“Cadastrar paciente Ana Clara com 8 anos”</li>
+      <li>“Criar comportamento Pede ajuda”</li>
+      <li>“Agendar sessão para Ana Clara amanhã às três da tarde”</li>
+      <li>“Abrir Agenda” ou “Abrir Análises”</li>
+      <li>“Clicar em Novo compromisso”</li>
+      <li>“Preencher Nome com Ana Clara”</li>
+      <li>“Selecionar Modalidade como Online”</li>
+      <li>“Marcar Pede ajuda” ou “Desmarcar Pede ajuda” na sessão</li>
+      <li>“Clicar em Salvar rascunho” ou “Finalizar sessão”</li>
+    </ul><small>Use o texto do botão ou campo. Se houver opções iguais, acrescente o paciente. Senhas e escolhas de arquivos continuam nas janelas próprias.</small></details>
   </section>
 }
 

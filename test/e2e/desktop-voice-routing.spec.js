@@ -71,7 +71,7 @@ test('Home captura áudio, chama o backend local, mostra texto editável e limpa
   await command.getByRole('button', { name: 'Ouvir e transcrever' }).click()
   const input = command.getByRole('textbox', { name: 'Seu comando' })
   await expect(input).toHaveValue('Cadastrar paciente Bia de Teste com 8 anos')
-  await expect(command.getByRole('status')).toContainText('Nada foi interpretado ou salvo')
+  await expect(command.getByRole('status')).toContainText('Bia de Teste')
   await expect.poll(() => page.evaluate(() => window.voiceTranscribePayload?.sampleRate)).toBe(8_000)
   await expect.poll(() => page.evaluate(() => window.voiceTranscribePayload?.samples?.length)).toBe(96_000)
   await expect.poll(() => page.evaluate(() => window.voiceTranscribePayload?.samples?.every(sample => sample === 0))).toBe(true)

@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test'
 
-const baseURL = 'http://127.0.0.1:5189'
+const port = Number(process.env.E2E_PORT || 5189)
+const baseURL = `http://127.0.0.1:${port}`
 
 export default defineConfig({
   testDir: './test/e2e',
@@ -10,7 +11,7 @@ export default defineConfig({
   reporter: 'list',
   use: { baseURL, channel: process.env.E2E_BROWSER_CHANNEL || 'msedge', headless: true, trace:'retain-on-failure' },
   webServer: {
-    command: 'npm run dev -- --host 127.0.0.1 --port 5189 --strictPort',
+    command: `npm run dev -- --host 127.0.0.1 --port ${port} --strictPort`,
     url: baseURL,
     reuseExistingServer: false,
     timeout: 30000,

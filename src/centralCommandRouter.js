@@ -78,8 +78,21 @@ const parseAge = value => {
     ['dez', 10], ['onze', 11], ['doze', 12], ['treze', 13], ['catorze', 14], ['quatorze', 14],
     ['quinze', 15], ['dezesseis', 16], ['dezessete', 17], ['dezoito', 18], ['dezenove', 19],
     ['vinte', 20], ['vinte e um', 21], ['vinte e uma', 21], ['vinte e dois', 22],
-    ['vinte e duas', 22], ['vinte e tres', 23],
+    ['vinte e duas', 22], ['vinte e tres', 23], ['dezassete', 17],
   ])
+  const units = ['zero', 'um', 'dois', 'tres', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove']
+  const tens = ['vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa']
+  tens.forEach((word, index) => {
+    const base = (index + 2) * 10
+    spokenAges.set(word, base)
+    units.slice(1).forEach((unit, offset) => spokenAges.set(`${word} e ${unit}`, base + offset + 1))
+    spokenAges.set(`${word} e uma`, base + 1)
+    spokenAges.set(`${word} e duas`, base + 2)
+  })
+  spokenAges.set('cem', 100)
+  for (const [word, number] of [...spokenAges]) {
+    if (number > 0 && number <= 20) spokenAges.set(`cento e ${word}`, 100 + number)
+  }
   const numeric = /^\d{1,3}$/u.test(String(value).trim()) ? Number(value) : null
   const age = numeric ?? spokenAges.get(normalize(value))
   if (age == null) return undefined
@@ -145,23 +158,143 @@ const isCivilDate = value => {
   return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
 }
 
+const cleanArgument = text => text.trim().replace(/[.!?;]+$/u, '').trim()
+const validName = name => name.length > 0 && name.length <= 160
+
+// Unlike session commands, these commands have a delimited entity argument:
+// the entire argument must match, never just a name embedded in other text.
+const exactTarget = (text, entities, label, getName = entity => entity.name) => {
+  const matches = entities.filter(entity => normalize(getName(entity)) === normalize(cleanArgument(text)))
+  if (matches.length === 1) return { entity: matches[0] }
+  return { error: matches.length > 1
+    ? `Encontrei mais de um ${label} com esse nome. Informe um nome único.`
+    : `Não encontrei ${label} com esse nome exato. Mencione apenas um por comando.` }
+}
+
+// Read only explicit trailing attributes; never normalize the stored name.
+const patientAttributes = input => {
+  let rest = cleanArgument(input)
+  const patch = {}
+  for (;;) {
+    const modality = /\s+(?:(?:com|na|em)\s+modalidade(?:\s+preferida)?|modalidade(?:\s+preferida)?|(?:com|no|na|em)\s+atendimento)\s+(\S+)$/iu.exec(rest)
+      || /\s+(?:com\s+|na\s+|em\s+)?(online|presencial)$/iu.exec(rest)
+    if (modality) {
+      const value = normalize(modality[1])
+      if (Object.hasOwn(patch, 'preferredModality') || !['online', 'presencial'].includes(value)) {
+        return { error: 'Informe uma única modalidade: Online ou Presencial.' }
+      }
+      patch.preferredModality = value === 'online' ? 'Online' : 'Presencial'
+      rest = rest.slice(0, modality.index).trim()
+      continue
+    }
+    const age = /\s+(?:com|de)\s+((?:(?!\b(?:com|de)\b).)+?)\s+anos?$/iu.exec(rest)
+    if (age) {
+      const value = parseAge(age[1])
+      if (Object.hasOwn(patch, 'age') || value === undefined) return { error: 'A idade deve ser um número inteiro entre 0 e 120 anos.' }
+      patch.age = value
+      rest = rest.slice(0, age.index).trim()
+      continue
+    }
+    break
+  }
+  if (/\s+(?:com|de)\s+\d|\s+(?:(?:com|na|em)\s+)?modalidade\b/iu.test(rest)) {
+    return { error: 'Informe atributos explícitos: idade em anos e uma modalidade Online ou Presencial.' }
+  }
+  return { name: rest, patch }
+}
+
 const parsePatientCreation = text => {
-  const match = /^(?:cadastrar|criar|adicionar)\s+(?:um\s+)?paciente[.!?,:]?\s+(?:chamado\s+|chamada\s+)?(.+?)(?:\s+com\s+(\d{1,3}|[\p{L}]+(?:\s+e\s+[\p{L}]+){0,2})\s+anos?)?[.!?]*$/iu.exec(text)
+  const match = /^(?:(?:cadastrar|cadastre|cadastra|criar|crie|cria|adicionar|adicione|adiciona)\s+(?:um\s+|uma\s+)?(?:novo\s+)?paciente|novo\s+paciente)[.!?,:]?\s+(?:chamad[oa]\s+)?(.+)$/iu.exec(text)
   if (!match) return null
-  const name = match[1].trim().replace(/[.!?]+$/g, '').trim()
-  if (!name || name.length > 160) return refuse('Informe um nome de paciente com até 160 caracteres.')
-  const age = parseAge(match[2])
-  if (age === undefined) return refuse('A idade deve ser um número inteiro entre 0 e 120 anos.')
-  const patientDraft = { name, age }
+  const parsed = patientAttributes(match[1])
+  if (parsed.error) return refuse(parsed.error)
+  const { name, patch } = parsed
+  if (!validName(name)) return refuse('Informe um nome de paciente com até 160 caracteres.')
+  if (/\s+e\s+(?:paciente\s+)?/iu.test(name)) return refuse('Mencione apenas um paciente por comando; use comandos separados para nomes com “e”.')
+  const patientDraft = { name, age: null, ...patch }
   return draft(
     { type: 'patient.create', draft: patientDraft },
-    `Rascunho de paciente: ${name}${age == null ? ' · idade não informada' : ` · ${age} anos`}.`,
+    `Rascunho de paciente: ${name}${patientDraft.age == null ? ' · idade não informada' : ` · ${patientDraft.age} anos`}${patch.preferredModality ? ` · ${patch.preferredModality}` : ''}.`,
     ['Nada será cadastrado até que a tela de destino revise e confirme este rascunho.'],
   )
 }
 
+const parsePatientManagement = (text, context) => {
+  const patients = context.patients || []
+  const lifecycle = /^(arquivar|arquive|arquiva|restaurar|restaure|restaura)\s+(?:o\s+)?paciente\s+(.+)$/iu.exec(text)
+  if (lifecycle) {
+    const restoring = /^restaur/iu.test(lifecycle[1])
+    const result = exactTarget(lifecycle[2], patients.filter(patient => restoring ? patient.archivedAt != null : patient.archivedAt == null), 'paciente')
+    if (result.error) return refuse(result.error)
+    return draft({ type: restoring ? 'patient.restore' : 'patient.archive', target: { patientId: result.entity.id } },
+      `${restoring ? 'Restaurar' : 'Arquivar'} paciente ${result.entity.name}.`)
+  }
+  const rename = /^(?:renomear|renomeie|renomeia)\s+(?:o\s+)?paciente\s+(.+?)\s+para\s+(.+)$/iu.exec(text)
+  const modality = /^(?:mudar|mude|muda|alterar|altere|altera)\s+(?:a\s+)?modalidade\s+(?:de|do|da)\s+(?:paciente\s+)?(.+?)\s+para\s+(.+)$/iu.exec(text)
+  const edit = /^(?:editar|edite|edita|atualizar|atualize|atualiza)\s+(?:o\s+)?paciente\s+(.+)$/iu.exec(text)
+  if (!rename && !modality && !edit) return null
+  let targetName
+  let patch
+  if (rename) {
+    targetName = rename[1]
+    const name = cleanArgument(rename[2])
+    if (!validName(name)) return refuse('Informe um nome de paciente com até 160 caracteres.')
+    patch = { name }
+  } else if (modality) {
+    targetName = modality[1]
+    const value = normalize(modality[2])
+    if (!['online', 'presencial'].includes(value)) return refuse('Informe uma única modalidade: Online ou Presencial.')
+    patch = { preferredModality: value === 'online' ? 'Online' : 'Presencial' }
+  } else {
+    const parsed = patientAttributes(edit[1])
+    if (parsed.error) return refuse(parsed.error)
+    targetName = parsed.name
+    patch = parsed.patch
+  }
+  if (!Object.keys(patch).length) return refuse('Informe explicitamente a idade, a modalidade ou um novo nome.')
+  const result = exactTarget(targetName, patients.filter(patient => patient.archivedAt == null), 'paciente')
+  if (result.error) return refuse(result.error)
+  return draft({ type: 'patient.update', target: { patientId: result.entity.id }, draft: patch },
+    `Alterar ${result.entity.name}: ${[patch.name && `nome ${patch.name}`, patch.age != null && `idade ${patch.age} anos`, patch.preferredModality && `modalidade ${patch.preferredModality}`].filter(Boolean).join(' · ')}.`)
+}
+
+const parseBehaviorManagement = (text, context) => {
+  const match = /^(criar|crie|cria|cadastrar|cadastre|cadastra|adicionar|adicione|adiciona|editar|edite|edita|atualizar|atualize|atualiza)\s+(?:um\s+|o\s+)?comportamento\s+(.+)$/iu.exec(text)
+  if (!match) return null
+  const editing = /^(?:edit|atualiz)/iu.test(match[1])
+  const description = /\s+com\s+descri[çc][ãa]o\s+(.+)$/iu.exec(match[2])
+  const titleArgument = (description ? match[2].slice(0, description.index) : match[2]).trim()
+  const availableBehaviors = (context.behaviors || []).filter(item => item.archivedAt == null)
+  const hasLiteralTarget = editing && availableBehaviors.some(item => normalize(item.title) === normalize(titleArgument))
+  const rename = editing && !hasLiteralTarget && /\s+para\s+(.+)$/iu.exec(titleArgument)
+  const titleOrTarget = match[2].slice(0, rename ? rename.index : description ? description.index : undefined).trim()
+  const patch = {}
+  if (!editing || rename) patch.title = rename ? rename[1].trim() : titleOrTarget
+  if (/\s+com\s+descri[çc][ãa]o\s*$/iu.test(match[2])) return refuse('Informe o texto da descrição.')
+  if (description) patch.description = description[1].trim()
+  if (patch.title != null && !validName(patch.title)) return refuse('Informe um título de comportamento com até 160 caracteres.')
+  if (patch.description != null && (!patch.description || patch.description.length > 1000)) return refuse('A descrição deve ter entre 1 e 1000 caracteres.')
+  if (!editing) {
+    return draft({ type: 'behavior.create', draft: { title: patch.title, description: patch.description ?? '' } },
+      `Rascunho de comportamento: ${patch.title}.`, ['Título e descrição mantidos literalmente, sem interpretação clínica.'])
+  }
+  if (!Object.keys(patch).length) return refuse('Informe uma descrição ou um novo título para o comportamento.')
+  const result = exactTarget(titleOrTarget, availableBehaviors, 'modelo de comportamento', item => item.title)
+  if (result.error) return refuse(result.error)
+  return draft({ type: 'behavior.update', target: { behaviorId: result.entity.id }, draft: patch },
+    `Rascunho de alteração do comportamento ${result.entity.title}.`, ['Texto mantido literalmente, sem interpretação clínica.'])
+}
+
+const parseWorkspaceNavigation = text => {
+  const match = /^(?:abrir|abra|abre)\s+(?:(?:a|o|as|os)\s+)?(.+)$/u.exec(text)
+  if (!match) return null
+  const spaces = { home: 'home', inicio: 'home', 'pagina inicial': 'home', pacientes: 'patients', agenda: 'agenda', sessoes: 'sessions', analises: 'analytics', graficos: 'analytics', ajustes: 'settings', configuracoes: 'settings' }
+  const space = Object.hasOwn(spaces, match[1]) ? spaces[match[1]] : null
+  return space ? draft({ type: 'workspace.open', target: { space } }, `Abrir ${match[1]}.`) : refuse('Informe um único espaço: início, pacientes, agenda, sessões, análises ou configurações.')
+}
+
 const parseRecurringAppointment = ({ text, context, referenceDate }) => {
-  if (!/\b(?:agendar|agenda|marcar|marca|criar|cria|adicionar|adiciona|incluir|inclui)\b/u.test(text) || !/\b(?:sessao|compromisso|serie)\b/u.test(text)) return null
+  if (!/^(?:agendar|agende|agenda|marcar|marque|marca|criar|crie|cria|adicionar|adicione|adiciona|incluir|inclui)\b/u.test(text) || !/\b(?:sessao|compromisso|serie)\b/u.test(text)) return null
   const patients = (context.patients || []).filter(patient => patient.archivedAt == null)
   const patientResult = uniqueEntity(text, patients, 'paciente')
   if (patientResult.error) return refuse(patientResult.error)
@@ -188,6 +321,47 @@ const parseRecurringAppointment = ({ text, context, referenceDate }) => {
     `Rascunho de série ${frequency.toLocaleLowerCase('pt-BR')} para ${patient.name}: ${weekday.label}, ${time.start}–${time.end}, a partir de ${startDate}, ${appointmentDraft.modality.toLocaleLowerCase('pt-BR')}.`,
     [! /\b(?:online|presencial)\b/u.test(text) ? `A modalidade presencial foi preenchida pelo padrão atual do formulário (${appointmentDraft.modality}).` : 'Modalidade identificada explicitamente no comando.', 'Revise paciente, data, horário e modalidade antes de confirmar. Nenhum compromisso foi criado.'],
   )
+}
+
+const parseSingleAppointment = ({ text, context, referenceDate }) => {
+  if (!/^(?:agendar|agende|agenda|marcar|marque|marca|criar|crie|cria|adicionar|adicione|adiciona)\s+(?:uma\s+)?sessao\b/u.test(text)) return null
+  const match = /^(?:agendar|agende|agenda|marcar|marque|marca|criar|crie|cria|adicionar|adicione|adiciona)\s+(?:uma\s+)?sessao\s+(?:avulsa\s+)?para\s+(.+?)\s+(hoje|amanha|(?:no\s+)?dia\s+\d{2}\/\d{2}\/\d{4})\s+(.+)$/u.exec(text)
+  if (!match && /\b(?:semanal|quinzenal|toda|todo|serie)\b/u.test(text)) return null
+  if (!match) return refuse('Informe um paciente, hoje, amanhã ou dia DD/MM/AAAA e um horário explícito para a sessão avulsa.')
+  const result = exactTarget(match[1], (context.patients || []).filter(patient => patient.archivedAt == null), 'paciente')
+  if (result.error) return refuse(result.error)
+  let startDate
+  if (match[2].includes('/')) {
+    const [, day, month, year] = /(\d{2})\/(\d{2})\/(\d{4})/u.exec(match[2])
+    startDate = `${year}-${month}-${day}`
+  } else {
+    if (!isCivilDate(referenceDate)) return refuse('Informe a data de referência válida para hoje ou amanhã.')
+    startDate = referenceDate
+    if (match[2] === 'amanha') {
+      const [year, month, day] = referenceDate.split('-').map(Number)
+      startDate = new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10)
+    }
+  }
+  if (!isCivilDate(startDate)) return refuse('Informe uma data válida para a sessão avulsa.')
+  const timeText = match[3].replace(/\s+(?:(?:com|na|em)\s+modalidade\s+)?(?:online|presencial)$/u, '')
+  // Validate the complete time clause, rather than silently ignoring another command.
+  if (!/^(?:as|pelas?)\s+/u.test(timeText)) return refuse('Informe um horário explícito para a sessão avulsa.')
+  const timePhrase = timeText.replace(/^(?:as|pelas?)\s+/u, '')
+  const validSpoken = [...spokenHours.keys()].some(hour => new RegExp(`^${escapeRegExp(hour)}(?:\\s+horas?)?(?:\\s+e\\s+meia)?(?:\\s+(?:da|de|pela)\\s+(?:manha|tarde|noite))?$`, 'u').test(timePhrase))
+  const validNumeric = /^\d{1,2}(?::[0-5]\d)?\s*(?:h(?:oras?)?)?(?:\s+e\s+meia)?(?:\s+(?:da|de|pela)\s+(?:manha|tarde|noite))?$/u.test(timePhrase)
+  if (!validSpoken && !validNumeric) return refuse('Informe apenas um horário e uma modalidade para a sessão avulsa.')
+  const time = parseTime(timeText)
+  if (!time) return refuse('Informe um horário explícito válido (por exemplo, 15:00 ou três da tarde).')
+  if (time.ambiguous) return refuse('O horário pode significar manhã ou noite. Diga, por exemplo, “9 da manhã” ou “21 horas”.')
+  if (/\bonline\b/u.test(match[3]) && /\bpresencial\b/u.test(match[3])) return refuse('Informe uma única modalidade: Online ou Presencial.')
+  const appointmentDraft = {
+    appointmentType: 'Avulsa', patientId: result.entity.id, patientName: result.entity.name,
+    startDate, start: time.start, end: time.end,
+    modality: /\bonline\b/u.test(match[3]) ? 'Online' : 'Presencial', meetingLink: '',
+  }
+  return draft({ type: 'appointment.single.create', draft: appointmentDraft },
+    `Rascunho de sessão avulsa para ${result.entity.name}: ${startDate}, ${time.start}–${time.end}, ${appointmentDraft.modality}.`,
+    [/\b(?:online|presencial)\b/u.test(match[3]) ? 'Modalidade identificada explicitamente no comando.' : 'A modalidade presencial foi preenchida pelo padrão atual do formulário.'])
 }
 
 const resolveSessionTarget = (text, context) => {
@@ -274,15 +448,33 @@ export function parseCentralCommand({ text, context = {}, referenceDate } = {}) 
   const normalized = normalize(rawText)
   if (!normalized) return refuse('Digite um comando para continuar.')
   if (normalized.length > 1200) return refuse('O comando passou do limite de 1200 caracteres. Divida-o em comandos menores.')
-  if (/\b(?:apague|apagar|exclua|excluir|delete|remova|remover|finalize|finalizar|cancele|cancelar|arquive|arquivar|restaure|restaurar)\b/u.test(normalized)) {
-    return refuse('Este comando não pode executar ações destrutivas ou finais. Faça essa ação manualmente na tela correspondente.')
+  // Descriptions and session field text are literal payloads, not commands.
+  const commandRegion = normalized.split(/\s+com\s+descricao\s+/u)[0]
+    .replace(/^(?:preencher|anotar|registrar)\s+(?:observacao|evolucao|procedimentos?|resultado|decisao|encaminhamento|fechamento)\s+(?:da|do)\s+sessao\s+de\s+(.+?)\s+com\s+.+$/u, '$1')
+  if (/^(?:(?:por favor|por gentileza)\s*[,،]?\s*)?(?:nao|nunca|jamais)\b/u.test(normalized)
+    || /\b(?:nao|nunca|jamais)\s+(?:cadastre|cadastra|cadastrar|crie|cria|criar|adicione|adiciona|adicionar|editar|edite|edita|mudar|mude|muda|renomear|renomeie|arquivar|arquive|arquiva|restaurar|restaure|restaura|agendar|agende|agenda|marcar|marque|marca|abrir|abra|abre|registrar|preencher|selecionar|definir)\b/u.test(commandRegion)) {
+    return refuse('O pedido contém uma negação. Informe um único comando afirmativo.')
+  }
+  if (/(?:\s+e\s+|;\s*|\s+depois\s+)(?:cadastrar|cadastre|cadastra|criar|crie|cria|adicionar|adicione|adiciona|editar|edite|mudar|mude|renomear|arquivar|arquive|restaurar|restaure|agendar|agende|marcar|marque|abrir|abra|finalizar|excluir)\b/u.test(commandRegion)) {
+    return refuse('Informe apenas uma ação por comando.')
+  }
+  if (/^(?:apague|apagar|exclua|excluir|delete|deletar|remova|remover|finalize|finalizar|cancele|cancelar)\b/u.test(normalized)) {
+    return refuse('Este comando não é suportado pelo parser. Use a ação explícita na tela correspondente.')
   }
   // Repair only the command prefix Whisper misheard; preserve the name exactly as spoken.
   const patientInput = rawText.replace(/^cada estrar(?=\s+paciente\b)/iu, 'cadastrar')
   const patient = parsePatientCreation(patientInput)
   if (patient) return patient
+  const patientManagement = parsePatientManagement(rawText, context)
+  if (patientManagement) return patientManagement
+  const behavior = parseBehaviorManagement(rawText, context)
+  if (behavior) return behavior
+  const navigation = parseWorkspaceNavigation(normalized)
+  if (navigation) return navigation
   const session = parseSessionDraft({ text: normalized, rawText, context })
   if (session) return session
+  const singleAppointment = parseSingleAppointment({ text: normalized, context, referenceDate })
+  if (singleAppointment) return singleAppointment
   const appointment = parseRecurringAppointment({ text: normalized, context, referenceDate })
   if (appointment) return appointment
   return refuse('Ainda não reconheço esse comando. Posso preparar um rascunho de paciente, uma série recorrente ou campos explícitos de uma sessão aberta.')

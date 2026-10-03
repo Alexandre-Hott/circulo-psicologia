@@ -323,7 +323,7 @@ test('a new standalone draft uses preference while a resumed draft keeps its ear
   await expect(page.getByLabel('Como o paciente chegou?')).toHaveValue('Rascunho sintético de Elisa')
 })
 
-test('online recurring reference is validated and reaches the agenda-origin session snapshot as text', async ({ page }) => {
+test('online recurring reference is validated and reaches the agenda-origin session snapshot as text', async ({ page, baseURL }) => {
   await page.goto('/')
   await page.getByRole('button',{name:/Agenda/}).click()
   await page.getByLabel('Data da agenda').fill('2026-09-29')
@@ -345,7 +345,7 @@ test('online recurring reference is validated and reaches the agenda-origin sess
   await occurrenceDialog.getByRole('button',{name:'Iniciar sessão'}).click()
   await expect(page.getByLabel('Modalidade')).toHaveValue('Online')
   await expect(page.getByLabel('Link externo (opcional)')).toHaveValue('https://example.test/room')
-  await expect(page).toHaveURL(/127\.0\.0\.1:5189/)
+  await expect(page).toHaveURL(`${baseURL}/`)
   await finishOpenedSession(page,'Referência online sintética')
   await expect(page.getByText('Referência externa: https://example.test/room')).toBeVisible()
   await expect(page.getByRole('group',{name:'Origem da agenda'})).not.toContainText('https://example.test/room')

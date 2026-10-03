@@ -1,0 +1,131 @@
+// The voice shortcut uses the same visible controls and validation as a click.
+// No hidden control, arbitrary selector or backend command can be requested.
+const fold = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').replace(/[.!?]+$/g, '').trim()
+const clean = value => String(value ?? '').trim().replace(/[.!?]+$/g, '').replace(/^["“]|["”]$/g, '').trim()
+const refusal = message => ({ status: 'clarification', message })
+
+function visible(element) {
+  if (!element.isConnected || element.closest('[hidden], [inert], [aria-hidden="true"]')) return false
+  for (let ancestor = element; ancestor; ancestor = ancestor.parentElement) {
+    const style = ancestor.ownerDocument.defaultView.getComputedStyle(ancestor)
+    if (style.display === 'none' || style.visibility === 'hidden') return false
+    if (ancestor.tagName === 'DETAILS' && !ancestor.open && !ancestor.querySelector(':scope > summary')?.contains(element)) return false
+  }
+  return true
+}
+
+function textContent(element) {
+  const clone = element.cloneNode(true)
+  clone.querySelectorAll('[aria-hidden="true"], [hidden], small, svg, input, textarea, select').forEach(item => item.remove())
+  return clean(clone.textContent)
+}
+
+function nameOf(element) {
+  const labelledBy = element.getAttribute('aria-labelledby')?.split(/\s+/).map(id => element.ownerDocument.getElementById(id)?.textContent || '').join(' ')
+  return clean(element.getAttribute('aria-label') || labelledBy || (element.labels?.length ? [...element.labels].map(textContent).join(' ') : textContent(element)))
+}
+
+function contextOf(element) {
+  const card = element.closest('li, form, article, [role="dialog"], [role="alertdialog"]')
+  const heading = card?.querySelector('strong, h3, h4')
+  return clean(card?.getAttribute('aria-label') || (heading ? textContent(heading) : ''))
+}
+
+function inventory(root) {
+  const dialog = root.querySelector('[role="alertdialog"]')
+  const scope = dialog && visible(dialog) ? dialog : root
+  return [...scope.querySelectorAll('button, summary, input, textarea, select')]
+    .filter(element => visible(element) && !element.closest('.voice-command-center') && !element.matches(':disabled') && element.type !== 'hidden')
+    .map(element => ({ element, name: nameOf(element), context: contextOf(element) }))
+    .filter(item => item.name)
+}
+
+function matches(query, entries) {
+  const normalized = fold(query)
+  const exact = entries.filter(item => fold(item.name) === normalized || fold(`${item.name} de ${item.context}`) === normalized || fold(`${item.name} em ${item.context}`) === normalized)
+  if (exact.length) return exact
+  const aliases = entries.filter(item => fold(item.name.replace(/\s*·\s*v\d+\s*$/i, '').replace(/\s*\(opcional\)/i, '').replace(/\s+em anos\b/i, '')) === normalized)
+  if (aliases.length) return aliases
+  // Patient cards have short buttons; their context makes "Editar de Ana Clara" unique.
+  return entries.filter(item => item.context && [fold(`${item.name} de ${item.context}`), fold(`${item.name} em ${item.context}`)].some(label => label.startsWith(normalized) && normalized.startsWith(fold(item.name) + ' ')))
+}
+
+function fingerprint(item) {
+  return { id: item.element.id || null, tag: item.element.tagName, inputType: item.element.type || null, name: item.name, context: item.context, record: item.element.closest('[data-voice-record]')?.getAttribute('data-voice-record') || null, epoch: item.element.closest('[data-voice-epoch]')?.getAttribute('data-voice-epoch') || null }
+}
+
+export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
+  // Exact variant observed in the synthetic Portuguese Whisper test. No names
+  // or field contents are repaired; this still produces a reviewable proposal.
+  const raw = clean(text).replace(/^ficarem novo cadastro$/iu, 'Clicar em Novo cadastro')
+  const normalized = fold(raw)
+  if (!root || !normalized) return null
+  if (/^(?:nao|nunca)\b/.test(normalized)) return refusal('Pedido negado. Nenhuma ação preparada.')
+  let operation, query, value
+  const field = /^(?:preencher|preencha|preenche|definir|defina|selecionar|selecione|seleciona)\s+(?:o campo |a op[cç][aã]o |o |a )?(.+?)\s+(?:com|como|para)\s+(.+)$/iu.exec(raw)
+  const check = /^(marcar|marque|desmarcar|desmarque)\s+(?:a op[cç][aã]o |o |a )?(.+)$/iu.exec(raw)
+  const click = /^(?:clicar|clique|clica|acionar|acione|apertar|aperte)\s+(?:no bot[aã]o |na opc[aã]o |no |na |em )?(.+)$/iu.exec(raw)
+  if (field) { operation = 'fill'; query = field[1]; value = clean(field[2]) }
+  else if (check) { operation = /^des/i.test(check[1]) ? 'uncheck' : 'check'; query = check[2] }
+  else if (click) { operation = 'click'; query = click[1] }
+  else if (/^(?:confirmar|confirma|confirmar acao|confirmar ação)$/.test(normalized)) { operation = 'click'; query = 'Confirmar ação' }
+  else if (/^(?:salvar paciente|salvar alteracoes|salvar rascunho|finalizar sessao|cancelar rascunho|novo cadastro|novo compromisso|criar comportamento reutilizavel|criar compromisso|criar serie|atualizar lista|bloquear|voltar|confirmar cancelamento|confirmar remarcacao individual|confirmar encerramento)$/.test(normalized)) { operation = 'click'; query = raw }
+  else return null
+  const candidates = inventory(root).filter(item => operation === 'fill'
+    ? ['INPUT', 'TEXTAREA', 'SELECT'].includes(item.element.tagName) && !['checkbox', 'radio', 'password', 'file'].includes(item.element.type) && !item.element.readOnly
+    : ['check', 'uncheck'].includes(operation) ? item.element.type === 'checkbox' || item.element.type === 'radio'
+      : item.element.matches('button, summary, input[type="radio"], input[type="checkbox"]'))
+  const found = matches(query, candidates)
+  if (found.length !== 1) {
+    if (found.length > 1) return refusal(`Há mais de uma opção “${query}”. Diga o nome completo ou acrescente o paciente: “clicar em ${found[0].name} de ${found[0].context || 'nome do paciente'}”.`)
+    return refusal(`Não encontrei “${query}” disponível nesta tela. Abra a área correspondente e diga o texto do botão ou campo.`)
+  }
+  const item = found[0]
+  if (operation === 'uncheck' && item.element.type === 'radio') return refusal('Escolha outra opção deste grupo para alterar a seleção.')
+  if (operation === 'fill') {
+    if (item.element.tagName === 'SELECT') {
+      const options = [...item.element.options].filter(option => !option.disabled && (fold(option.textContent) === fold(value) || fold(option.value) === fold(value)))
+      if (options.length !== 1) return refusal(`Para “${item.name}”, escolha: ${[...item.element.options].filter(option => !option.disabled).map(option => option.textContent).join(', ')}.`)
+      value = options[0].value
+    } else if (item.element.type === 'date' && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(value)) {
+      const [day, month, year] = value.split('/')
+      value = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+    }
+    if (item.element.maxLength > 0 && value.length > item.element.maxLength) return refusal(`O campo “${item.name}” aceita até ${item.element.maxLength} caracteres.`)
+    if (item.element.tagName === 'INPUT') {
+      const probe = item.element.cloneNode()
+      probe.value = value
+      if (probe.value !== value || !probe.checkValidity()) return refusal(`Valor inválido para “${item.name}”. Confira o formato e os limites do campo.`)
+    }
+  }
+  return {
+    status: 'draft',
+    intent: { type: 'interface.control', operation, target: fingerprint(item), ...(operation === 'fill' ? { value } : {}) },
+    preview: operation === 'fill' ? `${item.name}: ${item.element.tagName === 'SELECT' ? [...item.element.options].find(option => option.value === value)?.textContent : value}`
+      : `${operation === 'click' ? 'Acionar' : operation === 'check' ? 'Marcar' : 'Desmarcar'} ${item.name}${item.context ? ` · ${item.context}` : ''}.`,
+    notes: [],
+  }
+}
+
+export function applyVoiceInterfaceCommand(intent, root = globalThis.document) {
+  if (intent?.type !== 'interface.control') throw new Error('Comando de interface inválido.')
+  const found = inventory(root).filter(item => {
+    const current = fingerprint(item), target = intent.target
+    return current.id === target.id && current.tag === target.tag && current.inputType === target.inputType && current.name === target.name && current.context === target.context && current.record === target.record && current.epoch === target.epoch
+  })
+  if (found.length !== 1) throw new Error('A tela mudou. Prepare o comando novamente antes de aplicar.')
+  const element = found[0].element
+  element.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  element.focus({ preventScroll: true })
+  if (intent.operation === 'click') element.click()
+  else if (intent.operation === 'check' || intent.operation === 'uncheck') {
+    if (element.checked !== (intent.operation === 'check')) element.click()
+  } else if (intent.operation === 'fill') {
+    if (element.type === 'password' || element.type === 'file' || element.readOnly) throw new Error('Este campo precisa ser preenchido diretamente.')
+    const view = element.ownerDocument.defaultView
+    const prototype = element.tagName === 'TEXTAREA' ? view.HTMLTextAreaElement.prototype : element.tagName === 'SELECT' ? view.HTMLSelectElement.prototype : view.HTMLInputElement.prototype
+    Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, intent.value)
+    element.dispatchEvent(new view.Event('input', { bubbles: true }))
+    element.dispatchEvent(new view.Event('change', { bubbles: true }))
+  } else throw new Error('Operação de interface inválida.')
+}

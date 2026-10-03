@@ -4,6 +4,8 @@ import DesktopAgenda from './DesktopAgenda.jsx'
 import DesktopAnalytics from './DesktopAnalytics.jsx'
 import DesktopSessions from './DesktopSessions.jsx'
 import VoiceCommandCenter from './VoiceCommandCenter.jsx'
+import { parseCentralCommand } from './centralCommandRouter.js'
+import { applyVoiceInterfaceCommand, parseVoiceInterfaceCommand } from './voiceInterfaceCommands.js'
 import { captureCommandAudio } from './localVoiceCapture.js'
 import { seedSyntheticDemo } from './desktopDemoSeed.js'
 import { checkDesktopUpdate, closeDesktopUpdate, installDesktopUpdate } from './desktopUpdater.js'
@@ -65,6 +67,20 @@ export default function DesktopVault() {
   const [agendaVoiceDraft, setAgendaVoiceDraft] = useState(null)
   const [sessionVoiceDraft, setSessionVoiceDraft] = useState(null)
   const [voiceNotice, setVoiceNotice] = useState('')
+  const [confirmation, setConfirmation] = useState(null)
+  const confirmationRef = useRef(null)
+  const confirmAction = message => new Promise(resolve => {
+    if (confirmationRef.current) { resolve(false); return }
+    confirmationRef.current = { resolve, generation: vaultGeneration.current }
+    setConfirmation(message)
+  })
+  const answerConfirmation = accepted => {
+    const pending = confirmationRef.current
+    confirmationRef.current = null
+    setConfirmation(null)
+    pending?.resolve(Boolean(accepted && pending.generation === vaultGeneration.current))
+  }
+  useEffect(() => () => confirmationRef.current?.resolve(false), [])
   const voiceCaptureRef = useRef(null)
   const voiceFocusTarget = useRef(null)
   const [updateState, setUpdateState] = useState({ phase: 'checking' })
@@ -95,7 +111,11 @@ export default function DesktopVault() {
   }, [status?.unlocked])
   useEffect(() => () => voiceCaptureRef.current?.abort(), [])
   useEffect(() => {
-    if (space === 'home' && status?.unlocked) return
+    voiceCaptureRef.current?.abort()
+    setVoiceIntent(null)
+  }, [space])
+  useEffect(() => {
+    if (status?.unlocked) return
     voiceCaptureRef.current?.abort()
     voiceCaptureRef.current = null
   }, [space, status?.unlocked])
@@ -128,7 +148,9 @@ export default function DesktopVault() {
     try {
       captured = await captureCommandAudio({ signal: controller.signal })
       serializedSamples = Array.from(captured.samples)
-      return await invoke('voice_transcribe', { samples: serializedSamples, sampleRate: captured.sampleRate, patientNames })
+      const transcript = await invoke('voice_transcribe', { samples: serializedSamples, sampleRate: captured.sampleRate, patientNames })
+      if (controller.signal.aborted) throw new DOMException('Captura cancelada.', 'AbortError')
+      return transcript
     } finally {
       captured?.samples.fill(0)
       serializedSamples?.fill(0)
@@ -136,23 +158,67 @@ export default function DesktopVault() {
     }
   }
 
-  const openVoiceDraftForReview = () => {
-    if (!voiceIntent) return
-    const intent = voiceIntent
+  const prepareVoiceCommand = request => {
+    if (confirmationRef.current) {
+      const words = request.text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[.!?]/g, '').trim()
+      if (/^(?:confirmar|confirma|confirmar acao|sim)$/.test(words)) return { status: 'confirmation', intent: { type: 'confirmation.answer', accepted: true } }
+      if (/^(?:voltar|nao|cancelar|cancelar acao)$/.test(words)) return { status: 'confirmation', intent: { type: 'confirmation.answer', accepted: false } }
+      return { status: 'clarification', message: 'Há uma confirmação aberta. Diga “confirmar” ou “voltar”.' }
+    }
+    const control = parseVoiceInterfaceCommand(request.text)
+    if (control?.status === 'draft' || /^criar comportamento reutiliz[aá]vel[.!?]*$/iu.test(request.text.trim())) return control
+    const specific = parseCentralCommand(request)
+    if (specific.status === 'draft') return specific
+    return control || specific
+  }
+  const openVoiceDraftForReview = async (requestedIntent) => {
+    const intent = requestedIntent?.type?.includes('.') ? requestedIntent : voiceIntent
+    if (!intent) return
     setVoiceNotice('')
-    if (intent.type === 'patient.create') {
+    setVoiceIntent(null)
+    if (intent.type === 'confirmation.answer') { answerConfirmation(intent.accepted); return }
+    if (!vaultUnlocked.current || busyRef.current) { setVoiceNotice('Aguarde a operação atual antes de aplicar o comando.'); return }
+    if (confirmationRef.current) { setVoiceNotice('Responda à confirmação aberta antes de continuar.'); return }
+    if (intent.type === 'interface.control') {
+      try { applyVoiceInterfaceCommand(intent) } catch (reason) { setVoiceNotice(reason.message) }
+      return
+    }
+    if (intent.type === 'workspace.open') {
+      const destination = intent.target.space
+      if (destination === 'agenda') { setAgendaOpen(true); setQuickStart(false); setAgendaRecordPatientId('') }
+      if (destination === 'sessions') setSessionsOpen(true)
+      setSpace(destination)
+      return
+    }
+    if (intent.type === 'patient.create' || intent.type === 'patient.update') {
+      if (patientFormOpen && (form.name.trim() || editing) && !await confirmAction('Substituir o cadastro que está sendo preenchido pelo pedido de voz?')) return
       voiceFocusTarget.current = 'patients'
-      setEditing(null)
-      setForm({ ...emptyPatientForm(), name: intent.draft.name, age: intent.draft.age == null ? '' : String(intent.draft.age) })
+      const existing = intent.type === 'patient.update' ? patients.find(item => item.id === intent.target.patientId && item.archivedAt == null) : null
+      if (intent.type === 'patient.update' && !existing) { setVoiceNotice('Paciente não está mais disponível. Atualize o cadastro e tente novamente.'); return }
+      setEditing(existing)
+      const filled = { ...emptyPatientForm(), ...(existing || {}), ...intent.draft }
+      setForm({ name: filled.name, age: filled.age == null ? '' : String(filled.age), selfRequester: filled.selfRequester || '', preferredModality: filled.preferredModality || '' })
       setPatientFormOpen(true)
       setSpace('patients')
-    } else if (intent.type === 'appointment.recurring.create') {
+    } else if (intent.type === 'patient.archive' || intent.type === 'patient.restore') {
+      const listed = await invoke('patient_list', { includeArchived: true })
+      const patient = listed.find(item => item.id === intent.target.patientId)
+      if (!patient || (intent.type === 'patient.archive') !== (patient.archivedAt == null)) { setVoiceNotice('O estado do cadastro mudou. Prepare o comando novamente.'); return }
+      await changeArchive(patient)
+    } else if (intent.type === 'appointment.recurring.create' || intent.type === 'appointment.single.create') {
+      const agendaForm = document.querySelector('form[aria-label="Novo compromisso"]')
+      if (agendaForm && !await confirmAction('Substituir o compromisso que está sendo preenchido pelo pedido de voz?')) return
       voiceFocusTarget.current = 'agenda'
       setAgendaVoiceDraft({ ...intent.draft, commandId: crypto.randomUUID() })
       setAgendaRecordPatientId('')
       setQuickStart(false)
       setAgendaOpen(true)
       setSpace('agenda')
+    } else if (intent.type === 'behavior.create' || intent.type === 'behavior.update') {
+      if (sessionsRef.current?.hasOtherUnsavedEditors() && !await confirmAction('Substituir os campos não salvos da biblioteca pelo pedido de voz?')) return
+      setSessionVoiceDraft({ ...intent, commandId: crypto.randomUUID() })
+      setSessionsOpen(true)
+      setSpace('sessions')
     } else if (intent.type === 'session.draft.update') {
       if (!activeDraft || activeDraft.id !== intent.target.sessionDraftId || activeDraft.patientId !== intent.target.patientId) {
         setVoiceNotice('O rascunho de sessão não está mais aberto. Abra a sessão correta e prepare o comando novamente.')
@@ -165,7 +231,10 @@ export default function DesktopVault() {
       setSessionsOpen(true)
       setSpace('sessions')
     }
-    setVoiceIntent(null)
+  }
+  const applyVoiceCommand = async intent => {
+    try { await openVoiceDraftForReview(intent) }
+    catch (reason) { setVoiceNotice(String(reason?.message || reason)) }
   }
 
   useEffect(() => {
@@ -213,7 +282,7 @@ export default function DesktopVault() {
       setUpdateState({ phase: 'forms-open', version })
       return
     }
-    if (!window.confirm(`Instalar Círculo ${version}? O aplicativo será fechado durante a instalação. Salve seu trabalho antes de continuar.`)) return
+    if (!await confirmAction(`Instalar Círculo ${version}? O aplicativo será fechado durante a instalação. Salve seu trabalho antes de continuar.`)) return
     updateBusy.current = true
     setUpdateState({ phase: 'saving', version })
     try {
@@ -255,6 +324,11 @@ export default function DesktopVault() {
     setHomeAgenda({ state: 'loading', items: [] })
     setHomeAgendaRetry(value => value + 1)
     await refreshAuto()
+    if (vaultUnlocked.current) {
+      const generation = vaultGeneration.current
+      const [behaviors, indicators] = await Promise.all([invoke('behavior_list'), invoke('indicator_catalog')])
+      if (vaultUnlocked.current && generation === vaultGeneration.current) { setVoiceBehaviors(behaviors); setVoiceIndicators(indicators) }
+    }
   }
 
   const loadPatients = async (includeArchived = showArchived) => {
@@ -327,7 +401,7 @@ export default function DesktopVault() {
   }
   const changePartyArchive = async party => {
     const verb = party.archivedAt == null ? 'Arquivar' : 'Restaurar'
-    if (!window.confirm(`${verb} o vínculo de ${party.name}?`)) return
+    if (!await confirmAction(`${verb} o vínculo de ${party.name}?`)) return
     setBusy(true); setError(''); setMessage('')
     const patientId = partyPatientId
     const selection = partySelection.current
@@ -397,7 +471,7 @@ export default function DesktopVault() {
   }
   const changeArchive = async (patient) => {
     const action = patient.archivedAt == null ? 'Arquivar' : 'Restaurar'
-    if (!window.confirm(`${action} o cadastro de ${patient.name}?`)) return
+    if (!await confirmAction(`${action} o cadastro de ${patient.name}?`)) return
     setBusy(true); setError(''); setMessage('')
     try {
       const saved = await invoke(patient.archivedAt == null ? 'patient_archive' : 'patient_restore', { id: patient.id, revision: patient.revision })
@@ -411,6 +485,7 @@ export default function DesktopVault() {
     finally { setBusy(false) }
   }
   const clearUnlockedState = () => {
+    answerConfirmation(false)
     vaultGeneration.current += 1
     patientRequest.current += 1
     vaultUnlocked.current = false
@@ -527,7 +602,7 @@ export default function DesktopVault() {
 
   const toggleSessions = async () => {
     if (!sessionsOpen) { setSessionsOpen(true); return }
-    if (sessionsRef.current?.hasOtherUnsavedEditors() && !window.confirm('Fechar Sessões e descartar contexto, adendo ou comportamento ainda não salvos?')) return
+    if (sessionsRef.current?.hasOtherUnsavedEditors() && !await confirmAction('Fechar Sessões e descartar contexto, adendo ou comportamento ainda não salvos?')) return
     setBusy(true); setError('')
     try {
       await sessionsRef.current?.savePending()
@@ -563,7 +638,7 @@ export default function DesktopVault() {
   const restoreBackup = async () => {
     const incomplete = preview?.profileState === 'incomplete'
     const action = incomplete ? 'mover todos os arquivos do perfil incompleto para uma quarentena local sem sobrescrevê-los e criar um novo cofre' : preview?.replacesExisting ? 'SUBSTITUIR o único perfil local após criar uma cópia de segurança cifrada' : 'criar um cofre local vazio a partir deste backup com a nova senha local'
-    if (!window.confirm(`Confirmar restauração? Ela vai ${action}. Confira se este é o backup correto antes de continuar.`)) return
+    if (!await confirmAction(`Confirmar restauração? Ela vai ${action}. Confira se este é o backup correto antes de continuar.`)) return
     setBusy(true)
     setError('')
     setMessage('')
@@ -603,7 +678,7 @@ export default function DesktopVault() {
 
   const restoreLocalAutoBackup = async () => {
     if (!localAutoValidated) return
-    if (!window.confirm('Substituir o banco local pela última cópia automática cifrada? O banco anterior será preservado em arquivo local.')) {
+    if (!await confirmAction('Substituir o banco local pela última cópia automática cifrada? O banco anterior será preservado em arquivo local.')) {
       setLocalAutoPassword('')
       setLocalAutoValidated(false)
       return
@@ -658,7 +733,7 @@ export default function DesktopVault() {
 
   const loadSyntheticDemo = async () => {
     if (!status?.unlocked || busyRef.current) return
-    if (!window.confirm('Carregar dados fictícios de demonstração no cofre atual? A ação adiciona pacientes, modelos, compromissos e sessões Exemplo Demo; não apaga dados existentes. Se já estiverem presentes, não serão duplicados.')) return
+    if (!await confirmAction('Carregar dados fictícios de demonstração no cofre atual? A ação adiciona pacientes, modelos, compromissos e sessões Exemplo Demo; não apaga dados existentes. Se já estiverem presentes, não serão duplicados.')) return
     setBusy(true); setError(''); setMessage('')
     try {
       const result = await seedSyntheticDemo()
@@ -677,18 +752,19 @@ export default function DesktopVault() {
     }
   }
 
-  return <main className={`vault-page ${status?.unlocked ? 'vault-page-unlocked' : ''}`}>
+  return <main data-voice-epoch={`${space}:${sessionPatientId}:${activeDraft?.id || ''}:${editing?.id || ''}:${partyPatientId}`} className={`vault-page ${status?.unlocked ? 'vault-page-unlocked' : ''}`}>
     <section className="vault-card">
       <header className="vault-header"><div><p className="vault-eyebrow">CÍRCULO</p><h1>Círculo</h1><p>Um lugar para organizar o cuidado.</p></div>{status?.unlocked && space !== 'settings' && <button disabled={busy} className="vault-secondary vault-header-lock" onClick={() => lock(false)}>Bloquear</button>}</header>
       {updateState.phase === 'available' && <aside className="vault-updater" role="status"><strong>Atualização disponível: Círculo {updateState.version}</strong><p>Você pode continuar usando o aplicativo. A instalação só começa após sua confirmação.</p><button type="button" onClick={applyUpdate}>Baixar e instalar</button></aside>}
       {['saving', 'downloading', 'installing'].includes(updateState.phase) && <aside className="vault-updater" role="status"><strong>Atualização {updateState.version}</strong><p>{updateState.phase === 'saving' ? 'Salvando rascunho pendente…' : updateState.phase === 'installing' ? 'Download concluído. Iniciando instalação…' : `Baixando atualização…${updateState.total ? ` ${Math.min(100, Math.round(updateState.downloaded / updateState.total * 100))}%` : ''}`}</p>{updateState.phase === 'downloading' && updateState.total && <progress value={updateState.downloaded} max={updateState.total} aria-label="Progresso do download" />}</aside>}
-      {updateState.phase === 'forms-open' && <aside className="vault-updater" role="alert"><strong>Feche os formulários antes de instalar Círculo {updateState.version}.</strong><p>Cadastro, vínculo, Agenda ou editores de Sessões podem conter alterações não salvas. Salve o que precisar; depois feche ou descarte as alterações explicitamente.</p><button type="button" onClick={() => { if (!window.confirm('Fechar cadastro, vínculo e Agenda e descartar contexto, adendo ou comportamento não salvos em Sessões?')) return; try { sessionsRef.current?.discardOtherUnsavedEditors(); setPatientFormOpen(false); setEditing(null); setForm(emptyPatientForm()); clearParties(); setAgendaOpen(false); setUpdateState({ phase: 'available', version: updateState.version }) } catch (reason) { setUpdateState({ phase: 'forms-open', version: updateState.version, error: String(reason) }) } }}>Descartar edições e fechar formulários</button><button type="button" className="vault-secondary" onClick={applyUpdate}>Tentar novamente</button>{updateState.error && <p>{updateState.error}</p>}</aside>}
+      {updateState.phase === 'forms-open' && <aside className="vault-updater" role="alert"><strong>Feche os formulários antes de instalar Círculo {updateState.version}.</strong><p>Cadastro, vínculo, Agenda ou editores de Sessões podem conter alterações não salvas. Salve o que precisar; depois feche ou descarte as alterações explicitamente.</p><button type="button" onClick={async () => { if (!await confirmAction('Fechar cadastro, vínculo e Agenda e descartar contexto, adendo ou comportamento não salvos em Sessões?')) return; try { sessionsRef.current?.discardOtherUnsavedEditors(); setPatientFormOpen(false); setEditing(null); setForm(emptyPatientForm()); clearParties(); setAgendaOpen(false); setUpdateState({ phase: 'available', version: updateState.version }) } catch (reason) { setUpdateState({ phase: 'forms-open', version: updateState.version, error: String(reason) }) } }}>Descartar edições e fechar formulários</button><button type="button" className="vault-secondary" onClick={applyUpdate}>Tentar novamente</button>{updateState.error && <p>{updateState.error}</p>}</aside>}
       {updateState.phase === 'install-error' && <aside className="vault-updater" role="alert"><strong>Não foi possível instalar Círculo {updateState.version}.</strong><p>{updateState.error}</p><button type="button" onClick={retryUpdateCheck}>Verificar e tentar novamente</button></aside>}
       {updateState.phase === 'check-error' && <aside className="vault-updater" role="status"><p>Não foi possível verificar atualizações. Você pode continuar normalmente.</p><button type="button" onClick={retryUpdateCheck}>Tentar novamente</button></aside>}
       {updateState.phase === 'installed' && <aside className="vault-updater" role="status">Atualização {updateState.version} instalada. Reinicie o aplicativo para usar a nova versão.</aside>}
       {!status?.unlocked && <p>Entre com sua senha para acessar pacientes, agenda e sessões. A senha é solicitada na primeira abertura do dia.</p>}
       {error && <p className="vault-error" role="alert">{error}</p>}
       {message && <p className="vault-ok" role="status">{message}</p>}
+      {confirmation && <section className="vault-voice-confirmation" role="alertdialog" aria-label="Confirmar ação"><p>{confirmation}</p><small>Diga “confirmar” para continuar ou “voltar” para cancelar.</small><div><button type="button" onClick={() => answerConfirmation(true)}>Confirmar ação</button><button type="button" className="vault-secondary" onClick={() => answerConfirmation(false)}>Voltar</button></div></section>}
       {status?.profileState === 'empty' && !status.initialized && <details className="vault-advanced"><summary>Opções avançadas de restauração</summary><section className="vault-fresh-choice" aria-label="Começar neste dispositivo">
         <h2>Já tem um backup CBK1?</h2>
         <p>Restaure o cofre existente diretamente neste dispositivo. Você precisará do arquivo, da senha independente do backup e de uma nova senha local. Verificar o arquivo não cria nem substitui um cofre.</p>
@@ -710,7 +786,7 @@ export default function DesktopVault() {
         <input id="vault-password" type="password" autoComplete={status.initialized ? 'current-password' : 'new-password'} minLength={status.initialized ? undefined : 12} required value={password} onChange={event => setPassword(event.target.value)} />
         <button disabled={busy} type="submit">{status.initialized ? 'Desbloquear' : 'Criar cofre cifrado'}</button>
       </form> : !status.unlocked ? null : <div className="vault-workspace">
-        <nav className="vault-nav" aria-label="Espaços do Círculo">
+        <nav className="vault-nav" aria-label="Espaços do Círculo" inert={confirmation ? true : undefined}>
           <button type="button" aria-current={space === 'home' ? 'page' : undefined} onClick={() => { setHomeAgenda({ state: 'loading', items: [] }); setSpace('home') }}>Início</button>
           <button type="button" aria-current={space === 'patients' ? 'page' : undefined} onClick={() => setSpace('patients')}>Pacientes</button>
           <button type="button" aria-label="Abrir Agenda" aria-current={space === 'agenda' ? 'page' : undefined} onClick={() => { setAgendaRecordPatientId(''); setQuickStart(false); setAgendaOpen(true); setSpace('agenda') }}>Agenda</button>
@@ -718,8 +794,6 @@ export default function DesktopVault() {
           <button type="button" aria-current={space === 'analytics' ? 'page' : undefined} onClick={() => setSpace('analytics')}>Análises</button>
           <button type="button" className="vault-nav-settings" aria-current={space === 'settings' ? 'page' : undefined} onClick={() => setSpace('settings')}>Ajustes</button>
         </nav>
-        {space === 'home' && <section className="vault-panel vault-home" aria-label="Início">
-          <p className="vault-eyebrow">SEU ESPAÇO</p><h2>Olá, por onde começamos?</h2><p>Escolha uma área para continuar.</p>
           <VoiceCommandCenter
             patients={patients}
             behaviors={voiceBehaviors}
@@ -728,9 +802,18 @@ export default function DesktopVault() {
             referenceDate={currentCivilDate(AGENDA_TIME_ZONE)}
             onDraft={setVoiceIntent}
             onTranscribe={transcribeLocalVoice}
+            parseCommand={prepareVoiceCommand}
+            onApply={applyVoiceCommand}
+            onCancel={() => setVoiceIntent(null)}
+            pendingIntent={voiceIntent}
+            autoInterpret
+            compact
           />
-          {voiceIntent && <div className="vault-voice-review" role="status"><p>O rascunho está pronto para revisão na área correspondente. Ele ainda não foi salvo.</p><button type="button" onClick={openVoiceDraftForReview}>Revisar no formulário</button><button type="button" className="vault-secondary" onClick={() => setVoiceIntent(null)}>Descartar rascunho</button></div>}
+          {voiceIntent && <div className="vault-voice-review"><button type="button" disabled={busy} onClick={() => applyVoiceCommand()}>{voiceIntent.type === 'interface.control' || voiceIntent.type === 'workspace.open' || voiceIntent.type === 'patient.archive' || voiceIntent.type === 'patient.restore' ? 'Aplicar comando' : 'Revisar no formulário'}</button><button type="button" className="vault-secondary" onClick={() => setVoiceIntent(null)}>Descartar rascunho</button></div>}
           {voiceNotice && <p className="vault-error" role="alert">{voiceNotice}</p>}
+        <div inert={confirmation ? true : undefined}>
+        {space === 'home' && <section className="vault-panel vault-home" aria-label="Início">
+          <p className="vault-eyebrow">SEU ESPAÇO</p><h2>Olá, por onde começamos?</h2><p>Escolha uma área para continuar.</p>
           <div className="vault-home-actions">
             <button type="button" onClick={() => setSpace('patients')}><span aria-hidden="true">◯</span><strong>Pacientes</strong><small>Cadastros e vínculos</small></button>
             <button type="button" onClick={() => { setAgendaRecordPatientId(''); setQuickStart(false); setAgendaOpen(true); setSpace('agenda') }}><span aria-hidden="true">▦</span><strong>Agenda</strong><small>Compromissos e horários</small></button>
@@ -743,7 +826,7 @@ export default function DesktopVault() {
         {space === 'analytics' && <section className="vault-panel" aria-label="Análises"><div className="vault-section-heading"><div><p className="vault-eyebrow">ANÁLISES</p><h2>Análises</h2></div></div><DesktopAnalytics /></section>}
         <section className="vault-panel" hidden={space !== 'patients'} aria-label="Pacientes"><div className="vault-section-heading"><div><p className="vault-eyebrow">PACIENTES</p><h2>Pacientes</h2></div><button type="button" onClick={() => setPatientFormOpen(true)}>Novo cadastro</button></div>
         <p>Cadastre e consulte pacientes. Arquivar é reversível.</p>
-        {patientFormOpen && <form className="vault-form-panel" onSubmit={submitPatient} aria-label={editing ? 'Editar cadastro' : 'Novo cadastro'}>
+        {patientFormOpen && <form data-voice-record={editing?.id || "new-patient"} className="vault-form-panel" onSubmit={submitPatient} aria-label={editing ? 'Editar cadastro' : 'Novo cadastro'}>
           <label htmlFor="clinical-name">Nome</label><input id="clinical-name" maxLength={200} required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} />
           <label htmlFor="clinical-age">Idade em anos (opcional)</label><input id="clinical-age" inputMode="numeric" value={form.age} onChange={event => setForm({ ...form, age: event.target.value })} />
           <label htmlFor="clinical-self-requester">O próprio paciente solicitou o atendimento?</label><select id="clinical-self-requester" value={form.selfRequester} onChange={event => setForm({ ...form, selfRequester: event.target.value })}><option value="">Não informado</option><option value="yes">Sim</option><option value="no">Não</option></select>
@@ -757,8 +840,8 @@ export default function DesktopVault() {
         {partyPatientId && <section className="vault-parties" aria-label="Pessoas vinculadas ao paciente"><h3>Vínculos de {patients.find(patient => patient.id === partyPatientId)?.name}</h3><p>Registre somente o vínculo e seus papéis; nenhum contato é solicitado.</p><form onSubmit={saveParty} aria-label={editingParty ? 'Editar vínculo' : 'Novo vínculo'}><label htmlFor="party-name">Nome da pessoa ou instituição</label><input id="party-name" maxLength={200} required value={partyForm.name} onChange={event => setPartyForm({ ...partyForm, name: event.target.value })} /><label htmlFor="party-relation">Relação com o paciente</label><select id="party-relation" value={partyForm.relation} onChange={event => setPartyForm({ ...partyForm, relation: event.target.value })}>{relationOptions.map(value => <option key={value}>{value}</option>)}</select><fieldset><legend>Papéis (selecione ao menos um)</legend>{[['requester', 'Solicitante'], ['legalGuardian', 'Responsável legal'], ['administrativeContact', 'Contato administrativo']].map(([key, label]) => <label className="vault-checkbox" key={key}><input type="checkbox" checked={partyForm.roles[key]} onChange={event => setPartyForm({ ...partyForm, roles: { ...partyForm.roles, [key]: event.target.checked } })} />{label}</label>)}</fieldset><div><button disabled={busy || !Object.values(partyForm.roles).some(Boolean)} type="submit">{editingParty ? 'Salvar vínculo' : 'Adicionar vínculo'}</button>{editingParty && <button type="button" className="vault-secondary" onClick={() => { setEditingParty(null); setPartyForm(emptyPartyForm()) }}>Cancelar edição do vínculo</button>}</div></form><label className="vault-checkbox"><input type="checkbox" checked={showArchivedParties} onChange={async event => { const checked = event.target.checked; setShowArchivedParties(checked); try { await loadParties(partyPatientId, checked) } catch (reason) { setError(String(reason)) } }} /> Mostrar vínculos arquivados</label>{parties.length ? <ul className="vault-patients">{parties.map(party => <li key={party.id}><strong>{party.name}</strong> · {party.relation}{party.archivedAt != null && <em> · Arquivado</em>}<small>{[['requester', 'Solicitante'], ['legalGuardian', 'Responsável legal'], ['administrativeContact', 'Contato administrativo']].filter(([key]) => party.roles?.[key]).map(([, label]) => label).join(' · ')}</small><div>{party.archivedAt == null && <button disabled={busy} className="vault-secondary" onClick={() => { setEditingParty(party); setPartyForm({ name: party.name, relation: party.relation, roles: { ...party.roles } }) }}>Editar vínculo</button>}<button disabled={busy} className="vault-secondary" onClick={() => changePartyArchive(party)}>{party.archivedAt == null ? 'Arquivar vínculo' : 'Restaurar vínculo'}</button></div></li>)}</ul> : <p>Nenhum vínculo cadastrado.</p>}</section>}
         
         </section>
-        <section className="vault-panel" hidden={space !== 'agenda'} aria-label="Agenda"><div className="vault-section-heading"><div><p className="vault-eyebrow">AGENDA</p><h2>Compromissos</h2></div><button type="button" className="vault-secondary" onClick={() => setSpace('patients')}>Fechar Agenda</button></div>{agendaRecordPatientId && <p role="status">Paciente {patients.find(patient => patient.id === agendaRecordPatientId)?.name || 'selecionado'} já selecionado para um compromisso avulso. Confira data e horário e use “Criar e iniciar sessão”; você também pode iniciar uma sessão em um compromisso existente.</p>}{agendaOpen && <DesktopAgenda patients={patients} initialPatientId={agendaRecordPatientId} voiceCommandDraft={agendaVoiceDraft} onVoiceDraftApplied={commandId => setAgendaVoiceDraft(current => current?.commandId === commandId ? null : current)} onChanged={refreshWorkspace} onStartSession={startSessionFromAgenda} startAvulsaSignal={startAvulsaSignal} quickStart={quickStart} onQuickStartConsumed={() => setQuickStart(false)} />}</section>
-        <section className="vault-panel" hidden={space !== 'sessions'} aria-label="Sessões e registros"><div className="vault-section-heading"><div><p className="vault-eyebrow">SESSÕES / REGISTROS</p><h2>Sessões e registros</h2></div><button type="button" className="vault-secondary" disabled={busy} onClick={async () => { await toggleSessions(); if (sessionsOpen) setSpace('patients') }}>Fechar sessões</button></div><div className="vault-session-start"><p>Para começar um novo registro, crie ou escolha um compromisso na Agenda. Você também pode retomar um rascunho abaixo.</p><button type="button" onClick={() => { setAgendaRecordPatientId(''); setAgendaOpen(true); setSpace('agenda') }}>Criar compromisso avulso ou escolher agendado</button></div>{sessionsOpen && <DesktopSessions ref={sessionsRef} key={activeDraft?.id || 'timeline'} patientId={sessionPatientId} onPatientChange={setSessionPatientId} activeDraft={activeDraft} voiceCommandDraft={sessionVoiceDraft} onVoiceDraftApplied={commandId => setSessionVoiceDraft(current => current?.commandId === commandId ? null : current)} onDraftChange={setActiveDraft} onChanged={refreshWorkspace} onSessionMessage={setMessage} onStartRecord={openAgendaForRecord} />}</section>
+        <section className="vault-panel" hidden={space !== 'agenda'} aria-label="Agenda"><div className="vault-section-heading"><div><p className="vault-eyebrow">AGENDA</p><h2>Compromissos</h2></div><button type="button" className="vault-secondary" onClick={() => setSpace('patients')}>Fechar Agenda</button></div>{agendaRecordPatientId && <p role="status">Paciente {patients.find(patient => patient.id === agendaRecordPatientId)?.name || 'selecionado'} já selecionado para um compromisso avulso. Confira data e horário e use “Criar e iniciar sessão”; você também pode iniciar uma sessão em um compromisso existente.</p>}{agendaOpen && <DesktopAgenda onConfirm={confirmAction} patients={patients} initialPatientId={agendaRecordPatientId} voiceCommandDraft={agendaVoiceDraft} onVoiceDraftApplied={commandId => setAgendaVoiceDraft(current => current?.commandId === commandId ? null : current)} onChanged={refreshWorkspace} onStartSession={startSessionFromAgenda} startAvulsaSignal={startAvulsaSignal} quickStart={quickStart} onQuickStartConsumed={() => setQuickStart(false)} />}</section>
+        <section className="vault-panel" hidden={space !== 'sessions'} aria-label="Sessões e registros"><div className="vault-section-heading"><div><p className="vault-eyebrow">SESSÕES / REGISTROS</p><h2>Sessões e registros</h2></div><button type="button" className="vault-secondary" disabled={busy} onClick={async () => { await toggleSessions(); if (sessionsOpen) setSpace('patients') }}>Fechar sessões</button></div><div className="vault-session-start"><p>Para começar um novo registro, crie ou escolha um compromisso na Agenda. Você também pode retomar um rascunho abaixo.</p><button type="button" onClick={() => { setAgendaRecordPatientId(''); setAgendaOpen(true); setSpace('agenda') }}>Criar compromisso avulso ou escolher agendado</button></div>{sessionsOpen && <DesktopSessions onConfirm={confirmAction} ref={sessionsRef} key={activeDraft?.id || 'timeline'} patientId={sessionPatientId} onPatientChange={setSessionPatientId} activeDraft={activeDraft} voiceCommandDraft={sessionVoiceDraft} onVoiceDraftApplied={commandId => setSessionVoiceDraft(current => current?.commandId === commandId ? null : current)} onDraftChange={setActiveDraft} onChanged={refreshWorkspace} onSessionMessage={setMessage} onStartRecord={openAgendaForRecord} />}</section>
         <section className="vault-panel" hidden={space !== 'settings'} aria-label="Ajustes"><p className="vault-eyebrow">AJUSTES</p><h2>Proteção e dados locais</h2><p className="vault-ok">Cofre desbloqueado neste dispositivo.</p><p>Seus registros ficam neste computador. Para recuperá-los em outro, crie também um backup portátil com senha independente.</p><p className="vault-idle-note">Ao mudar o dia, o cofre pode pedir a senha novamente. Use Bloquear para fechar agora.</p><button disabled={busy} className="vault-secondary" onClick={() => lock(false)}>Bloquear</button>
       {status && <section className="vault-backup" aria-label="Backup e restauração">
         <h2>Backup e restauração manual</h2>
@@ -797,7 +880,7 @@ export default function DesktopVault() {
         <p>OpenSSL 3.x — Copyright (c) The OpenSSL Project. All rights reserved. Apache License 2.0.</p>
         <pre>{opensslLicense}</pre>
         <p>SQLite é disponibilizado em domínio público.</p>
-      </details></section></div>}
+      </details></section></div></div>}
       {status && !status.unlocked && !(status.profileState === 'empty' && !status.initialized) && <details className="vault-advanced" open={status.profileState === 'incomplete' ? true : undefined}><summary>Opções avançadas de backup e restauração</summary><section className="vault-backup" aria-label="Backup e restauração">
         <p>A restauração exige verificação da cópia e confirmação explícita.</p>
         {autoBackup?.dirty && <p role="alert" className="vault-error">Cópia automática pendente: {autoBackup.error || 'tente novamente'}. A última alteração pode não estar na cópia.</p>}

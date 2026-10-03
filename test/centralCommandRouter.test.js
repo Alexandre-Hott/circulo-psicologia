@@ -292,3 +292,129 @@ test('não transforma comandos destrutivos ou intenções arbitrárias em ação
     assert.equal(parseCentralCommand({ text, context }).status, 'clarification')
   }
 })
+
+test('variantes naturais de cadastro preservam nome, idade opcional e modalidade explícita', () => {
+  for (const prefix of ['Cadastre', 'Cadastra', 'Crie', 'Adiciona', 'Novo']) {
+    const result = parseCentralCommand({ text: `${prefix} paciente João D’Ávila` })
+    assert.deepEqual(result.intent, { type: 'patient.create', draft: { name: 'João D’Ávila', age: null } }, prefix)
+  }
+  for (const suffix of ['com quarenta e duas anos na modalidade Online', 'na modalidade Online com quarenta e duas anos']) {
+    const result = parseCentralCommand({ text: `Crie um novo paciente João de Souza ${suffix}` })
+    assert.deepEqual(result.intent.draft, { name: 'João de Souza', age: 42, preferredModality: 'Online' })
+  }
+  assert.deepEqual(parseCentralCommand({ text: 'Adiciona paciente Érica com atendimento presencial' }).intent.draft,
+    { name: 'Érica', age: null, preferredModality: 'Presencial' })
+})
+
+test('idades adultas faladas e limites numéricos são explícitos e não inferem ciclo de vida', () => {
+  for (const [word, age] of [['zero', 0], ['trinta e um', 31], ['sessenta e cinco', 65], ['noventa e nove', 99], ['cem', 100], ['cento e uma', 101], ['cento e dezenove', 119], ['cento e vinte', 120], ['120', 120]]) {
+    assert.deepEqual(parseCentralCommand({ text: `Novo paciente José com ${word} anos` }).intent.draft, { name: 'José', age }, word)
+  }
+  for (const word of ['121', '-1', '8.5', 'cento e vinte e um', 'muitos']) {
+    assert.equal(parseCentralCommand({ text: `Crie paciente José com ${word} anos` }).status, 'clarification', word)
+  }
+})
+
+test('atualização de paciente contém somente os campos explícitos e o ID exato', () => {
+  for (const [text, patch] of [
+    ['Editar paciente Ana Clara com 9 anos', { age: 9 }],
+    ['Atualize paciente Ana Clara com trinta e sete anos na modalidade Presencial', { age: 37, preferredModality: 'Presencial' }],
+    ['Mudar modalidade de Ana Clara para Online', { preferredModality: 'Online' }],
+    ['Renomear paciente Ana Clara para Ana Souza', { name: 'Ana Souza' }],
+    ['Renomear paciente Ana Clara para Caio Fictício', { name: 'Caio Fictício' }],
+  ]) {
+    assert.deepEqual(parseCentralCommand({ text, context }).intent, { type: 'patient.update', target: { patientId: 'patient-ana' }, draft: patch }, text)
+  }
+})
+
+test('atualização recusa alvo parcial, alvo duplo, duplicatas e patch inválido', () => {
+  for (const text of ['Editar paciente Ana com 9 anos', 'Editar paciente Ana Clara e Caio Fictício com 9 anos', 'Renomear paciente Ana Clara e Outra Pessoa para Bia', 'Editar paciente Ana Clara', 'Editar paciente Ana Clara com 121 anos', 'Mudar modalidade de Ana Clara para Online e Presencial', 'Editar paciente Ana Clara com modalidade Remota', 'Crie paciente Bia com 9', 'Crie paciente Bia com 9 anos com 10 anos', 'Crie paciente Ana Clara e Bia']) {
+    assert.equal(parseCentralCommand({ text, context }).status, 'clarification', text)
+  }
+  const duplicateContext = { ...context, patients: [...patients, { id: 'duplicate', name: 'Ana Clara' }] }
+  assert.equal(parseCentralCommand({ text: 'Editar paciente Ana Clara com 9 anos', context: duplicateContext }).status, 'clarification')
+  const nestedContext = { ...context, patients: [...patients, { id: 'short', name: 'Ana' }] }
+  assert.equal(parseCentralCommand({ text: 'Editar paciente Ana Clara com 9 anos', context: nestedContext }).intent.target.patientId, 'patient-ana')
+})
+
+test('arquiva somente paciente ativo e restaura somente paciente arquivado', () => {
+  const archived = { id: 'archived', name: 'Bia Souza', archivedAt: '2026-09-01' }
+  const lifecycleContext = { ...context, patients: [...patients, archived] }
+  assert.deepEqual(parseCentralCommand({ text: 'Arquive paciente Ana Clara', context: lifecycleContext }).intent,
+    { type: 'patient.archive', target: { patientId: 'patient-ana' } })
+  assert.deepEqual(parseCentralCommand({ text: 'Restaurar paciente Bia Souza', context: lifecycleContext }).intent,
+    { type: 'patient.restore', target: { patientId: 'archived' } })
+  for (const text of ['Arquivar paciente Bia Souza', 'Restaurar paciente Ana Clara', 'Arquivar paciente Ana Clara e Caio Fictício', 'Editar paciente Bia Souza com 10 anos', 'Excluir permanentemente paciente Ana Clara']) {
+    assert.equal(parseCentralCommand({ text, context: lifecycleContext }).status, 'clarification', text)
+  }
+})
+
+test('cria comportamento literal sem associar a sessão ou inferir paciente', () => {
+  const result = parseCentralCommand({ text: 'Criar comportamento Pede ajuda com descrição Solicita ajuda ao adulto', context })
+  assert.deepEqual(result.intent, { type: 'behavior.create', draft: { title: 'Pede ajuda', description: 'Solicita ajuda ao adulto' } })
+  const literal = parseCentralCommand({ text: 'Crie comportamento Não espera a vez! com descrição Não registrar diagnóstico; apenas observar.', context: {} })
+  assert.deepEqual(literal.intent, { type: 'behavior.create', draft: { title: 'Não espera a vez!', description: 'Não registrar diagnóstico; apenas observar.' } })
+  assert.deepEqual(parseCentralCommand({ text: 'Criar comportamento Pede ajuda' }).intent.draft, { title: 'Pede ajuda', description: '' })
+})
+
+test('edita descrição e título de comportamento com alvo delimitado pelo catálogo', () => {
+  assert.deepEqual(parseCentralCommand({ text: 'Editar comportamento Pede ajuda com descrição Solicita apoio.', context }).intent,
+    { type: 'behavior.update', target: { behaviorId: 'behavior-regulation' }, draft: { description: 'Solicita apoio.' } })
+  assert.deepEqual(parseCentralCommand({ text: 'Editar comportamento Pede ajuda para Solicita Apoio! com descrição Pede apoio ao adulto.', context }).intent,
+    { type: 'behavior.update', target: { behaviorId: 'behavior-regulation' }, draft: { title: 'Solicita Apoio!', description: 'Pede apoio ao adulto.' } })
+  assert.deepEqual(parseCentralCommand({ text: 'Editar comportamento Pede ajuda para Espera a vez', context }).intent.draft, { title: 'Espera a vez' })
+  for (const text of ['Editar comportamento Pede com descrição Apoio', 'Editar comportamento Pede ajuda e Espera a vez com descrição Apoio', 'Editar comportamento Pede ajuda', 'Criar comportamento Pede ajuda com descrição']) {
+    assert.equal(parseCentralCommand({ text, context }).status, 'clarification', text)
+  }
+  const duplicate = { ...context, behaviors: [...behaviors, { id: 'duplicate', title: 'Pede ajuda' }] }
+  assert.equal(parseCentralCommand({ text: 'Editar comportamento Pede ajuda com descrição Apoio', context: duplicate }).status, 'clarification')
+})
+
+test('navega para um único espaço tipado e recusa espaços ambíguos', () => {
+  for (const [label, space] of [['início', 'home'], ['home', 'home'], ['pacientes', 'patients'], ['agenda', 'agenda'], ['sessões', 'sessions'], ['análises', 'analytics'], ['configurações', 'settings']]) {
+    assert.deepEqual(parseCentralCommand({ text: `Abrir ${label}` }).intent, { type: 'workspace.open', target: { space } })
+  }
+  for (const text of ['Abrir agenda e análises', 'Abrir relatórios', 'Abrir sessões de Ana Clara']) assert.equal(parseCentralCommand({ text }).status, 'clarification', text)
+})
+
+test('negações e pedidos de várias ações não geram intents', () => {
+  for (const text of ['Não cadastre paciente Bia', 'Por favor, não criar comportamento Pede ajuda', 'Nunca arquivar paciente Ana Clara', 'Não restaure paciente Ana Clara', 'Não abrir agenda', 'Não agendar sessão para Ana Clara amanhã às três da tarde', 'Criar paciente Bia e arquivar paciente Ana Clara', 'Arquivar paciente Ana Clara e restaurar paciente Caio Fictício', 'Editar paciente Ana Clara com 9 anos e abrir agenda', 'Abrir agenda; excluir paciente Ana Clara']) {
+    const result = parseCentralCommand({ text, context, referenceDate: '2026-10-03' })
+    assert.equal(result.status, 'clarification', text)
+    assert.equal(result.intent, undefined, text)
+  }
+  assert.equal(parseCentralCommand({ text: 'Preencher observação da sessão de Ana Clara com Não registrar diagnóstico; apenas observar.', context }).intent.patch.value, 'Não registrar diagnóstico; apenas observar.')
+})
+
+test('sessão avulsa usa data civil de referência e horário explícito', () => {
+  for (const [dateText, date] of [['hoje', '2026-10-03'], ['amanhã', '2026-10-04'], ['dia 05/10/2026', '2026-10-05']]) {
+    const result = parseCentralCommand({ text: `Agendar sessão para Ana Clara ${dateText} às três da tarde`, context, referenceDate: '2026-10-03' })
+    assert.deepEqual(result.intent, { type: 'appointment.single.create', draft: {
+      appointmentType: 'Avulsa', patientId: 'patient-ana', patientName: 'Ana Clara', startDate: date,
+      start: '15:00', end: '15:50', modality: 'Presencial', meetingLink: '',
+    } }, dateText)
+  }
+  const online = parseCentralCommand({ text: 'Marcar uma sessão avulsa para Ana Clara no dia 05/10/2026 às 15:30 com modalidade Online', context })
+  assert.equal(online.intent.draft.modality, 'Online')
+  assert.equal(online.intent.draft.end, '16:20')
+  const rollover = parseCentralCommand({ text: 'Agendar sessão para Ana Clara amanhã às 15:00', context, referenceDate: '2026-12-31' })
+  assert.equal(rollover.intent.draft.startDate, '2027-01-01')
+})
+
+test('sessão avulsa recusa dados inválidos, ambiguidades e palavras extras', () => {
+  for (const text of ['Agendar sessão para Ana Clara hoje às 9', 'Agendar sessão para Ana Clara dia 31/02/2026 às 15:00', 'Agendar sessão para Ana Clara e Caio Fictício hoje às 15:00', 'Agendar sessão para Ana hoje às 15:00', 'Agendar sessão para Ana Clara hoje às três da tarde e Caio Fictício', 'Agendar sessão para Ana Clara hoje às três da tarde online presencial', 'Agendar sessão para Ana Clara hoje às 24:00', 'Agendar sessão para Ana Clara hoje', 'Agendar sessão para Ana Clara às 15:00']) {
+    assert.equal(parseCentralCommand({ text, context, referenceDate: '2026-10-03' }).status, 'clarification', text)
+  }
+  assert.equal(parseCentralCommand({ text: 'Agendar sessão para Ana Clara amanhã às 15:00', context }).status, 'clarification')
+  assert.equal(parseCentralCommand({ text: 'Agendar sessão para Ana Clara hoje às 15:00', context, referenceDate: '2026-02-30' }).status, 'clarification')
+})
+
+test('vocabulário de agenda em títulos e descrições não transforma comportamento em agendamento', () => {
+  const result = parseCentralCommand({ text: 'Crie comportamento Agendar sessão semanal com descrição Arquivar e restaurar são ações administrativas.', context })
+  assert.deepEqual(result.intent, { type: 'behavior.create', draft: { title: 'Agendar sessão semanal', description: 'Arquivar e restaurar são ações administrativas.' } })
+  const literalContext = { ...context, behaviors: [...behaviors, { id: 'literal', title: 'Pede ajuda para o adulto' }] }
+  assert.deepEqual(parseCentralCommand({ text: 'Editar comportamento Pede ajuda para o adulto com descrição Solicita apoio.', context: literalContext }).intent,
+    { type: 'behavior.update', target: { behaviorId: 'literal' }, draft: { description: 'Solicita apoio.' } })
+  assert.equal(parseCentralCommand({ text: 'Não sei se devo criar sessão semanal para Ana Clara toda quinta às 15:00', context, referenceDate: '2026-10-03' }).status, 'clarification')
+  assert.equal(parseCentralCommand({ text: 'Abrir constructor' }).status, 'clarification')
+})

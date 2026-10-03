@@ -40,7 +40,11 @@ try {
     $commands = @(
         'Marcar sessão semanal para Ana Clara toda quinta às quinze horas.',
         'Cadastrar paciente Bia Fictícia com nove anos.',
-        'Registrar comportamento Pede ajuda para Ana Clara na sessão.'
+        'Registrar comportamento Pede ajuda para Ana Clara na sessão.',
+        'Criar comportamento Espera a vez.',
+        'Abrir agenda.',
+        'Clicar em Novo cadastro.',
+        'Confirmar comando.'
     )
     $results = foreach ($index in 0..($commands.Count - 1)) {
         $wav = Join-Path $testDirectory "synthetic-command-$index.wav"
