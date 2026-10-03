@@ -1,5 +1,11 @@
 # Melhoria contínua de voz
 
+## Estado atual: instalado 0.2.41 — 03/10/2026
+
+[Evidência atual](validacao-voz-0.2.41.md). Concluídas as provas pendentes da 0.2.40 para payload completo de pacientes/solicitante/busca e edição/cancelamento da biblioteca. Corrigido rótulo iniciado por “O”; comportamentos homônimos têm opções explícitas e identidade/versão; proposta antiga não atravessa troca de editor ou rascunho. 23/23 E2E conjuntos e 223/223 JS passaram. Instalador local auditado/instalado, perfil preservado e smoke de processo aprovado. Sem Release/updater assinado ou validação do microfone humano.
+
+Próximos pontos: pacientes/vínculos homônimos, datas/horas faladas em campos genéricos e matriz consolidada das ações visíveis. A meta permanece ativa; senha/diálogos de arquivos são manuais, cofre bloqueado não oferece assistente e recovery desabilitado permanece fora da investigação. As seções seguintes são histórico, não o estado do instalador atual.
+
 ## Estado atual: instalado 0.2.40 — 03/10/2026
 
 Os trechos abaixo que dizem “ainda não incluído no instalador 0.2.39” são histórico de implementação: esses incrementos agora estão consolidados na 0.2.40. [Evidência e limites atuais](validacao-voz-0.2.40.md).

@@ -73,8 +73,11 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   if (!root || !normalized) return null
   if (/^(?:nao|nunca)\b/.test(normalized)) return refusal('Pedido negado. Nenhuma ação preparada.')
   let operation, query, value
-  const fieldPayload = /^(?:preencher|preencha|preenche|definir|defina|selecionar|selecione|seleciona)\s+(?:o campo |a op[cç][aã]o |o |a )?(.+)$/iu.exec(raw)?.[1]
-  const fields = fieldPayload ? [...fieldPayload.matchAll(/\s+(?:com|como|para)\s+/giu)].map(delimiter => ({ query: fieldPayload.slice(0, delimiter.index), value: clean(fieldPayload.slice(delimiter.index + delimiter[0].length)) })).filter(item => item.query && item.value) : []
+  const fieldPayload = /^(?:preencher|preencha|preenche|definir|defina|selecionar|selecione|seleciona)\s+(.+)$/iu.exec(raw)?.[1]
+  // An article can be part of the actual label ("O próprio paciente...").
+  // Resolve both forms against visible controls instead of stripping it blindly.
+  const payloads = fieldPayload ? [...new Set([fieldPayload, fieldPayload.replace(/^(?:o campo |a op[cç][aã]o |o |a )/iu, '')])] : []
+  const fields = payloads.flatMap(payload => [...payload.matchAll(/\s+(?:com|como|para)\s+/giu)].map(delimiter => ({ query: payload.slice(0, delimiter.index), value: clean(payload.slice(delimiter.index + delimiter[0].length)) }))).filter(item => item.query && item.value)
   const clearField = /^(?:limpar|limpe|esvaziar|esvazie)\s+(?:o campo |o |a )?(.+)$/iu.exec(raw)
   const check = /^(marcar|marque|desmarcar|desmarque)\s+(?:a op[cç][aã]o |o |a )?(.+)$/iu.exec(raw)
   const click = /^(?:clicar|clique|clica|acionar|acione|apertar|aperte)\s+(?:no bot[aã]o |na opc[aã]o |no |na |em )?(.+)$/iu.exec(raw)
