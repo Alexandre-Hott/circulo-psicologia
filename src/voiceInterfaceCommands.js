@@ -22,7 +22,7 @@ function textContent(element) {
 
 function nameOf(element) {
   const labelledBy = element.getAttribute('aria-labelledby')?.split(/\s+/).map(id => element.ownerDocument.getElementById(id)?.textContent || '').join(' ')
-  return clean(element.getAttribute('aria-label') || labelledBy || (element.labels?.length ? [...element.labels].map(textContent).join(' ') : textContent(element)))
+  return clean(element.getAttribute('data-voice-label') || element.getAttribute('aria-label') || labelledBy || (element.labels?.length ? [...element.labels].map(textContent).join(' ') : textContent(element)))
 }
 
 function contextOf(element) {
@@ -34,10 +34,21 @@ function contextOf(element) {
 function inventory(root) {
   const dialog = root.querySelector('[role="alertdialog"]')
   const scope = dialog && visible(dialog) ? dialog : root
+  const seenActions = new Set()
   return [...scope.querySelectorAll('button, summary, input, textarea, select')]
     .filter(element => visible(element) && !element.closest('.voice-command-center') && !element.matches(':disabled') && element.type !== 'hidden')
     .map(element => ({ element, name: nameOf(element), context: contextOf(element) }))
     .filter(item => item.name)
+    .filter(item => {
+      // Only explicitly identical, record-scoped button actions are equivalent.
+      // Matching text alone must never merge different patient/session targets.
+      const action = item.element.matches('button') && item.element.getAttribute('data-voice-action')
+      if (!action) return true
+      const key = `${action}:${fold(item.name)}`
+      if (seenActions.has(key)) return false
+      seenActions.add(key)
+      return true
+    })
 }
 
 function matches(query, entries) {
@@ -51,7 +62,7 @@ function matches(query, entries) {
 }
 
 function fingerprint(item) {
-  return { id: item.element.id || null, tag: item.element.tagName, inputType: item.element.type || null, name: item.name, context: item.context, record: item.element.closest('[data-voice-record]')?.getAttribute('data-voice-record') || null, epoch: item.element.closest('[data-voice-epoch]')?.getAttribute('data-voice-epoch') || null }
+  return { id: item.element.id || null, tag: item.element.tagName, inputType: item.element.type || null, name: item.name, context: item.context, action: item.element.getAttribute('data-voice-action') || null, record: item.element.closest('[data-voice-record]')?.getAttribute('data-voice-record') || null, epoch: item.element.closest('[data-voice-epoch]')?.getAttribute('data-voice-epoch') || null }
 }
 
 export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
@@ -62,11 +73,12 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   if (!root || !normalized) return null
   if (/^(?:nao|nunca)\b/.test(normalized)) return refusal('Pedido negado. Nenhuma ação preparada.')
   let operation, query, value
-  const field = /^(?:preencher|preencha|preenche|definir|defina|selecionar|selecione|seleciona)\s+(?:o campo |a op[cç][aã]o |o |a )?(.+?)\s+(?:com|como|para)\s+(.+)$/iu.exec(raw)
+  const fieldPayload = /^(?:preencher|preencha|preenche|definir|defina|selecionar|selecione|seleciona)\s+(?:o campo |a op[cç][aã]o |o |a )?(.+)$/iu.exec(raw)?.[1]
+  const fields = fieldPayload ? [...fieldPayload.matchAll(/\s+(?:com|como|para)\s+/giu)].map(delimiter => ({ query: fieldPayload.slice(0, delimiter.index), value: clean(fieldPayload.slice(delimiter.index + delimiter[0].length)) })).filter(item => item.query && item.value) : []
   const clearField = /^(?:limpar|limpe|esvaziar|esvazie)\s+(?:o campo |o |a )?(.+)$/iu.exec(raw)
   const check = /^(marcar|marque|desmarcar|desmarque)\s+(?:a op[cç][aã]o |o |a )?(.+)$/iu.exec(raw)
   const click = /^(?:clicar|clique|clica|acionar|acione|apertar|aperte)\s+(?:no bot[aã]o |na opc[aã]o |no |na |em )?(.+)$/iu.exec(raw)
-  if (field) { operation = 'fill'; query = field[1]; value = clean(field[2]) }
+  if (fields.length) { operation = 'fill'; query = fields[0].query; value = fields[0].value }
   else if (clearField) { operation = 'fill'; query = clearField[1]; value = '' }
   else if (check) { operation = /^des/i.test(check[1]) ? 'uncheck' : 'check'; query = check[2] }
   else if (click) { operation = 'click'; query = click[1] }
@@ -77,7 +89,12 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
     ? ['INPUT', 'TEXTAREA', 'SELECT'].includes(item.element.tagName) && !['checkbox', 'radio', 'password', 'file'].includes(item.element.type) && !item.element.readOnly
     : ['check', 'uncheck'].includes(operation) ? item.element.type === 'checkbox' || item.element.type === 'radio'
       : item.element.matches('button, summary, input[type="radio"], input[type="checkbox"]'))
-  const found = matches(query, candidates)
+  let found = matches(query, candidates)
+  if (fields.length) {
+    const viable = fields.map(item => ({ ...item, found: matches(item.query, candidates) })).filter(item => item.found.length)
+    if (viable.length > 1) return refusal('O pedido pode preencher campos diferentes. Diga um campo e um valor por comando.')
+    if (viable.length === 1) { query = viable[0].query; value = viable[0].value; found = viable[0].found }
+  }
   if (found.length !== 1) {
     if (found.length > 1) return refusal(`Há mais de uma opção “${query}”. Diga o nome completo ou acrescente o paciente: “clicar em ${found[0].name} de ${found[0].context || 'nome do paciente'}”.`)
     return refusal(`Não encontrei “${query}” disponível nesta tela. Abra a área correspondente e diga o texto do botão ou campo.`)
@@ -114,7 +131,7 @@ export function applyVoiceInterfaceCommand(intent, root = globalThis.document) {
   if (intent?.type !== 'interface.control') throw new Error('Comando de interface inválido.')
   const found = inventory(root).filter(item => {
     const current = fingerprint(item), target = intent.target
-    return current.id === target.id && current.tag === target.tag && current.inputType === target.inputType && current.name === target.name && current.context === target.context && current.record === target.record && current.epoch === target.epoch
+    return current.id === target.id && current.tag === target.tag && current.inputType === target.inputType && current.name === target.name && current.context === target.context && current.action === target.action && current.record === target.record && current.epoch === target.epoch
   })
   if (found.length !== 1) throw new Error('A tela mudou. Prepare o comando novamente antes de aplicar.')
   const element = found[0].element

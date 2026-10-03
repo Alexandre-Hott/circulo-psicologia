@@ -519,3 +519,145 @@ test('vocabulário de agenda em títulos e descrições não transforma comporta
   assert.equal(parseCentralCommand({ text: 'Não sei se devo criar sessão semanal para Ana Clara toda quinta às 15:00', context, referenceDate: '2026-10-03' }).status, 'clarification')
   assert.equal(parseCentralCommand({ text: 'Abrir constructor' }).status, 'clarification')
 })
+
+test('ações naturais de ocorrência preparam somente o contrato de abertura e uma prévia segura', () => {
+  for (const [text, action, date] of [
+    ['Iniciar sessão de Ana Clara hoje às 15 horas', 'start', '2026-10-03'],
+    ['Remarcar sessão de Ana Clara amanhã às três da tarde', 'remarcar', '2026-10-04'],
+    ['Cancelar sessão de Ana Clara no dia 10/10/2026 às 15:00', 'cancelar', '2026-10-10'],
+  ]) {
+    const result = parseCentralCommand({ text, context, referenceDate: '2026-10-03' })
+    assert.equal(result.status, 'draft', text)
+    assert.deepEqual(result.intent, {
+      type: 'agenda.occurrence.action', target: { patientId: 'patient-ana', date, start: '15:00', action },
+    })
+    assert.equal(formatCentralCommandPreview(result), result.preview)
+    assert.match(result.preview, /Ana Clara.*às 15:00/u)
+    assert.ok(result.preview.includes(date.split('-').reverse().join('/')))
+    if (action === 'start') assert.match(result.preview, /Abrir a sessão existente/u)
+    else assert.match(result.preview, new RegExp(`Abrir o formulário para ${action}.*sem salvar alterações`, 'u'))
+    assert.match(result.notes.join(' '), action === 'start' ? /Após confirmar.*cria ou retoma o rascunho/u : /Apenas abre o formulário.*confirm.*salvar/u)
+  }
+})
+
+test('ocorrência exige nome completo único e ativo, mesmo com nomes sobrepostos no cadastro', () => {
+  const expanded = { ...context, patients: [...patients,
+    { id: 'short', name: 'Ana' }, { id: 'archived', name: 'Ana Clara', archivedAt: '2026-09-01' },
+  ] }
+  assert.equal(parseCentralCommand({ text: 'Iniciar sessão de Ana Clara hoje às 15:00', context: expanded, referenceDate: '2026-10-03' }).intent.target.patientId, 'patient-ana')
+  for (const action of ['Iniciar', 'Remarcar', 'Cancelar']) {
+    for (const name of ['Ana', 'Clara', 'Ana Clara e Caio Fictício', 'Ana Clara por favor', 'Outra Pessoa']) {
+      assert.equal(parseCentralCommand({ text: `${action} sessão de ${name} hoje às 15:00`, context, referenceDate: '2026-10-03' }).status, 'clarification', name)
+    }
+    for (const patients of [
+      [{ id: 'archived', name: 'Ana Clara', archivedAt: '2026-09-01' }],
+      [...context.patients, { id: 'duplicate', name: 'Ana Clara' }],
+      [...context.patients, { id: 'duplicate', name: 'ÁNA CLARA' }],
+      [],
+    ]) {
+      assert.equal(parseCentralCommand({ text: `${action} sessão de Ana Clara hoje às 15:00`, context: { patients }, referenceDate: '2026-10-03' }).status, 'clarification')
+    }
+  }
+  assert.equal(parseCentralCommand({ text: '  INICIAR   SESSÃO DE ANA CLARA HOJE ÀS 15 HORAS! ', context, referenceDate: '2026-10-03' }).intent.target.patientId, 'patient-ana')
+})
+
+test('ocorrência resolve datas civis relativas e explícitas sem consultar sessão aberta', () => {
+  for (const [referenceDate, tomorrow] of [
+    ['2026-12-31', '2027-01-01'], ['2026-01-31', '2026-02-01'],
+    ['2024-02-28', '2024-02-29'], ['2024-02-29', '2024-03-01'], ['2026-02-28', '2026-03-01'],
+  ]) {
+    for (const [qualifier, date] of [['hoje', referenceDate], ['amanhã', tomorrow]]) {
+      const result = parseCentralCommand({ text: `Iniciar sessão de Ana Clara ${qualifier} às 15:00`, context: { patients }, referenceDate })
+      assert.equal(result.intent.target.date, date)
+    }
+  }
+  for (const referenceDate of [undefined, null, '', '2026-02-30', '03/10/2026', '2026-10-03T00:00:00Z']) {
+    for (const qualifier of ['hoje', 'amanhã']) {
+      assert.equal(parseCentralCommand({ text: `Remarcar sessão de Ana Clara ${qualifier} às 15:00`, context, referenceDate }).status, 'clarification')
+    }
+    assert.equal(parseCentralCommand({ text: 'Cancelar sessão de Ana Clara no dia 29/02/2024 às 15:00', context, referenceDate }).intent.target.date, '2024-02-29')
+  }
+  for (const date of ['31/02/2026', '29/02/2026', '31/04/2026', '00/10/2026', '10/00/2026', '10/13/2026', '10/10/0000', '1/10/2026', '10/10', '2026-10-10']) {
+    assert.equal(parseCentralCommand({ text: `Iniciar sessão de Ana Clara no dia ${date} às 15:00`, context }).status, 'clarification', date)
+  }
+  assert.equal(parseCentralCommand({ text: 'Iniciar sessão de Ana Clara amanhã às 15:00', context, referenceDate: '9999-12-31' }).status, 'clarification')
+})
+
+test('ocorrência consome horário completo sem impor duração e exige interpretação única', () => {
+  for (const [time, start] of [
+    ['15 horas', '15:00'], ['quinze horas', '15:00'], ['quinze', '15:00'],
+    ['três da tarde', '15:00'], ['três e meia da tarde', '15:30'], ['9 da manhã', '09:00'],
+    ['oito da noite', '20:00'], ['12 da tarde', '12:00'], ['doze da noite', '00:00'],
+    ['09:05', '09:05'], ['00:00', '00:00'], ['23:59', '23:59'], ['meia-noite', '00:00'],
+    ['vinte e três horas e meia', '23:30'],
+  ]) {
+    assert.equal(parseCentralCommand({ text: `Iniciar sessão de Ana Clara hoje às ${time}`, context, referenceDate: '2026-10-03' }).intent?.target.start, start, time)
+  }
+  for (const time of [
+    '3', 'três', 'três horas', '12 horas', '24:00', '25 horas', '15:60', '-1', '15.30',
+    '13 da tarde', 'zero da manhã', '12 da manhã', 'três e quinze da tarde',
+    'três e qualquer coisa da tarde', 'quinze bananas', '15:00 e meia',
+    '15 horas ou 16 horas', '15:00 e 16:00', '15 horas não', '15:00 por favor',
+  ]) {
+    const result = parseCentralCommand({ text: `Remarcar sessão de Ana Clara hoje às ${time}`, context, referenceDate: '2026-10-03' })
+    assert.equal(result.status, 'clarification', time)
+    assert.equal(result.intent, undefined, time)
+  }
+})
+
+test('cancelar só supera a recusa global com ocorrência inteiramente validada', () => {
+  for (const text of [
+    'Cancelar sessão de Ana Clara hoje às três', 'Cancelar sessão de Ana Clara no dia 31/02/2026 às 15:00',
+    'Cancelar sessão de Outra Pessoa hoje às 15:00', 'Cancelar sessão de Ana Clara hoje às 15:00 e algo mais',
+    'Cancelar sessão de Ana Clara amanhã às 15:00', 'Cancelar sessão de Ana Clara às 15:00',
+    'Cancelar sessão', 'Cancelar rascunho', 'Cancelar paciente Ana Clara',
+    'Cancele sessão de Ana Clara no dia 10/10/2026 às 15:00',
+  ]) {
+    const result = parseCentralCommand({ text, context })
+    assert.deepEqual(result, {
+      status: 'clarification', message: 'Este comando não é suportado pelo parser. Use a ação explícita na tela correspondente.',
+    }, text)
+  }
+  assert.equal(parseCentralCommand({ text: 'Cancelar sessão de Ana Clara hoje às 15:00', context, referenceDate: '2026-10-03' }).intent.target.action, 'cancelar')
+})
+
+test('ocorrência recusa conteúdo extra, negações e ações múltiplas em ambas as ordens', () => {
+  for (const action of ['iniciar', 'remarcar', 'cancelar']) {
+    const command = `${action} sessão de Ana Clara hoje às 15:00`
+    for (const text of [
+      `não ${command}`, `nunca ${command}`, `jamais ${command}`, `por favor, não ${command}`,
+      `${command} não`, `${command} para amanhã`, `${command} com modalidade Online`,
+      `${command} com descrição Abrir pacientes`, `${command} e abrir pacientes`,
+      `${command}; criar paciente Bia`, `${command} depois remarcar sessão de Caio Fictício amanhã às 15:00`,
+      `criar paciente Bia e ${command}`, `criar paciente Bia; ${command}`, `criar paciente Bia depois ${command}`,
+      `criar paciente Bia ou ${command}`, `criar paciente Bia, ${command}`, `criar paciente Bia em seguida ${command}`,
+      `criar paciente Bia e não ${command}`, `criar paciente Bia e nunca ${command}`,
+      `${action} sessão de Ana Clara hoje e amanhã às 15:00`,
+      `${action} sessão de Ana Clara hoje`, `${action} sessão de Ana Clara às 15:00`,
+    ]) {
+      const result = parseCentralCommand({ text, context, referenceDate: '2026-10-03' })
+      assert.equal(result.status, 'clarification', text)
+      assert.equal(result.intent, undefined, text)
+    }
+  }
+})
+
+test('parser de ocorrência não altera contexto nem chama efeitos externos', () => {
+  const frozenPatient = Object.freeze({ ...patients[0] })
+  const frozenSession = Object.freeze({ ...session })
+  const frozenContext = Object.freeze({
+    patients: Object.freeze([frozenPatient]), activeSessionDraft: frozenSession,
+    invoke: () => assert.fail('O parser não pode chamar o backend'),
+    save: () => assert.fail('O parser não pode salvar'),
+    openSession: () => assert.fail('O parser não executa a abertura da sessão'),
+  })
+  const before = structuredClone({ patients: frozenContext.patients, activeSessionDraft: frozenSession })
+  for (const action of ['iniciar', 'remarcar', 'cancelar']) {
+    const input = Object.freeze({ text: `${action} sessão de Ana Clara hoje às 15:00`, context: frozenContext, referenceDate: '2026-10-03' })
+    const result = parseCentralCommand(input)
+    assert.equal(result.status, 'draft')
+    assert.equal(result.intent.draft, undefined)
+    assert.equal(result.intent.patch, undefined)
+    assert.deepEqual({ patients: frozenContext.patients, activeSessionDraft: frozenSession }, before)
+  }
+})

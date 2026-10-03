@@ -316,6 +316,59 @@ const parseAgendaNavigation = (text, referenceDate) => {
     `Mostrar agenda ${label} ${day}/${month}/${year}.`)
 }
 
+// Occurrence lookup has no duration: accept the full clock range and consume
+// every time token rather than using the scheduling parser's spoken prefix.
+const parseOccurrenceTime = phrase => {
+  const match = /^(.*?)\s*(?:\s+(?:da|de|pela)\s+(manha|tarde|noite))?$/u.exec(phrase)
+  const clock = /^(\d{1,2}):([0-5]\d)$/u.exec(match[1])
+  const hourPhrase = /^(.*?)(?:\s+horas?)?(\s+e\s+meia)?$/u.exec(match[1])
+  const hourText = hourPhrase[1]
+  let hour = clock ? Number(clock[1]) : /^\d{1,2}$/u.test(hourText) ? Number(hourText) : spokenHours.get(hourText)
+  const minute = clock ? Number(clock[2]) : hourPhrase[2] ? 30 : 0
+  if (hour == null || hour > 23) return null
+  const period = match[2]
+  if (period) {
+    if (hour < 1 || hour > 12 || (period === 'manha' && hour === 12)) return null
+    if (period !== 'manha' && hour < 12) hour += 12
+    if (period === 'noite' && hour === 12) hour = 0
+  } else if (!clock && hour >= 1 && hour <= 12) {
+    return null
+  }
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
+const parseOccurrenceAction = (text, context, referenceDate) => {
+  if (!/^(?:iniciar|remarcar|cancelar)\s+sessao\b/u.test(text)) return null
+  const match = /^(iniciar|remarcar|cancelar)\s+sessao\s+de\s+(.+?)\s+(hoje|amanha|no dia \d{2}\/\d{2}\/\d{4})\s+as\s+(.+)$/u.exec(text)
+  if (!match) return refuse('Informe uma sessão com nome exato do paciente, hoje, amanhã ou no dia DD/MM/AAAA e horário explícito.')
+  const patient = exactTarget(match[2], (context.patients || []).filter(item => item.archivedAt == null), 'paciente')
+  if (patient.error) return refuse(patient.error)
+  let date
+  if (match[3].startsWith('no dia ')) {
+    const [day, month, year] = match[3].slice(7).split('/')
+    date = `${year}-${month}-${day}`
+  } else {
+    if (!isCivilDate(referenceDate)) return refuse('Informe uma data civil de referência válida (AAAA-MM-DD).')
+    date = referenceDate
+    if (match[3] === 'amanha') {
+      const tomorrow = new Date(`${date}T00:00:00Z`)
+      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
+      date = tomorrow.toISOString().slice(0, 10)
+    }
+  }
+  if (!isCivilDate(date)) return refuse('Informe uma data válida para a ocorrência.')
+  const start = parseOccurrenceTime(match[4])
+  if (!start) return refuse('Informe um horário explícito e sem ambiguidade, como 15:00 ou três da tarde.')
+  const action = match[1] === 'iniciar' ? 'start' : match[1]
+  const [year, month, day] = date.split('-')
+  const detail = `${patient.entity.name} em ${day}/${month}/${year} às ${start}`
+  return draft({ type: 'agenda.occurrence.action', target: { patientId: patient.entity.id, date, start, action } },
+    action === 'start'
+      ? `Abrir a sessão existente de ${detail}.`
+      : `Abrir o formulário para ${action} a ocorrência de ${detail}, sem salvar alterações.`,
+    [action === 'start' ? 'Após confirmar, o sistema cria ou retoma o rascunho da sessão existente.' : 'Apenas abre o formulário; informe o motivo e confirme na tela para salvar a alteração.'])
+}
+
 const parseWorkspaceNavigation = text => {
   const match = /^(?:abrir|abra|abre)\s+(?:(?:a|o|as|os)\s+)?(.+)$/u.exec(text)
   if (!match) return null
@@ -483,15 +536,19 @@ export function parseCentralCommand({ text, context = {}, referenceDate } = {}) 
   const commandRegion = normalized.split(/\s+com\s+descricao\s+/u)[0]
     .replace(/^(?:preencher|anotar|registrar)\s+(?:observacao|evolucao|procedimentos?|resultado|decisao|encaminhamento|fechamento)\s+(?:da|do)\s+sessao\s+de\s+(.+?)\s+com\s+.+$/u, '$1')
   if (/^(?:(?:por favor|por gentileza)\s*[,،]?\s*)?(?:nao|nunca|jamais)\b/u.test(normalized)
-    || /\b(?:nao|nunca|jamais)\s+(?:cadastre|cadastra|cadastrar|crie|cria|criar|adicione|adiciona|adicionar|editar|edite|edita|mudar|mude|muda|renomear|renomeie|arquivar|arquive|arquiva|restaurar|restaure|restaura|agendar|agende|agenda|marcar|marque|marca|abrir|abra|abre|mostrar|mostre|mostra|registrar|preencher|selecionar|definir)\b/u.test(commandRegion)) {
+    || /\b(?:nao|nunca|jamais)\s+(?:iniciar|remarcar|cancelar|cadastre|cadastra|cadastrar|crie|cria|criar|adicione|adiciona|adicionar|editar|edite|edita|mudar|mude|muda|renomear|renomeie|arquivar|arquive|arquiva|restaurar|restaure|restaura|agendar|agende|agenda|marcar|marque|marca|abrir|abra|abre|mostrar|mostre|mostra|registrar|preencher|selecionar|definir)\b/u.test(commandRegion)) {
     return refuse('O pedido contém uma negação. Informe um único comando afirmativo.')
   }
-  if (/(?:\s+e\s+|;\s*|\s+depois\s+)(?:cadastrar|cadastre|cadastra|criar|crie|cria|adicionar|adicione|adiciona|editar|edite|mudar|mude|renomear|arquivar|arquive|restaurar|restaure|agendar|agende|marcar|marque|abrir|abra|abre|mostrar|mostre|mostra|finalizar|excluir)\b/u.test(commandRegion)) {
+  if (/(?:\s+e\s+|;\s*|\s+depois\s+)(?:iniciar|remarcar|cancelar|cadastrar|cadastre|cadastra|criar|crie|cria|adicionar|adicione|adiciona|editar|edite|mudar|mude|renomear|arquivar|arquive|restaurar|restaure|agendar|agende|marcar|marque|abrir|abra|abre|mostrar|mostre|mostra|finalizar|excluir)\b/u.test(commandRegion)
+    || /(?:\s+ou\s+|,\s*|\s+em seguida\s+)(?:iniciar|remarcar|cancelar)\s+sessao\b/u.test(commandRegion)) {
     return refuse('Informe apenas uma ação por comando.')
   }
+  const occurrence = parseOccurrenceAction(normalized, context, referenceDate)
+  if (occurrence?.status === 'draft') return occurrence
   if (/^(?:apague|apagar|exclua|excluir|delete|deletar|remova|remover|finalize|finalizar|cancele|cancelar)\b/u.test(normalized)) {
     return refuse('Este comando não é suportado pelo parser. Use a ação explícita na tela correspondente.')
   }
+  if (occurrence) return occurrence
   // Repair only the command prefix Whisper misheard; preserve the name exactly as spoken.
   const patientInput = rawText.replace(/^cada estrar(?=\s+paciente\b)/iu, 'cadastrar')
   const patient = parsePatientCreation(patientInput)

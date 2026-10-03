@@ -36,8 +36,9 @@ async function openApp(page) {
       if (command === 'behavior_list') return behaviors
       if (command === 'indicator_catalog') return []
       if (command === 'voice_transcribe') return window.deferVoice ? await new Promise(resolve => { window.resolveVoice = resolve }) : window.voiceTranscript
-      if (command === 'agenda_occurrences') return [occurrence]
+      if (command === 'agenda_occurrences') return (window.voiceOccurrences || [occurrence]).filter(item => item.date >= args.from && item.date <= args.to)
       if (command === 'session_draft_start') return draft
+      if (command === 'session_timeline') return window.voiceTimeline || []
       if (['agenda_list_series', 'agenda_history', 'session_timeline', 'session_addendum_list', 'case_context_list', 'session_draft_list'].includes(command)) return []
       if (command === 'patient_create') { const saved = { id: 'bia', revision: 1, archivedAt: null, ...args.input }; patients.push(saved); window.writes.push({ command, args }); return saved }
       if (command === 'patient_update') { const index = patients.findIndex(item => item.id === args.id); patients[index] = { ...patients[index], ...args.input, revision: patients[index].revision + 1 }; window.writes.push({ command, args }); return patients[index] }
@@ -98,6 +99,8 @@ test('campos, opções e gavetas são controláveis de qualquer área; ocultos e
   await command(page, 'Abrir Pacientes')
   await command(page, 'Ficarem novo cadastro')
   await command(page, 'Preencher Nome com Joana Fictícia')
+  await command(page, 'Preencher Nome para Ana com Silva')
+  await expect(page.getByRole('form', { name: 'Novo cadastro' }).getByLabel('Nome', { exact: true })).toHaveValue('Ana com Silva')
   await command(page, 'Preencher Idade com 42')
   await command(page, 'Selecionar Modalidade como Online')
   await expect(page.getByRole('form', { name: 'Novo cadastro' }).getByLabel('Modalidade')).toHaveValue('Online')
@@ -203,6 +206,68 @@ test('arquivar e restaurar exigem confirmação de voz e preservam a identidade'
   await expect.poll(() => page.evaluate(() => window.writes.find(item => item.command === 'patient_restore')?.args.id)).toBe('ana')
 })
 
+test('botões repetidos da mesma ocorrência não tornam a voz ambígua', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Abrir Agenda')
+  await command(page, 'Novo compromisso')
+  await expect(page.getByRole('form', { name: 'Novo compromisso' })).toBeVisible()
+  await command(page, 'Clicar em Recolher novo compromisso')
+  await expect(page.getByRole('form', { name: 'Novo compromisso' })).toHaveCount(0)
+  await command(page, 'Clicar em Abrir formulário de novo compromisso')
+  await expect(page.getByRole('form', { name: 'Novo compromisso' })).toBeVisible()
+  await command(page, 'Mostrar agenda de hoje')
+  await command(page, 'Clicar em Detalhes e ações')
+  await expect(page.getByRole('button', { name: 'Iniciar sessão de Ana Clara em 2026-10-03 às 15:00–15:50', exact: true })).toHaveCount(2)
+  await command(page, 'Clicar em Iniciar sessão de Ana Clara em 2026-10-03 às 15:00–15:50')
+  await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toBeVisible()
+})
+
+test('adendo por voz identifica o horário entre duas sessões no mesmo dia', async ({ page }) => {
+  await openApp(page)
+  await page.evaluate(() => { window.voiceTimeline = [
+    { id: 'morning', patientId: 'ana', sessionDate: '2026-10-03', start: '09:00', end: '09:50', modality: 'Presencial', behaviors: [], indicators: [] },
+    { id: 'afternoon', patientId: 'ana', sessionDate: '2026-10-03', start: '15:00', end: '15:50', modality: 'Presencial', behaviors: [], indicators: [] },
+  ] })
+  await command(page, 'Abrir Sessões')
+  await command(page, 'Selecionar Paciente para evolução e sessões como Ana Clara')
+  await command(page, 'Clicar em Evolução e escalas registradas · Adicionar adendo')
+  await command(page, 'Clicar em Adicionar adendo de Ana Clara em 2026-10-03 às 15:00–15:50')
+  await expect(page.locator('#addendum-afternoon')).toBeVisible()
+  await expect(page.locator('#addendum-morning')).toHaveCount(0)
+  await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(0)
+})
+
+test('pedido natural encontra compromisso e abre cancelamento ou remarcação sem gravar', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Cancelar sessão de Ana Clara hoje às 15 horas')
+  const form = page.getByRole('form', { name: 'Alterar ocorrência individual' })
+  await expect(form).toBeVisible()
+  await expect(form.getByLabel('Ação explícita')).toHaveValue('cancelar')
+  await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(0)
+  await command(page, 'Clicar em Fechar')
+  await command(page, 'Remarcar sessão de Ana Clara hoje às três da tarde')
+  await expect(form.getByLabel('Ação explícita')).toHaveValue('remarcar')
+  await expect(form.getByLabel('Novo início')).toHaveValue('15:00')
+  await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(0)
+  await command(page, 'Clicar em Fechar')
+  await command(page, 'Iniciar sessão de Ana Clara hoje às 15 horas')
+  await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toBeVisible()
+})
+
+test('pedido natural não inicia compromisso ausente, realizado ou duplicado', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Iniciar sessão de Ana Clara amanhã às 15 horas')
+  await expect(page.getByRole('alert')).toContainText('Não encontrei esse compromisso')
+  await page.evaluate(() => { window.voiceOccurrences = [{ id: 'done', patientId: 'ana', date: '2026-10-03', start: '15:00', status: 'completed' }] })
+  await command(page, 'Iniciar sessão de Ana Clara hoje às 15 horas')
+  await expect(page.getByRole('alert')).toContainText('não está agendado')
+  await page.evaluate(() => { window.voiceOccurrences = ['first', 'second'].map(id => ({ id, patientId: 'ana', date: '2026-10-03', start: '15:00', status: 'scheduled' })) })
+  await command(page, 'Iniciar sessão de Ana Clara hoje às 15 horas')
+  await expect(page.getByRole('alert')).toContainText('mais de um compromisso')
+  await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toHaveCount(0)
+  await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(0)
+})
+
 test('agenda avulsa e sessão com comportamento podem ser preenchidas e finalizadas por comando', async ({ page }) => {
   await openApp(page)
   await command(page, 'Agendar sessão para Ana Clara amanhã às três da tarde')
@@ -210,6 +275,7 @@ test('agenda avulsa e sessão com comportamento podem ser preenchidas e finaliza
   await expect(appointment.getByLabel('Data do compromisso')).toHaveValue('2026-10-04')
   await command(page, 'Clicar em Criar compromisso avulso')
   await expect.poll(() => page.evaluate(() => window.writes.filter(item => item.command === 'agenda_create_series').length)).toBe(1)
+  await command(page, 'Mostrar agenda de hoje')
   await command(page, 'Clicar em Detalhes e ações')
   await command(page, 'Clicar em Iniciar sessão de Ana Clara em 2026-10-03 às 15:00–15:50')
   await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toBeVisible()
