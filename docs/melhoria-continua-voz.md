@@ -1,5 +1,9 @@
 # Melhoria contínua de voz
 
+## Entrega instalada0.2.45 — 03/10/2026
+
+[Pacote e limites](validacao-voz-0.2.45.md). Incremento da entrada do cofre e invalidação do áudio agora empacotado. 229/229JS e guard repetidos na45; build NSISoffline/locked, audit e instalaçãoexit0. Versão45, quatro arquivos do perfil preservados e snapshot0245 verificado; Whisper/modelo instalados conferidos por hash. Sem abertura/microfone humano/smokeRust/Release/assinatura updater. As referências abaixo a não empacotado são históricas, consolidadas neste instalador. Meta permanece ativa.
+
 ## Incremento após0.2.44: assistente na entrada do cofre
 
 Implementado assistente bloqueado/primeira configuração, restrito aos controles visíveis, com contexto vazio e ajuda própria; senha manual e acesso clínico apenas desbloqueado. Criação/desbloqueio usam os formulários normais. Revisor identificou transcrição antiga cruzando desbloqueio; reproduzida em confirmação do updater no Início, corrigida por aborto na entrada/troca de estado e invalidação ao desmontar. Teste red1/2→green2/2 em20,6s; revisor confirmou correção sem novos achados concretos. Regressão final78/78 em4,2min e painel isolado9/9 em21,0s; 229/229JS, lint/guard/build/diff check aprovados, avisos anteriores. [Detalhes, tentativas intermediárias e limites](voz-cobertura-interface.md). Sem alteração de backend/Rust, arquivos de perfil ou atualização real. **Ainda não no instalador instalado0.2.44: próxima etapa consolidar o pacote atualizado.** Microfone humano, RPC de entrada atrasado/falhando, gravação interrompida e controles avançados bloqueados ainda têm lacunas; senha/chooser manuais. Meta ativa.

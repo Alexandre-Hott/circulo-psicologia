@@ -191,6 +191,10 @@ Revisão independente após a correção: cenário reproduzido eliminado, sem no
 
 Painel isolado:9/9 E2E em21,0s. Rodada anterior8/9 por timeout no `page.goto` do primeiro teste, antes de interagir; repetição completa aprovada sem alterar timeout ou código. Todas as execuções acima são testes de UI com mídia/transcrição simuladas, não microfone físico.
 
+## Consolidação instalada0.2.45
+
+[Entrega e limites](validacao-voz-0.2.45.md). Assistente de entrada e descarte de áudio antigo agora incluídos no pacote instalado45. 229/229JS e guard repetidos; build offline/locked e auditoria aprovados, instalaçãoexit0, versão45, quatro arquivos do perfil preservados/snapshot0245 e recursos Whisper/modelo conferidos por hash. Referências anteriores a não empacotado são históricas. Sem abertura, microfone humano ou suíte Rust nova; pacote não publicado em Release e não assinado para updater.
+
 ## Prioridades restantes para o agente principal
 
 Homologação dos testes novos de homônimos, identidade de seleção e helper: **concluída pelo principal**, conforme nota de execução. Não é mais prioridade pendente.
@@ -198,4 +202,4 @@ Homologação dos testes novos de homônimos, identidade de seleção e helper: 
 1. **Continuar cobertura dos controles restantes:** entrada de Sessões, demonstração com recusa/repetição, fechamento de vínculos, cabeçalhos semanal/diário e navegação Início foram comprovados pelo assistente. Revisar itens ainda `S` sem suplemento `E`; comandos digitados e cenários por mouse não substituem reconhecimento físico ou banco nativo.
 2. **Manter regressão dos caminhos comprovados:** pacote instalado0.2.44 consolida retries e cabeçalhos. Não tomar os testes já aprovados como prova dos caminhos ainda pendentes nem repetir build sem mudança de produção.
 3. **Consolidar evidência nativa de Ajustes:** seleção/verificação/restauração de backup pelo assistente foi comprovada na fronteira simulada, assim como descarte dos cinco editores e updater. Ainda faltam arquivo/seletor/restauração nativos; senhas/chooser manuais, sem limpeza ou backups antigos. Troca de senha após seleção e respostas tardias ainda exigem cenários próprios. Não confundir mocks com arquivo nativo validado.
-4. **Empacotar e fechar evidência nativa:** assistente da tela bloqueada implementado e principais percursos comprovados na simulação, ainda não no instalado0.2.44. Consolidar no próximo instalador; microfone físico/reconhecimento no Windows, chooser e arquivos reais em destino fictício autorizado permanecem sem prova. Não executar recuperação/substituição/limpeza de perfil real nesta auditoria. Controles avançados bloqueados ainda precisam de cenários próprios, e senhas permanecem manuais.
+4. **Fechar evidência nativa e as transições pendentes:** assistente bloqueado incluído no instalado0.2.45, principais percursos comprovados na simulação. Microfone físico/reconhecimento no Windows, chooser e arquivos reais em destino fictício autorizado permanecem sem prova. RPC de entrada atrasado/falhando e fase de gravação ainda exigem cenários próprios. Não executar recuperação/substituição/limpeza de perfil real nesta auditoria. Controles avançados bloqueados ainda precisam de cenários, e senhas permanecem manuais.
