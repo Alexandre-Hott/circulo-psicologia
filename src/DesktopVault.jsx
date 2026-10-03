@@ -248,11 +248,12 @@ export default function DesktopVault() {
       } finally { setBusy(false) }
       return
     }
-    if (intent.type === 'patient.create' || intent.type === 'patient.update') {
+    if (intent.type === 'patient.create' || intent.type === 'patient.update' || intent.type === 'patient.edit.open') {
       if (patientFormOpen && (form.name.trim() || editing) && !await confirmAction('Substituir o cadastro que está sendo preenchido pelo pedido de voz?')) return
       voiceFocusTarget.current = 'patients'
-      const existing = intent.type === 'patient.update' ? patients.find(item => item.id === intent.target.patientId && item.archivedAt == null) : null
-      if (intent.type === 'patient.update' && !existing) { setVoiceNotice('Paciente não está mais disponível. Atualize o cadastro e tente novamente.'); return }
+      const editingPatient = intent.type !== 'patient.create'
+      const existing = editingPatient ? patients.find(item => item.id === intent.target.patientId && item.archivedAt == null) : null
+      if (editingPatient && !existing) { setVoiceNotice('Paciente não está mais disponível. Atualize o cadastro e tente novamente.'); return }
       setEditing(existing)
       const filled = { ...emptyPatientForm(), ...(existing || {}), ...intent.draft }
       setForm({ name: filled.name, age: filled.age == null ? '' : String(filled.age), selfRequester: filled.selfRequester || '', preferredModality: filled.preferredModality || '' })

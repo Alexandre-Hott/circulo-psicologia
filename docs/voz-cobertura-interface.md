@@ -1,5 +1,11 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Complemento executado: abrir edição pelo nome
+
+`Editar paciente Ana Clara` sem atributos agora prepara abertura, não atualização: `patient.edit.open` com ID do paciente ativo exato. Aceita pontuação da pausa após a palavra `paciente`, não dentro do nome; não adivinha nomes, não seleciona arquivados/homônimos. Confirmação abre formulário normal com campos atuais; Salvar continua separado. Teste unitário cobre variantes/recusas e E2E `voz abre edição pelo nome e preserva os campos até salvar explicitamente` compara ID, ausência de gravação antecipada e payload completo após idade9/Salvar.
+
+**231/231JS**, **22/22E2E interface em1,5min**, lint/build/guard/diff aprovados. Primeira tentativa E2E0/1 tinha expectativa errada de `selfRequester` e ausência de `lifeCycle`, corrigida após conferir `submitPatient`; regressão final22/22. Captura/RPC simulados: nenhuma prova nova de microfone humano ou persistência nativa. Sem novo instalador: incremento posterior ao pacote0.2.46. Atualiza a limitação histórica do pedido de edição sem atributos; não altera nomes/textos clínicos automaticamente.
+
 ## Complemento executado: restauração inicial pelo assistente
 
 Em `desktop-voice-settings.spec.js`, quatro cenários `restauração inicial por comando` exercitam os componentes reais com perfil inicialmente vazio e backend simulado: abrir opções avançadas/restauração; seletor cancelado e Voltar sem criar/restaurar; alteração manual da senha invalidando prévia/nova senha; recusa preservando entrada; aceite com payload das duas senhas manuais, `confirmed: true` e `quarantineConfirmed: false`. Sucesso simulado torna o cofre pronto e mostra apenas Lia do Backup Fictício; retorno falso não anuncia sucesso nem carrega pacientes. Nenhum caminho chama `vault_create`.

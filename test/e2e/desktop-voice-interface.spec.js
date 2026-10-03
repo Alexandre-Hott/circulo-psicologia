@@ -258,6 +258,29 @@ test('limpar campos por voz altera apenas o formulário e não grava ou escolhe 
   await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(0)
 })
 
+test('voz abre edição pelo nome e preserva os campos até salvar explicitamente', async ({ page }) => {
+  await openApp(page)
+  const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
+  await page.evaluate(() => { window.voiceTranscript = 'Editar paciente. Ana Clara.' })
+  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await expect(page.locator('.voice-command-preview')).toContainText('Abrir edição do cadastro de Ana Clara')
+  await expect(page.getByRole('form', { name: 'Editar cadastro' })).toHaveCount(0)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await page.evaluate(() => { window.voiceTranscript = 'confirmar' })
+  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  const form = page.getByRole('form', { name: 'Editar cadastro' })
+  await expect(form).toHaveAttribute('data-voice-record', 'ana')
+  await expect(form.getByLabel('Nome', { exact: true })).toHaveValue('Ana Clara')
+  await expect(form.getByLabel('Idade em anos (opcional)')).toHaveValue('8')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await command(page, 'Preencher Idade em anos (opcional) com 9')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await command(page, 'Clicar em Salvar alterações')
+  await expect.poll(() => page.evaluate(() => window.writes)).toEqual([
+    { command: 'patient_update', args: { id: 'ana', revision: 1, input: { name: 'Ana Clara', age: 9, lifeCycle: 'Criança', selfRequester: null, preferredModality: 'Presencial' } } },
+  ])
+})
+
 test('voz transcrita prepara cadastro e segundo áudio confirma sem voltar ao início', async ({ page }) => {
   await openApp(page)
   await command(page, 'Abrir Pacientes')

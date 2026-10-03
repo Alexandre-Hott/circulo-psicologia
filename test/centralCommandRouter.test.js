@@ -17,6 +17,19 @@ const indicators = [
 const session = { id: 'session-draft-ana-001', patientId: 'patient-ana', patientName: 'Ana Clara', originalDate: '2026-09-30' }
 const context = { patients, behaviors, indicators, activeSessionDraft: session }
 
+test('editar paciente sem atributos abre formulário por ID, não prepara gravação', () => {
+  for (const text of ['Editar paciente Ana Clara.', 'Editar paciente. Ana Clara.', 'Editar paciente, Ana Clara.', 'Edite o paciente Ana Clara', 'Atualizar paciente Ana Clara']) {
+    const result = parseCentralCommand({ text, context })
+    assert.deepEqual(result.intent, { type: 'patient.edit.open', target: { patientId: 'patient-ana' } })
+    assert.match(result.preview, /Abrir edição/)
+  }
+  for (const patients of [[{ id: '1', name: 'Ana Clara', archivedAt: 1 }],
+    [{ id: '1', name: 'Ana Clara' }, { id: '2', name: 'Ana Clara' }]]) {
+    assert.equal(parseCentralCommand({ text: 'Editar paciente Ana Clara', context: { patients } }).status, 'clarification')
+  }
+  assert.equal(parseCentralCommand({ text: 'Editar paciente Ana', context }).status, 'clarification')
+})
+
 test('transcrições nativas: variantes de navegação não reescrevem nomes ou títulos', () => {
   const sessions = parseCentralCommand({ text: 'Abrir seções de Ana Clara.', context })
   assert.deepEqual(sessions.intent, { type: 'patient.workspace.open', target: { patientId: 'patient-ana', space: 'sessions' } })
@@ -489,7 +502,7 @@ test('atualização de paciente contém somente os campos explícitos e o ID exa
 })
 
 test('atualização recusa alvo parcial, alvo duplo, duplicatas e patch inválido', () => {
-  for (const text of ['Editar paciente Ana com 9 anos', 'Editar paciente Ana Clara e Caio Fictício com 9 anos', 'Renomear paciente Ana Clara e Outra Pessoa para Bia', 'Editar paciente Ana Clara', 'Editar paciente Ana Clara com 121 anos', 'Mudar modalidade de Ana Clara para Online e Presencial', 'Editar paciente Ana Clara com modalidade Remota', 'Crie paciente Bia com 9', 'Crie paciente Bia com 9 anos com 10 anos', 'Crie paciente Ana Clara e Bia']) {
+  for (const text of ['Editar paciente Ana com 9 anos', 'Editar paciente Ana Clara e Caio Fictício com 9 anos', 'Renomear paciente Ana Clara e Outra Pessoa para Bia', 'Editar paciente Ana Clara com 121 anos', 'Mudar modalidade de Ana Clara para Online e Presencial', 'Editar paciente Ana Clara com modalidade Remota', 'Crie paciente Bia com 9', 'Crie paciente Bia com 9 anos com 10 anos', 'Crie paciente Ana Clara e Bia']) {
     assert.equal(parseCentralCommand({ text, context }).status, 'clarification', text)
   }
   const duplicateContext = { ...context, patients: [...patients, { id: 'duplicate', name: 'Ana Clara' }] }

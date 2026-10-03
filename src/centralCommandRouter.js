@@ -234,7 +234,9 @@ const parsePatientManagement = (text, context) => {
   }
   const rename = /^(?:renomear|renomeie|renomeia)\s+(?:o\s+)?paciente\s+(.+?)\s+para\s+(.+)$/iu.exec(text)
   const modality = /^(?:mudar|mude|muda|alterar|altere|altera)\s+(?:a\s+)?modalidade\s+(?:de|do|da)\s+(?:paciente\s+)?(.+?)\s+para\s+(.+)$/iu.exec(text)
-  const edit = /^(?:editar|edite|edita|atualizar|atualize|atualiza)\s+(?:o\s+)?paciente\s+(.+)$/iu.exec(text)
+  // A pause after the command noun can be transcribed as punctuation.
+  // Consume it before the entity argument, never inside the patient's name.
+  const edit = /^(?:editar|edite|edita|atualizar|atualize|atualiza)\s+(?:o\s+)?paciente[.,]?\s+(.+)$/iu.exec(text)
   if (!rename && !modality && !edit) return null
   let targetName
   let patch
@@ -254,9 +256,12 @@ const parsePatientManagement = (text, context) => {
     targetName = parsed.name
     patch = parsed.patch
   }
-  if (!Object.keys(patch).length) return refuse('Informe explicitamente a idade, a modalidade ou um novo nome.')
   const result = exactTarget(targetName, patients.filter(patient => patient.archivedAt == null), 'paciente')
   if (result.error) return refuse(result.error)
+  if (!Object.keys(patch).length) {
+    return draft({ type: 'patient.edit.open', target: { patientId: result.entity.id } },
+      `Abrir edição do cadastro de ${result.entity.name}.`, ['Apenas abre o formulário existente; nenhum dado será salvo.'])
+  }
   return draft({ type: 'patient.update', target: { patientId: result.entity.id }, draft: patch },
     `Alterar ${result.entity.name}: ${[patch.name && `nome ${patch.name}`, patch.age != null && `idade ${patch.age} anos`, patch.preferredModality && `modalidade ${patch.preferredModality}`].filter(Boolean).join(' · ')}.`)
 }

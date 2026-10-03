@@ -1,5 +1,9 @@
 # Melhoria contínua de voz
 
+## Incremento após0.2.46: abrir edição do paciente sem ditar alterações
+
+Pedido natural `Editar paciente Ana Clara` prepara `patient.edit.open`, confirma a abertura e reutiliza formulário/validações/gravação normais. Pausa transcrita como ponto/vírgula após `paciente` é aceita apenas no prefixo; nome continua exato. Arquivados, homônimos e nomes parciais são recusados. **231/231JS**, **22/22E2E interface em1,5min**, lint/build/guard/diff aprovados com avisos anteriores. Novo E2E usa captura/transcrição simulada para abrir Ana por ID, preservar campos, preencher idade e gravar uma única atualização somente após Salvar alterações. Primeira execução falhou na expectativa incompleta do payload (ciclo de vida derivado e solicitante null); conferido handler normal e corrigida asserção, sem mudar a normalização. Sem banco/microfone físico/Rust/novo instalador nesta rodada; pacote46 não contém este incremento. Meta ativa.
+
 ## Pacote Windows0.2.46 — 03/10/2026
 
 [Instalador e limites](validacao-voz-0.2.46.md). Consolidados prompt/variantes de navegação e limpeza de proposta antiga após desbloqueio.230/230JS e guard repetidos; build NSIS offline/locked e auditoria PE/hash aprovados, avisos anteriores. Sem instalação/abertura/perfil alterado nesta rodada: instalado permanece0.2.45. Sem Release ou assinatura updater. Referências abaixo a não empacotado são histórico incluído agora na46. Meta ativa, captura humana ainda não homologada.
