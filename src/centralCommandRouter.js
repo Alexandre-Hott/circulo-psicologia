@@ -111,7 +111,7 @@ const parseWeekday = text => {
 }
 
 const parseTime = text => {
-  const marker = /\b(?:as|pelas?)\s+(.+?)(?=\s+(?:na|no|para|toda|todo|semanal|quinzenal|a partir|com inicio|inicio em|com modalidade)\b|$)/u.exec(text)
+  const marker = /\b(?:as|pelas?)\s+(.+?)(?=\s+(?:na|no|para|toda|todo|semanal|quinzenal|a partir|com inicio|inicio em|com modalidade|online|presencial)\b|$)/u.exec(text)
   if (!marker) return null
   const phrase = marker[1].trim()
   const period = /\b(?:da|de|pela)\s+(manha|tarde|noite)\b/u.exec(phrase)?.[1]
@@ -447,6 +447,7 @@ const parseWorkspaceNavigation = text => {
 
 const parseRecurringAppointment = ({ text, context, referenceDate }) => {
   if (!/^(?:agendar|agende|agenda|marcar|marque|marca|criar|crie|cria|adicionar|adicione|adiciona|incluir|inclui)\b/u.test(text) || !/\b(?:sessao|compromisso|serie)\b/u.test(text)) return null
+  if (/\bonline\b/u.test(text) && /\bpresencial\b/u.test(text)) return refuse('Informe uma única modalidade: Online ou Presencial.')
   const patients = (context.patients || []).filter(patient => patient.archivedAt == null)
   const patientResult = uniqueEntity(text, patients, 'paciente')
   if (patientResult.error) return refuse(patientResult.error)

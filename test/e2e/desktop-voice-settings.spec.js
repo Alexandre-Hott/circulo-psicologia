@@ -1,0 +1,126 @@
+import { expect, test } from '@playwright/test'
+
+// UI/voice are real; native file dialogs, updater and storage are synthetic.
+async function openApp(page, update = false) {
+  await page.clock.install({ time: new Date('2026-10-03T15:00:00Z') })
+  await page.clock.pauseAt(new Date('2026-10-03T15:00:00Z'))
+  await page.addInitScript(({ update }) => {
+    let unlocked = true
+    let downloads = 0
+    window.settingsFixture = { calls: [], unexpected: [] }
+    const callbacks = new Map()
+    window.__TAURI_INTERNALS__ = {
+      transformCallback(callback) { const id = callbacks.size + 1; callbacks.set(id, callback); return id },
+      unregisterCallback(id) { callbacks.delete(id) },
+      invoke: async (command, args = {}) => {
+        window.settingsFixture.calls.push({ command, args: structuredClone(args) })
+        if (command === 'vault_status') return { initialized: true, unlocked, profileState: 'ready' }
+        if (command === 'vault_lock') { unlocked = false; return null }
+        if (command === 'auto_backup_status') return { available: false, dirty: false }
+        if (command === 'auto_backup_retry') return { available: true, dirty: false, lastVerifiedAt: 1791039600 }
+        if (command === 'recovery_inventory') return { categories: [], eligibleCount: 0, eligibleBytes: 0, cleanupBlocked: false }
+        if (command === 'patient_list') return [{ id: 'ana', name: 'Ana Clara', age: 8, revision: 1, archivedAt: null }]
+        if (['behavior_list', 'indicator_catalog', 'agenda_list_series', 'agenda_history', 'agenda_occurrences', 'related_party_list', 'session_timeline', 'session_draft_list', 'session_addendum_list', 'case_context_list'].includes(command)) return []
+        if (command === 'record_copy_export' || command === 'backup_create') return false // chooser cancelled; no file
+        if (command === 'plugin:updater|check') return update ? { rid: 1, currentVersion: '0.2.39', version: '0.2.40' } : null
+        if (command === 'plugin:resources|close') return null
+        if (command === 'plugin:updater|download_and_install') {
+          if (++downloads === 1) throw new Error('Falha sintética de download')
+          const callback = callbacks.get(args.onEvent.id)
+          callback?.({ index: 0, message: { event: 'Finished' } })
+          return null
+        }
+        window.settingsFixture.unexpected.push(command)
+        throw new Error(`Invoke sem fixture: ${command}`)
+      },
+    }
+  }, { update })
+  await page.goto('/')
+  await expect(page.getByRole('region', { name: 'Comando do Círculo' })).toBeVisible()
+}
+
+async function propose(page, text) {
+  const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
+  await assistant.getByLabel('Seu comando').fill(text)
+  await assistant.getByRole('button', { name: 'Preparar rascunho' }).click()
+}
+
+async function command(page, text) {
+  await propose(page, text)
+  await expect(page.locator('.voice-command-preview'), text).toBeVisible()
+  await propose(page, 'confirmar')
+  await page.clock.runFor(32)
+  await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+}
+
+const calls = (page, command) => page.evaluate(name => window.settingsFixture.calls.filter(item => item.command === name), command)
+test.afterEach(async ({ page }) => expect(await page.evaluate(() => window.settingsFixture?.unexpected || [])).toEqual([]))
+
+test('ajustes: inspeção, cópia automática, licenças e bloqueio por voz', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Abrir ajustes')
+  await command(page, 'Clicar em Inspecionar artefatos locais')
+  expect(await calls(page, 'recovery_inventory')).toHaveLength(1)
+  await expect(page.getByText('Nenhum artefato elegível para limpeza. Itens incertos são preservados.')).toBeVisible()
+  await command(page, 'Clicar em Atualizar cópia automática agora')
+  expect(await calls(page, 'auto_backup_retry')).toHaveLength(1)
+  await command(page, 'Clicar em Licenças de terceiros')
+  await expect(page.getByText('SQLite é disponibilizado em domínio público.')).toBeVisible()
+  await propose(page, 'Preencher Senha independente do backup com senha-ficticia-1234')
+  await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+  await expect(page.locator('#backup-password')).toHaveValue('')
+  expect(await calls(page, 'backup_create')).toHaveLength(0)
+  // Password entry deliberately remains manual; voice may open the regular chooser.
+  await page.locator('#backup-password').fill('senha-ficticia-1234')
+  await command(page, 'Clicar em Criar backup cifrado')
+  expect(await calls(page, 'backup_create')).toEqual([{ command: 'backup_create', args: { password: 'senha-ficticia-1234' } }])
+  await command(page, 'Clicar em Bloquear')
+  expect(await calls(page, 'vault_lock')).toHaveLength(1)
+  await expect(page.getByRole('region', { name: 'Comando do Círculo' })).toHaveCount(0)
+})
+
+test('exportação por voz: recusar não exporta; confirmar usa o paciente selecionado', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Abrir registros de Ana Clara')
+  await command(page, 'Clicar em Exportar cópia legível')
+  await command(page, 'Clicar em Exportar cópia legível deste paciente')
+  await expect(page.getByRole('alertdialog', { name: 'Confirmar ação' })).toBeVisible()
+  await propose(page, 'voltar')
+  expect(await calls(page, 'record_copy_export')).toHaveLength(0)
+  await command(page, 'Clicar em Exportar cópia legível deste paciente')
+  await propose(page, 'confirmar')
+  await expect.poll(() => calls(page, 'record_copy_export')).toEqual([{ command: 'record_copy_export', args: { patientId: 'ana' } }])
+})
+
+test('atualização por voz: recusar, falhar e tentar novamente sem instalar silenciosamente', async ({ page }) => {
+  await openApp(page, true)
+  await command(page, 'Clicar em Baixar e instalar')
+  await propose(page, 'voltar')
+  expect(await calls(page, 'plugin:updater|download_and_install')).toHaveLength(0)
+  await command(page, 'Clicar em Baixar e instalar')
+  await propose(page, 'confirmar')
+  await expect(page.getByText('Não foi possível instalar Círculo 0.2.40.')).toBeVisible()
+  await command(page, 'Clicar em Verificar e tentar novamente')
+  await expect(page.getByText('Atualização disponível: Círculo 0.2.40')).toBeVisible()
+  await command(page, 'Clicar em Baixar e instalar')
+  await propose(page, 'confirmar')
+  await expect(page.getByText('Atualização 0.2.40 instalada. Reinicie o aplicativo para usar a nova versão.')).toBeVisible()
+  expect(await calls(page, 'plugin:updater|download_and_install')).toHaveLength(2)
+})
+
+test('atualização não descarta cadastro aberto sem confirmação explícita por voz', async ({ page }) => {
+  await openApp(page, true)
+  await command(page, 'Cadastrar paciente Bia Fictícia de 9 anos')
+  await command(page, 'Clicar em Baixar e instalar')
+  await expect(page.getByText('Feche os formulários antes de instalar Círculo 0.2.40.')).toBeVisible()
+  expect(await calls(page, 'plugin:updater|download_and_install')).toHaveLength(0)
+  await command(page, 'Clicar em Descartar edições e fechar formulários')
+  await propose(page, 'voltar')
+  await expect(page.getByLabel('Nome', { exact: true })).toHaveValue('Bia Fictícia')
+  await command(page, 'Clicar em Descartar edições e fechar formulários')
+  await propose(page, 'confirmar')
+  await expect(page.getByLabel('Nome', { exact: true })).toHaveCount(0)
+  expect(await calls(page, 'patient_create')).toHaveLength(0)
+  expect(await calls(page, 'plugin:updater|download_and_install')).toHaveLength(0)
+  await expect(page.getByText('Atualização disponível: Círculo 0.2.40')).toBeVisible()
+})

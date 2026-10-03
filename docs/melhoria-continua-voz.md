@@ -1,5 +1,13 @@
 # Melhoria contínua de voz
 
+## Estado atual: instalado 0.2.40 — 03/10/2026
+
+Os trechos abaixo que dizem “ainda não incluído no instalador 0.2.39” são histórico de implementação: esses incrementos agora estão consolidados na 0.2.40. [Evidência e limites atuais](validacao-voz-0.2.40.md).
+
+Nesta rodada passaram 223 testes JS e 12 E2E conjuntos de voz para agenda, ajustes, exportação, updater, vínculos, indicadores, contexto e adendos. Correção nova: modalidade após horário numérico em série recorrente; modalidades conflitantes recusadas. Instalador gerado, auditado, instalado com perfil preservado e smoke de processo aprovado; sem Release nem assinatura updater. O microfone humano não foi validado.
+
+Próxima rodada de auditoria: payload completo do paciente/solicitante próprio/busca; cancelamento e edição da biblioteca preservando snapshots; propostas contra alvo/tela que mudam. Senhas e arquivos Windows continuam manuais, assistente só após desbloqueio, recovery desabilitado sem investigação. Não declarar que toda ação tem linguagem natural ou que cobertura universal foi comprovada. A meta continua ativa.
+
 ## Incremento após a entrega 0.2.38 — 03/10/2026
 
 Implementado no código, ainda não incluído no instalador 0.2.38:

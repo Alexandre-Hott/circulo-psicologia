@@ -183,6 +183,19 @@ test('prepara uma série semanal exata para paciente existente e explicita os pa
   assert.match(result.notes.join(' '), /padrão atual do formulário/u)
 })
 
+test('série aceita modalidade após horário numérico e recusa modalidades conflitantes', () => {
+  for (const [time, start] of [['15 horas', '15:00'], ['15:30', '15:30'], ['quinze horas', '15:00']]) {
+    for (const modality of ['online', 'presencial']) {
+      const result = parseCentralCommand({ text: `Agendar sessão quinzenal para Ana Clara na segunda às ${time} ${modality}`, context, referenceDate: '2026-10-03' })
+      assert.equal(result.status, 'draft')
+      assert.equal(result.intent.draft.start, start)
+      assert.equal(result.intent.draft.frequency, 'Quinzenal')
+      assert.equal(result.intent.draft.modality, modality === 'online' ? 'Online' : 'Presencial')
+    }
+  }
+  assert.equal(parseCentralCommand({ text: 'Agendar sessão quinzenal para Ana Clara na segunda às 15 horas online presencial', context, referenceDate: '2026-10-03' }).status, 'clarification')
+})
+
 test('aceita formulação curta natural, data válida e modalidade explícita', () => {
   const result = parseCentralCommand({
     text: 'Adiciona uma sessão toda quinta às quinze online para Ana Clara',
