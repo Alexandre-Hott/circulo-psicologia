@@ -195,11 +195,26 @@ Painel isolado:9/9 E2E em21,0s. Rodada anterior8/9 por timeout no `page.goto` do
 
 [Entrega e limites](validacao-voz-0.2.45.md). Assistente de entrada e descarte de áudio antigo agora incluídos no pacote instalado45. 229/229JS e guard repetidos; build offline/locked e auditoria aprovados, instalaçãoexit0, versão45, quatro arquivos do perfil preservados/snapshot0245 e recursos Whisper/modelo conferidos por hash. Referências anteriores a não empacotado são históricas. Sem abertura, microfone humano ou suíte Rust nova; pacote não publicado em Release e não assinado para updater.
 
+## Incremento após0.2.45: transições demoradas, gravação e proposta antiga
+
+Após a correção: **35/35 E2E** conjuntos de transições/settings/painel em1,6min, porta5197. **229/229JS**, lint, guard, build frontend e diff check aprovados. Quatro avisos anteriores no lint e chunk>500KiB; nenhum teste Rust/instalação/microfone físico novo.
+
+Quatro cenários adicionais em [lock-transition](../test/e2e/desktop-voice-lock-transition.spec.js) passaram na rodada específica6/6 em21,0s:
+
+- RPC de desbloqueio mantido pendente: transcrição antiga chega durante a espera, mas não prepara proposta nem consulta pacientes antes de desbloquear.
+- Desbloqueio com erro: aviso normal, senha manual preservada, nenhuma área clínica aberta; nova tentativa permite continuar sem reaplicar áudio antigo.
+- Bloquear durante gravação interrompe track e fecha AudioContext, sem chamar `voice_transcribe`, mesmo avançando o relógio além do limite de12s.
+- Trocar de área durante gravação também interrompe track/contexto antes do reconhecimento, sem proposta automática.
+
+Outra prova encontrou uma falha de interface: desbloquear manualmente com proposta da tela bloqueada deixava o botão de aplicar o comando antigo no espaço desbloqueado. Teste específico falhou exatamente nessa asserção (red0/1). `enter` agora limpa `voiceIntent` e aviso de voz no início da tentativa, além de abortar a captura. Não altera RPC, validação de senha ou persistência.
+
+Mídia, transcrição, RPC e relógio sintéticos; não são prova de microfone físico ou cofre instalado sob falha real. Nenhum dado real ou arquivo de perfil acessado. Correção de limpeza da proposta **ainda não incluída no instalado0.2.45**; coalescer no próximo pacote. Senhas/chooser manuais, controles avançados bloqueados e arquivos nativos continuam pendentes. Sem investigação de recovery/legados.
+
 ## Prioridades restantes para o agente principal
 
 Homologação dos testes novos de homônimos, identidade de seleção e helper: **concluída pelo principal**, conforme nota de execução. Não é mais prioridade pendente.
 
 1. **Continuar cobertura dos controles restantes:** entrada de Sessões, demonstração com recusa/repetição, fechamento de vínculos, cabeçalhos semanal/diário e navegação Início foram comprovados pelo assistente. Revisar itens ainda `S` sem suplemento `E`; comandos digitados e cenários por mouse não substituem reconhecimento físico ou banco nativo.
-2. **Manter regressão dos caminhos comprovados:** pacote instalado0.2.44 consolida retries e cabeçalhos. Não tomar os testes já aprovados como prova dos caminhos ainda pendentes nem repetir build sem mudança de produção.
+2. **Consolidar correção da proposta no próximo pacote:** instalado0.2.45 inclui assistente bloqueado e invalidação do áudio; limpeza da proposta antiga após entrada está no código posterior. Não tomar os testes já aprovados como prova dos caminhos ainda pendentes nem repetir build sem mudança de produção.
 3. **Consolidar evidência nativa de Ajustes:** seleção/verificação/restauração de backup pelo assistente foi comprovada na fronteira simulada, assim como descarte dos cinco editores e updater. Ainda faltam arquivo/seletor/restauração nativos; senhas/chooser manuais, sem limpeza ou backups antigos. Troca de senha após seleção e respostas tardias ainda exigem cenários próprios. Não confundir mocks com arquivo nativo validado.
-4. **Fechar evidência nativa e as transições pendentes:** assistente bloqueado incluído no instalado0.2.45, principais percursos comprovados na simulação. Microfone físico/reconhecimento no Windows, chooser e arquivos reais em destino fictício autorizado permanecem sem prova. RPC de entrada atrasado/falhando e fase de gravação ainda exigem cenários próprios. Não executar recuperação/substituição/limpeza de perfil real nesta auditoria. Controles avançados bloqueados ainda precisam de cenários, e senhas permanecem manuais.
+4. **Fechar evidência nativa:** assistente bloqueado incluído no instalado0.2.45; RPC de entrada atrasado/falhando e interrupção na fase de gravação agora têm cenários próprios na simulação. Microfone físico/reconhecimento no Windows, chooser e arquivos reais em destino fictício autorizado permanecem sem prova. Não executar recuperação/substituição/limpeza de perfil real nesta auditoria. Controles avançados bloqueados ainda precisam de cenários, e senhas permanecem manuais.

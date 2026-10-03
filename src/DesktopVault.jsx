@@ -479,6 +479,8 @@ export default function DesktopVault() {
     event.preventDefault()
     voiceCaptureRef.current?.abort()
     voiceCaptureRef.current = null
+    setVoiceIntent(null)
+    setVoiceNotice('')
     setBusy(true)
     setError('')
     try {

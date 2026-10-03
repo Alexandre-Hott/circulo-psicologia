@@ -1,5 +1,9 @@
 # Melhoria contínua de voz
 
+## Incremento após0.2.45: transições e proposta antiga
+
+35/35 E2E em1,6min e229/229JS, lint/guard/build/diff check aprovados (avisos anteriores). Cenários novos comprovaram RPC de entrada atrasado/falhando sem aceitar transcrição antiga e interrupção de track/AudioContext durante gravação ao bloquear/trocar área, sem reconhecimento. Teste adicional reproduziu botão de proposta antiga persistindo após desbloqueio manual (red0/1); corrigido limpando intenção/aviso na entrada, antes do RPC, green na regressão35/35. [Evidência e limites](voz-cobertura-interface.md). Mídia/RPC/relógio sintéticos, nenhum arquivo de perfil ou dado real acessado. Correção de proposta ainda não no instalado0.2.45; consolidar no próximo pacote junto ao trabalho restante. Meta ativa, sem novas provas nativas/microfone ou alterações de recovery/legados.
+
 ## Entrega instalada0.2.45 — 03/10/2026
 
 [Pacote e limites](validacao-voz-0.2.45.md). Incremento da entrada do cofre e invalidação do áudio agora empacotado. 229/229JS e guard repetidos na45; build NSISoffline/locked, audit e instalaçãoexit0. Versão45, quatro arquivos do perfil preservados e snapshot0245 verificado; Whisper/modelo instalados conferidos por hash. Sem abertura/microfone humano/smokeRust/Release/assinatura updater. As referências abaixo a não empacotado são históricas, consolidadas neste instalador. Meta permanece ativa.
