@@ -46,6 +46,7 @@ async function openApp(page, { emptyLibrary = false, archivedPatient = false } =
       if (command === 'session_draft_start') return draft
       if (command === 'session_timeline') return window.voiceTimeline || []
       if (command === 'session_draft_list') return window.voiceDrafts || []
+      if (command === 'case_context_list' && window.deferContexts) return await new Promise(resolve => { window.resolveContexts = resolve })
       if (command === 'session_draft_cancel') { window.writes.push({ command, args }); window.voiceDrafts = (window.voiceDrafts || []).filter(item => item.id !== args.id); return null }
       if (['agenda_list_series', 'agenda_history', 'session_timeline', 'session_addendum_list', 'case_context_list', 'session_draft_list'].includes(command)) return []
       if (command === 'patient_create') { const saved = { id: 'bia', revision: 1, archivedAt: null, ...args.input }; patients.push(saved); window.writes.push({ command, args }); return saved }
@@ -256,6 +257,101 @@ test('limpar campos por voz altera apenas o formulário e não grava ou escolhe 
   await command(page, 'Limpar Descrição opcional')
   await expect(page.getByLabel('Descrição opcional')).toHaveValue('')
   await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(0)
+})
+
+test('abrir biblioteca por pedido natural de qualquer área preserva edição sem gravar', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Abrir biblioteca de comportamentos reutilizáveis')
+  const panel = page.locator('#session-behaviors')
+  await expect(panel).toHaveAttribute('open', '')
+  await expect(page.getByLabel('Título descritivo')).toBeVisible()
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await command(page, 'Preencher Título descritivo com Modelo fictício ainda não salvo')
+  await command(page, 'Abrir Análises')
+  await command(page, 'Abrir biblioteca de comportamentos')
+  await expect(page.getByLabel('Título descritivo')).toHaveValue('Modelo fictício ainda não salvo')
+  await expect(panel).toHaveAttribute('open', '')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+})
+
+test('contexto natural aguarda dados do paciente correto e abre sem salvar revisão', async ({ page }) => {
+  await openApp(page)
+  await page.evaluate(() => { window.deferContexts = true })
+  await propose(page, 'Abrir contexto do caso de Ana Clara')
+  await expect(page.locator('.voice-command-preview')).toContainText('contexto do caso de Ana Clara')
+  await propose(page, 'confirmar')
+  await expect.poll(() => page.evaluate(() => typeof window.resolveContexts)).toBe('function')
+  const form = page.getByRole('form', { name: 'Nova revisão do contexto do caso' })
+  await expect(form).toBeHidden()
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await page.evaluate(() => { window.resolveContexts([]); window.deferContexts = false })
+  await expect(form).toBeVisible()
+  await expect(page.getByLabel('Paciente para evolução e sessões')).toHaveValue('ana')
+  await expect(page.getByLabel('Demanda avaliada')).toHaveValue('')
+  await expect.poll(() => page.evaluate(() => window.voiceNativeCalls.filter(call => call.command === 'case_context_list').at(-1)?.args)).toEqual({ patientId: 'ana' })
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+})
+
+test('contexto não reutiliza carga antiga ao selecionar novamente o mesmo paciente', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Abrir contexto do caso de Ana Clara')
+  const form = page.getByRole('form', { name: 'Nova revisão do contexto do caso' })
+  await expect(form).toBeVisible()
+  await page.evaluate(() => document.querySelector('form[aria-label="Nova revisão do contexto do caso"]').closest('details').open = false)
+  const patient = page.getByLabel('Paciente para evolução e sessões')
+  await patient.selectOption('')
+  await page.evaluate(() => { window.deferContexts = true; delete window.resolveContexts })
+  await patient.selectOption('ana')
+  await expect.poll(() => page.evaluate(() => typeof window.resolveContexts)).toBe('function')
+  await command(page, 'Abrir contexto do caso de Ana Clara')
+  await expect(form).toBeHidden()
+  await page.evaluate(() => { window.resolveContexts([]); window.deferContexts = false })
+  await expect(form).toBeVisible()
+  await form.getByLabel('Demanda avaliada').fill('Demanda fictícia preservada')
+  await expect(form.getByLabel('Demanda avaliada')).toHaveValue('Demanda fictícia preservada')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+})
+
+test('contexto pendente é descartado ao trocar de área ou paciente', async ({ page }) => {
+  await openApp(page)
+  for (const change of ['area', 'patient']) {
+    await page.evaluate(() => { window.deferContexts = true; delete window.resolveContexts })
+    await command(page, 'Abrir contexto do caso de Ana Clara')
+    await expect.poll(() => page.evaluate(() => typeof window.resolveContexts)).toBe('function')
+    const panel = page.locator('details:has(form[aria-label="Nova revisão do contexto do caso"])')
+    if (change === 'area') await command(page, 'Abrir Análises')
+    else await page.getByLabel('Paciente para evolução e sessões').selectOption('')
+    await page.evaluate(() => { window.resolveContexts([]); window.deferContexts = false })
+    await expect(page.locator('details[open]:has(form[aria-label="Nova revisão do contexto do caso"])')).toHaveCount(0)
+    await command(page, 'Abrir registros de Ana Clara')
+    await expect.poll(() => page.evaluate(() => window.voiceNativeCalls.filter(call => call.command === 'case_context_list').length)).toBeGreaterThan(0)
+    await expect(panel).not.toHaveAttribute('open', '')
+    await page.getByLabel('Paciente para evolução e sessões').selectOption('')
+  }
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+})
+
+test('fechar Sessões cancela abertura de contexto pendente antes da remontagem', async ({ page }) => {
+  await openApp(page)
+  await page.evaluate(() => { window.deferContexts = true })
+  await command(page, 'Abrir contexto do caso de Ana Clara')
+  await expect.poll(() => page.evaluate(() => typeof window.resolveContexts)).toBe('function')
+  await command(page, 'Clicar em Fechar sessões')
+  await expect(page.getByLabel('Paciente para evolução e sessões')).toHaveCount(0)
+  await page.evaluate(() => { window.resolveContexts([]); delete window.resolveContexts })
+  await command(page, 'Abrir registros de Ana Clara')
+  await expect(page.getByLabel('Paciente para evolução e sessões')).toHaveValue('ana')
+  await expect.poll(() => page.evaluate(() => typeof window.resolveContexts)).toBe('function')
+  await page.evaluate(() => {
+    window.resolveContexts([{ id: 'restored-context', patientId: 'ana', recordedAt: '2026-10-03T12:00:00Z', demand: 'Contexto fictício carregado após remontagem', objectives: 'Objetivo fictício' }])
+    window.deferContexts = false
+  })
+  const panel = page.locator('details:has(form[aria-label="Nova revisão do contexto do caso"])')
+  await expect(panel.locator(':scope > dl')).toContainText('Contexto fictício carregado após remontagem')
+  await expect(panel).not.toHaveAttribute('open', '')
+  await command(page, 'Abrir contexto do caso de Ana Clara')
+  await expect(page.getByRole('form', { name: 'Nova revisão do contexto do caso' })).toBeVisible()
+  expect(await page.evaluate(() => window.writes)).toEqual([])
 })
 
 test('voz abre modelo de comportamento e cancela ou salva versão sem registrar em sessão', async ({ page }) => {

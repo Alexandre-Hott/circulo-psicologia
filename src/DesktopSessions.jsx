@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { groupIndicatorHistory } from './desktopIndicatorEvolution.js'
 import './DesktopSessions.css'
 
-export default function DesktopSessions({ ref, patientId, onPatientChange, activeDraft, voiceCommandDraft = null, onVoiceDraftApplied, onDraftChange, onChanged, onSessionMessage, onStartRecord, onConfirm = async message => window.confirm(message) }) {
+export default function DesktopSessions({ ref, patientId, onPatientChange, activeDraft, workspaceActive = true, voiceCommandDraft = null, onVoiceDraftApplied, onDraftChange, onChanged, onSessionMessage, onStartRecord, onConfirm = async message => window.confirm(message) }) {
   const [patients, setPatients] = useState([])
   const [templates, setTemplates] = useState([])
   const [indicatorCatalog, setIndicatorCatalog] = useState([])
@@ -86,6 +86,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
 
   useEffect(() => {
     let active = true
+    setLoadedPatientId('')
     if (!patientId) return () => { active = false }
     Promise.all([invoke('session_draft_list', { patientId }), invoke('session_timeline', { patientId }), invoke('session_addendum_list', { patientId }), invoke('case_context_list', { patientId })])
       .then(([nextDrafts, nextTimeline, nextAddenda, nextContexts]) => { if (active) { setDrafts(nextDrafts); setTimeline(nextTimeline); setAddenda(nextAddenda); setCaseContexts(nextContexts); setCaseDemand(''); setCaseObjectives(''); setLoadedPatientId(patientId) } })
@@ -110,6 +111,25 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   useEffect(() => {
     const intent = voiceCommandDraft
     if (!intent?.commandId || appliedVoiceDraftRef.current === intent.commandId) return
+    if (intent.type === 'session.section.open') {
+      const section = intent.target?.section
+      if (!['library', 'context'].includes(section)) return
+      if (!workspaceActive || (section === 'context' && (!patientId || intent.target.patientId !== patientId))) {
+        appliedVoiceDraftRef.current = intent.commandId
+        onVoiceDraftApplied?.(intent.commandId)
+        return
+      }
+      if (section === 'context' && loadedPatientId !== patientId) return
+      const panel = section === 'library' ? document.getElementById('session-behaviors')
+        : document.querySelector('form[aria-label="Nova revisão do contexto do caso"]')?.closest('details')
+      if (!panel) return
+      appliedVoiceDraftRef.current = intent.commandId
+      panel.open = true
+      panel.scrollIntoView({ block: 'center' })
+      panel.querySelector('summary')?.focus({ preventScroll: true })
+      onVoiceDraftApplied?.(intent.commandId)
+      return
+    }
     if (intent.type === 'behavior.create' || intent.type === 'behavior.update' || intent.type === 'behavior.edit.open') {
       appliedVoiceDraftRef.current = intent.commandId
       const applyBehaviorDraft = async () => {
@@ -165,7 +185,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       onSessionMessage?.(`Indicador preenchido. Confira o formulário e clique em “Salvar rascunho” para gravar.`)
     } else onSessionMessage?.('Não apliquei o comando: o campo ou a operação não é compatível com este rascunho.')
     onVoiceDraftApplied?.(intent.commandId)
-  }, [voiceCommandDraft, activeDraft, patientId, onVoiceDraftApplied, onSessionMessage, updateValues])
+  }, [voiceCommandDraft, activeDraft, patientId, loadedPatientId, workspaceActive, onVoiceDraftApplied, onSessionMessage, updateValues])
   const save = useCallback(() => {
     clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = null

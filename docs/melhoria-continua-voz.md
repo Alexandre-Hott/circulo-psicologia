@@ -1,5 +1,11 @@
 # Melhoria contínua de voz
 
+## Incremento após0.2.47: biblioteca e contexto por pedido natural
+
+`Abrir biblioteca de comportamentos reutilizáveis` abre a gaveta existente e preserva edição não salva. `Abrir contexto do caso de Ana Clara` exige paciente ativo/exato/único e consulta concluída. A revisão independente reproduziu três falhas de pedido atrasado: ID antigo reutilizado, abertura em área oculta e sobrevivência ao fechamento de Sessões. Corrigidas com invalidação da carga e do pedido nas respectivas transições; nenhum novo achado de produção na revisão final. Teste de remontagem fortalecido para aguardar a segunda consulta e comprovar o conteúdo carregado antes da asserção de gaveta fechada.
+
+**233/233JS**, **45/45E2E interface/biblioteca/transições/workflows em3,0min**, seguidos de **5/5 focados em27,4s** após fortalecer somente a asserção de remontagem. Build/guard/diff aprovados; lint exit0 com cinco avisos (quatro anteriores e um novo set-state-in-effect na invalidação de carga); build mantém aviso de chunk>500KiB. Evidência sintética de componentes/RPC, sem microfone físico, banco nativo, mudança de perfil ou novo instalador. A versão instalada0.2.47 não inclui este incremento nem o alias de adendo anterior. Pedido natural de adendo com paciente/data/horário continua pendente. Meta ativa.
+
 ## Incremento após0.2.47: texto visível para Adicionar adendo
 
 Auditoria independente identificou três fricções concretas de acesso natural, não bugs de persistência. [Pendências e prioridade](voz-pendencias-usabilidade-0.2.47.md). Corrigida primeira parte: `Clicar em Adicionar adendo` usa alias explícito, único alvo mostra registro completo/abre após confirmar; dois alvos recusam e exigem rótulo específico. Cancelar não grava.2/2 específicos em24,1s; regressão **29/29 E2E interface/workflows em2,1min**, **232/232JS**, lint/build/guard/diff aprovados (avisos anteriores). Revisor confirmou alias sem escolha arbitrária, sem achado novo. Rotas naturais de biblioteca, contexto e adendo com paciente/data ainda pendentes. Nenhum dado real/banco/Rust/microfone físico ou novo instalador; instalado47 não contém alias. Meta ativa.

@@ -383,13 +383,13 @@ const parseOccurrenceAction = (text, context, referenceDate) => {
 const parsePatientWorkspaceNavigation = (text, context) => {
   // Whisper may spell the spoken navigation noun as “seções”; accept it only
   // here, leaving the delimited patient name and literal fields untouched.
-  const match = /^(?:abrir|abra|abre)\s+(?:(?:o|a|os|as)\s+)?(registros|sessoes|secoes|evolucao|vinculos)\s+(?:de|do|da)\s+(.+)$/u.exec(text)
+  const match = /^(?:abrir|abra|abre)\s+(?:(?:o|a|os|as)\s+)?(registros|sessoes|secoes|evolucao|vinculos|contexto(?: do caso)?)\s+(?:de|do|da)\s+(.+)$/u.exec(text)
   if (!match) return null
   const result = exactTarget(match[2], (context.patients || []).filter(patient => patient.archivedAt == null), 'paciente')
   if (result.error) return refuse(result.error)
-  const space = match[1] === 'vinculos' ? 'links' : match[1] === 'evolucao' ? 'evolution' : 'sessions'
+  const space = match[1] === 'vinculos' ? 'links' : match[1] === 'evolucao' ? 'evolution' : match[1].startsWith('contexto') ? 'context' : 'sessions'
   return draft({ type: 'patient.workspace.open', target: { patientId: result.entity.id, space } },
-    `Abrir ${space === 'links' ? 'vínculos' : 'registros'} de ${result.entity.name}.`)
+    `Abrir ${space === 'links' ? 'vínculos' : space === 'context' ? 'contexto do caso' : 'registros'} de ${result.entity.name}.`)
 }
 
 // Month boundaries are civil dates, including leap years and the four-digit
@@ -450,6 +450,10 @@ const parseAnalyticsNavigation = (text, context, referenceDate) => {
 const parseWorkspaceNavigation = text => {
   const match = /^(?:abrir|abra|abre)\s+(?:(?:a|o|as|os)\s+)?(.+)$/u.exec(text)
   if (!match) return null
+  if (/^(?:biblioteca|biblioteca de comportamentos(?: reutilizaveis)?)$/u.test(match[1])) {
+    return draft({ type: 'workspace.open', target: { space: 'sessions', section: 'library' } },
+      'Abrir biblioteca de comportamentos reutilizáveis.', ['Apenas abre a biblioteca; nenhum comportamento ou registro será salvo.'])
+  }
   const spaces = { home: 'home', inicio: 'home', 'pagina inicial': 'home', pacientes: 'patients', agenda: 'agenda', sessoes: 'sessions', analises: 'analytics', graficos: 'analytics', ajustes: 'settings', configuracoes: 'settings' }
   const space = Object.hasOwn(spaces, match[1]) ? spaces[match[1]] : null
   return space ? draft({ type: 'workspace.open', target: { space } }, `Abrir ${match[1]}.`) : refuse('Informe um único espaço: início, pacientes, agenda, sessões, análises ou configurações.')

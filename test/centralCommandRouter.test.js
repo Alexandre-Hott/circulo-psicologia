@@ -17,6 +17,21 @@ const indicators = [
 const session = { id: 'session-draft-ana-001', patientId: 'patient-ana', patientName: 'Ana Clara', originalDate: '2026-09-30' }
 const context = { patients, behaviors, indicators, activeSessionDraft: session }
 
+test('abrir biblioteca e contexto usa rotas de leitura e paciente exato ativo', () => {
+  for (const text of ['Abrir biblioteca', 'Abra a biblioteca de comportamentos', 'Abrir biblioteca de comportamentos reutilizáveis.']) {
+    assert.deepEqual(parseCentralCommand({ text, context }).intent, { type: 'workspace.open', target: { space: 'sessions', section: 'library' } })
+  }
+  for (const text of ['Abrir contexto do caso de Ana Clara', 'Abra o contexto de Ana Clara.']) {
+    assert.deepEqual(parseCentralCommand({ text, context }).intent, { type: 'patient.workspace.open', target: { patientId: 'patient-ana', space: 'context' } })
+  }
+  for (const text of ['Abrir contexto do caso de Ana', 'Abrir contexto do caso de Ana Clara e Caio Fictício', 'Abrir biblioteca e abrir agenda']) {
+    assert.equal(parseCentralCommand({ text, context }).status, 'clarification')
+  }
+  for (const patients of [[{ id: 'x', name: 'Ana Clara', archivedAt: 1 }], [{ id: 'x', name: 'Ana Clara' }, { id: 'y', name: 'Ana Clara' }]]) {
+    assert.equal(parseCentralCommand({ text: 'Abrir contexto do caso de Ana Clara', context: { patients } }).status, 'clarification')
+  }
+})
+
 test('editar comportamento sem alterações abre modelo exato sem preparar versão nova', () => {
   for (const text of ['Editar comportamento Pede ajuda.', 'Edite o comportamento Pede ajuda', 'Atualizar comportamento Pede ajuda']) {
     assert.deepEqual(parseCentralCommand({ text, context }).intent,

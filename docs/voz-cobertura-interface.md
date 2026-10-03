@@ -1,5 +1,11 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Complemento executado: biblioteca e contexto por pedido natural
+
+`Abrir biblioteca de comportamentos reutilizáveis` abre a gaveta existente e preserva edição não salva. `Abrir contexto do caso de Ana Clara` exige paciente ativo/exato/único e consulta concluída. A revisão independente reproduziu três falhas de pedido atrasado: ID antigo reutilizado, abertura em área oculta e sobrevivência ao fechamento de Sessões. Corrigidas com invalidação da carga e do pedido nas respectivas transições; nenhum novo achado de produção na revisão final. Teste de remontagem fortalecido para aguardar a segunda consulta e comprovar o conteúdo carregado antes da asserção de gaveta fechada.
+
+**233/233JS**, **45/45E2E interface/biblioteca/transições/workflows em3,0min**, seguidos de **5/5 focados em27,4s** após fortalecer somente a asserção de remontagem. Build/guard/diff aprovados; lint exit0 com cinco avisos (quatro anteriores e um novo set-state-in-effect na invalidação de carga); build mantém aviso de chunk>500KiB. Evidência sintética de componentes/RPC, sem microfone físico, banco nativo, mudança de perfil ou novo instalador. A versão instalada0.2.47 não inclui este incremento nem o alias de adendo anterior. Pedido natural de adendo com paciente/data/horário continua pendente. Meta ativa.
+
 ## Complemento executado: alias visível do adendo
 
 `Clicar em Adicionar adendo` reconhece o texto do botão, preservando o rótulo detalhado. Gateway existente exige alvo único e fingerprint de registro. Novo E2E abre adendo da única sessão após confirmar e cancela sem escrever; cenário com duas sessões foi ampliado para recusar o alias e abrir só a sessão da tarde mediante nome completo. **2/2 em24,1s**, regressão **29/29 interface/workflows em2,1min**, JS232/232 e lint/build/guard/diff aprovados; revisão independente sem achado novo. Componentes/backend sintéticos, sem microfone/banco nativo ou novo pacote. [Auditoria e próximas rotas](voz-pendencias-usabilidade-0.2.47.md): biblioteca/contexto/adendo natural específico ainda não concluídos. Instalado0.2.47 anterior a este alias.
