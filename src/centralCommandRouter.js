@@ -348,6 +348,21 @@ const parseOccurrenceTime = phrase => {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 }
 
+const parseAddendumNavigation = (text, context) => {
+  if (!/^(?:adicionar|adicione|adiciona|abrir|abra|abre)\s+(?:um\s+|o\s+)?adendo\b/u.test(text)) return null
+  const match = /^(?:adicionar|adicione|adiciona|abrir|abra|abre)\s+(?:um\s+|o\s+)?adendo\s+(?:a|na|da)\s+sessao\s+de\s+(.+?)\s+(?:de|em|no dia)\s+(\d{2})\/(\d{2})\/(\d{4})\s+as\s+(.+)$/u.exec(text)
+  if (!match) return refuse('Informe o paciente, a data DD/MM/AAAA e o horário da sessão finalizada para abrir o adendo.')
+  const patient = exactTarget(match[1], (context.patients || []).filter(item => item.archivedAt == null), 'paciente')
+  if (patient.error) return refuse(patient.error)
+  const date = `${match[4]}-${match[3]}-${match[2]}`
+  const start = parseOccurrenceTime(match[5])
+  if (!isCivilDate(date)) return refuse('Informe uma data válida para a sessão finalizada.')
+  if (!start) return refuse('Informe um horário explícito e sem ambiguidade, como 15:00 ou três da tarde.')
+  return draft({ type: 'session.addendum.open', target: { patientId: patient.entity.id, date, start } },
+    `Abrir adendo da sessão finalizada de ${patient.entity.name} em ${match[2]}/${match[3]}/${match[4]} às ${start}.`,
+    ['Apenas abre o formulário da sessão finalizada exata; nenhum adendo ou compromisso será salvo.'])
+}
+
 const parseOccurrenceAction = (text, context, referenceDate) => {
   if (!/^(?:iniciar|remarcar|cancelar)\s+sessao\b/u.test(text)) return null
   const match = /^(iniciar|remarcar|cancelar)\s+sessao\s+de\s+(.+?)\s+(hoje|amanha|no dia \d{2}\/\d{2}\/\d{4})\s+as\s+(.+)$/u.exec(text)
@@ -627,6 +642,8 @@ export function parseCentralCommand({ text, context = {}, referenceDate } = {}) 
     || /(?:\s+ou\s+|,\s*|\s+em seguida\s+)(?:abrir|abra|abre|mostrar|mostre|mostra)\s+(?:(?:a|o|as|os)\s+)?(?:analises|graficos|registros|sessoes|evolucao|vinculos)\b/u.test(commandRegion)) {
     return refuse('Informe apenas uma ação por comando.')
   }
+  const addendum = parseAddendumNavigation(normalized, context)
+  if (addendum) return addendum
   const occurrence = parseOccurrenceAction(normalized, context, referenceDate)
   if (occurrence?.status === 'draft') return occurrence
   if (/^(?:apague|apagar|exclua|excluir|delete|deletar|remova|remover|finalize|finalizar|cancele|cancelar)\b/u.test(normalized)) {

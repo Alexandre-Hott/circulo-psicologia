@@ -1,5 +1,19 @@
 # Melhoria contínua de voz
 
+## Entrega local0.2.48 — adendo natural e acessos da biblioteca/contexto
+
+Pacote local `Círculo_0.2.48_x64-setup.exe`, **135.881.324 bytes**, SHA-256 `a6297c0fe761c7a0dbd3318c5451d65425c025f2840d151aca6573de02e93b95`. Build Tauri NSIS offline/locked exit0; override temporário de artifacts updater removido depois do terminal. Metadados auditados em `%TEMP%\\circulo-0248-audit-20261003.json`: PE0.2.48/x64/NotSigned, tamanho/hash conferidos. Sem extração, instalação ou abertura nesta rodada. Instalado local permanece0.2.47; pacote não publicado em Release e sem assinatura updater/Authenticode. Configuração oficial do updater preservada.
+
+Inclui alias do botão Adicionar adendo, biblioteca/contexto naturais e `Adicionar adendo à sessão de Ana Clara de 03/10/2026 às 15:00`. A nova rota não usa agendamento nem savePending; após confirmar consulta a timeline novamente, exige paciente/data/start únicos/exatos e abre somente o formulário existente. Recusa ausência/duplicidade/paciente incompatível. Mantém texto no mesmo editor; outro adendo com conteúdo exige Salvar/Cancelar. Ao trocar de paciente com editores/rascunho abertos, exige salvá-los e fechar Sessões antes; não descarta nem salva automaticamente pela nova rota. Respostas antigas são invalidadas por área/paciente, Cancelar/Salvar, fechamento ou remontagem por rascunho/Agenda.
+
+**234/234JS**, **53/53E2E interface/biblioteca/transições/workflows em4,0min**, lint exit0 (cinco avisos anteriores), guard/build/diff aprovados. Oito novos cenários de adendo incluem proposta/confirmar, foco no textarea correto, duas sessões do mesmo dia, Salvar explícito com payload exato, recusa/preservação e respostas atrasadas. Sete focados passaram7/7 em39,6s antes de acrescentar Agenda e asserção de foco; ambos passaram na regressão53. Revisão independente final sem novo achado concreto, apenas estática.
+
+Falhas intermediárias registradas: teste de texto digitado durante consulta reproduziu perda de editor (0/1), corrigida lendo ref atual no retorno; rodada6cenários5/6 porque autosave normal de600ms interferiu na prova de ausência de save da rota, corrigido pausando relógio antes do fill. Revisor apontou também remontagem/Cancelamento, cobertos pelos cenários finais.
+
+Rust debug offline/locked **não executou testes**: compilação do OpenSSL falhou em arquivo build.info ausente na árvore debug. Alternativa `cargo test --release --offline --locked`: **83 aprovados, 0 falhas, 1 ignorado opt-in de áudio**, execução8,48s. Não foi repetido teste de WAV/transcrição nativa. Build/teste release mantêm warning LNK4099 de PDB OpenSSL; Vite mantém chunk>500KiB. Sem alteração de backend Rust funcional.
+
+Limites: testes de comando/captura/RPC sintéticos não validam microfone humano, ruído, sotaque ou jornada instalada. Senhas/seletores nativos de arquivos manuais. Nenhum perfil/dado real alterado; nenhuma limpeza de recovery ou compatibilidade antiga implementada. Três fricções da auditoria após47 resolvidas no código e incluídas neste pacote; isso não comprova cobertura universal de fala. Meta permanece ativa para ampliar evidência e comandos restantes.
+
 ## Incremento após0.2.47: biblioteca e contexto por pedido natural
 
 `Abrir biblioteca de comportamentos reutilizáveis` abre a gaveta existente e preserva edição não salva. `Abrir contexto do caso de Ana Clara` exige paciente ativo/exato/único e consulta concluída. A revisão independente reproduziu três falhas de pedido atrasado: ID antigo reutilizado, abertura em área oculta e sobrevivência ao fechamento de Sessões. Corrigidas com invalidação da carga e do pedido nas respectivas transições; nenhum novo achado de produção na revisão final. Teste de remontagem fortalecido para aguardar a segunda consulta e comprovar o conteúdo carregado antes da asserção de gaveta fechada.

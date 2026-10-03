@@ -44,7 +44,7 @@ async function openApp(page, { emptyLibrary = false, archivedPatient = false } =
       if (command === 'voice_transcribe') return window.deferVoice ? await new Promise(resolve => { window.resolveVoice = resolve }) : window.voiceTranscript
       if (command === 'agenda_occurrences') return (window.voiceOccurrences || [occurrence]).filter(item => item.date >= args.from && item.date <= args.to)
       if (command === 'session_draft_start') return draft
-      if (command === 'session_timeline') return window.voiceTimeline || []
+      if (command === 'session_timeline') return window.deferTimeline ? await new Promise(resolve => { window.resolveTimeline = resolve }) : window.voiceTimeline || []
       if (command === 'session_draft_list') return window.voiceDrafts || []
       if (command === 'case_context_list' && window.deferContexts) return await new Promise(resolve => { window.resolveContexts = resolve })
       if (command === 'session_draft_cancel') { window.writes.push({ command, args }); window.voiceDrafts = (window.voiceDrafts || []).filter(item => item.id !== args.id); return null }
@@ -56,6 +56,7 @@ async function openApp(page, { emptyLibrary = false, archivedPatient = false } =
       if (command === 'behavior_update') { const saved = behaviors.find(item => item.id === args.id); Object.assign(saved, args, { version: saved.version + 1 }); window.writes.push({ command, args }); return saved }
       if (command === 'session_draft_save') { draft = { ...draft, ...args.input }; window.writes.push({ command, args }); return draft }
       if (command === 'session_finalize') { window.writes.push({ command, args }); return null }
+      if (command === 'session_addendum_create') { window.writes.push({ command, args }); return { id: 'new-addendum', ...args, createdAt: '2026-10-03T12:00:00Z' } }
       if (command === 'agenda_create_series') { window.writes.push({ command, args }); return { id: 'series-2', ...args.input } }
       if (command === 'analytics_overview') { window.analyticsRequests.push(args); return { totalCompletedSessions: 0, uniquePatients: 0, dailyCounts: [], monthlyCounts: [], behaviorCounts: [] } }
       if (command === 'plugin:updater|check') return null
@@ -541,6 +542,162 @@ test('adendo por voz identifica o horário entre duas sessões no mesmo dia', as
   await expect(page.locator('#addendum-afternoon')).toBeVisible()
   await expect(page.locator('#addendum-morning')).toHaveCount(0)
   await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(0)
+})
+
+test('adendo natural escolhe sessão finalizada pelo horário e só salva após pedido explícito', async ({ page }) => {
+  await openApp(page)
+  await page.evaluate(() => { window.voiceTimeline = [
+    { id: 'morning', patientId: 'ana', sessionDate: '2026-10-03', start: '09:00', end: '09:50', modality: 'Presencial', behaviors: [], indicators: [] },
+    { id: 'afternoon', patientId: 'ana', sessionDate: '2026-10-03', start: '15:00', end: '15:50', modality: 'Presencial', behaviors: [], indicators: [] },
+  ] })
+  await propose(page, 'Adicionar adendo à sessão de Ana Clara de 03/10/2026 às 15:00')
+  await expect(page.locator('.voice-command-preview')).toContainText('sessão finalizada de Ana Clara em 03/10/2026 às 15:00')
+  await expect(page.locator('#addendum-afternoon')).toHaveCount(0)
+  await propose(page, 'confirmar')
+  await expect(page.locator('#addendum-afternoon')).toBeVisible()
+  await expect(page.locator('#addendum-afternoon')).toBeFocused()
+  await expect(page.locator('#addendum-morning')).toHaveCount(0)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await command(page, 'Preencher Texto do adendo com Complemento fictício preservado')
+  await command(page, 'Abrir adendo da sessão de Ana Clara de 03/10/2026 às 15:00')
+  await expect(page.locator('#addendum-afternoon')).toHaveValue('Complemento fictício preservado')
+  await command(page, 'Adicionar adendo à sessão de Ana Clara de 03/10/2026 às 09:00')
+  await expect(page.getByRole('alert')).toContainText('Salve ou cancele o adendo atual')
+  await expect(page.locator('#addendum-afternoon')).toHaveValue('Complemento fictício preservado')
+  await expect(page.locator('#addendum-morning')).toHaveCount(0)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await command(page, 'Clicar em Salvar adendo imutável')
+  await expect.poll(() => page.evaluate(() => window.writes)).toEqual([{ command: 'session_addendum_create', args: { sessionId: 'afternoon', patientId: 'ana', content: 'Complemento fictício preservado' } }])
+})
+
+test('adendo natural recusa sessão ausente, duplicada e de outro paciente sem gravar', async ({ page }) => {
+  await openApp(page)
+  for (const kind of ['absent', 'duplicate', 'wrong-patient']) {
+    await page.evaluate(kind => {
+      const session = { id: 'one', patientId: kind === 'wrong-patient' ? 'other' : 'ana', sessionDate: '2026-10-03', start: '15:00', end: '15:50', modality: 'Presencial', behaviors: [], indicators: [] }
+      window.voiceTimeline = kind === 'absent' ? [] : kind === 'duplicate' ? [session, { ...session, id: 'two' }] : [session]
+    }, kind)
+    await command(page, 'Adicionar adendo à sessão de Ana Clara de 03/10/2026 às 15:00')
+    await expect(page.getByRole('alert')).toContainText(kind === 'duplicate' ? 'Há mais de uma sessão finalizada' : 'Não encontrei a sessão finalizada exata')
+    await expect(page.locator('textarea[id^="addendum-"]')).toHaveCount(0)
+  }
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+})
+
+test('consulta atrasada de adendo não atravessa navegação ou fechamento de Sessões', async ({ page }) => {
+  await openApp(page)
+  for (const destination of ['Análises', 'Fechar sessões']) {
+    await command(page, 'Abrir registros de Ana Clara')
+    await page.evaluate(() => { window.deferTimeline = true; delete window.resolveTimeline })
+    await command(page, 'Adicionar adendo à sessão de Ana Clara de 03/10/2026 às 15:00')
+    await expect.poll(() => page.evaluate(() => typeof window.resolveTimeline)).toBe('function')
+    await command(page, `Clicar em ${destination}`)
+    await page.evaluate(() => {
+      window.voiceTimeline = [{ id: 'late', patientId: 'ana', sessionDate: '2026-10-03', start: '15:00', end: '15:50', modality: 'Presencial', behaviors: [], indicators: [] }]
+      window.deferTimeline = false; window.resolveTimeline(window.voiceTimeline)
+    })
+    await command(page, 'Abrir registros de Ana Clara')
+    await expect(page.locator('textarea[id^="addendum-"]')).toHaveCount(0)
+    await expect(page.locator('details[aria-label="Evolução descritiva somente leitura"]')).not.toHaveAttribute('open', '')
+  }
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+})
+
+test('consulta de adendo preserva texto digitado no editor atual durante a espera', async ({ page }) => {
+  await openApp(page)
+  await page.evaluate(() => { window.voiceTimeline = [
+    { id: 'morning', patientId: 'ana', sessionDate: '2026-10-03', start: '09:00', end: '09:50', modality: 'Presencial', behaviors: [], indicators: [] },
+    { id: 'afternoon', patientId: 'ana', sessionDate: '2026-10-03', start: '15:00', end: '15:50', modality: 'Presencial', behaviors: [], indicators: [] },
+  ] })
+  await command(page, 'Adicionar adendo à sessão de Ana Clara de 03/10/2026 às 09:00')
+  await expect(page.locator('#addendum-morning')).toBeVisible()
+  await page.evaluate(() => { window.deferTimeline = true })
+  await command(page, 'Adicionar adendo à sessão de Ana Clara de 03/10/2026 às 15:00')
+  await expect.poll(() => page.evaluate(() => typeof window.resolveTimeline)).toBe('function')
+  await page.locator('#addendum-morning').fill('Texto fictício digitado durante espera')
+  await page.evaluate(() => { window.deferTimeline = false; window.resolveTimeline(window.voiceTimeline) })
+  await expect(page.getByRole('alert')).toContainText('Salve ou cancele o adendo atual')
+  await expect(page.locator('#addendum-morning')).toHaveValue('Texto fictício digitado durante espera')
+  await expect(page.locator('#addendum-afternoon')).toHaveCount(0)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+})
+
+test('adendo de outro paciente não descarta editor nem salva rascunho aberto', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Cadastrar paciente Bia Fictícia com 27 anos')
+  await command(page, 'Clicar em Salvar paciente')
+  await page.evaluate(() => {
+    window.writes = []
+    window.voiceTimeline = [{ id: 'original', patientId: 'ana', sessionDate: '2026-10-03', start: '15:00', end: '15:50', modality: 'Presencial', behaviors: [], indicators: [] }]
+  })
+  await command(page, 'Adicionar adendo à sessão de Ana Clara de 03/10/2026 às 15:00')
+  await page.locator('#addendum-original').fill('Complemento fictício ainda não salvo')
+  await command(page, 'Adicionar adendo à sessão de Bia Fictícia de 03/10/2026 às 15:00')
+  await expect(page.getByRole('alert')).toContainText('Salve e feche as edições atuais')
+  await expect(page.locator('#addendum-original')).toHaveValue('Complemento fictício ainda não salvo')
+  await expect(page.getByLabel('Paciente para evolução e sessões')).toHaveValue('ana')
+  await command(page, 'Clicar em Cancelar')
+  await page.evaluate(() => { window.voiceDrafts = [{ id: 'unsaved', patientId: 'ana', originalDate: '2026-10-02', observation: 'Observação fictícia original', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicators: [] }] })
+  await command(page, 'Clicar em Fechar sessões')
+  await command(page, 'Abrir registros de Ana Clara')
+  await command(page, 'Clicar em Retomar sessão de 2026-10-02')
+  await page.clock.pauseAt(new Date('2026-10-03T15:01:00Z'))
+  await page.getByLabel('Observações descritivas').fill('Observação fictícia ainda não salva')
+  await command(page, 'Adicionar adendo à sessão de Bia Fictícia de 03/10/2026 às 15:00')
+  await expect(page.getByRole('alert')).toContainText('Salve e feche as edições atuais')
+  await expect(page.getByLabel('Observações descritivas')).toHaveValue('Observação fictícia ainda não salva')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+})
+
+test('retomar rascunho invalida consulta de adendo antes da remontagem', async ({ page }) => {
+  await openApp(page)
+  await page.evaluate(() => {
+    window.voiceTimeline = [{ id: 'late-final', patientId: 'ana', sessionDate: '2026-10-03', start: '15:00', end: '15:50', modality: 'Presencial', behaviors: [], indicators: [] }]
+    window.voiceDrafts = [{ id: 'resume-new', patientId: 'ana', originalDate: '2026-10-02', observation: 'Observação fictícia', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicators: [] }]
+  })
+  await command(page, 'Abrir registros de Ana Clara')
+  await page.evaluate(() => { window.deferTimeline = true })
+  await command(page, 'Adicionar adendo à sessão de Ana Clara de 03/10/2026 às 15:00')
+  await expect.poll(() => page.evaluate(() => typeof window.resolveTimeline)).toBe('function')
+  await page.evaluate(() => { window.oldTimelineResolve = window.resolveTimeline; window.deferTimeline = false })
+  await command(page, 'Clicar em Retomar sessão de 2026-10-02')
+  await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toHaveAttribute('data-voice-record', 'resume-new')
+  await expect(page.locator('details[aria-label="Evolução descritiva somente leitura"]')).not.toHaveAttribute('open', '')
+  await page.evaluate(() => window.oldTimelineResolve(window.voiceTimeline))
+  await expect(page.locator('#addendum-late-final')).toHaveCount(0)
+  await expect(page.getByLabel('Observações descritivas')).toHaveValue('Observação fictícia')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+})
+
+test('Cancelar adendo invalida consulta pendente sem reabrir o editor', async ({ page }) => {
+  await openApp(page)
+  await page.evaluate(() => { window.voiceTimeline = [{ id: 'cancelled', patientId: 'ana', sessionDate: '2026-10-03', start: '15:00', end: '15:50', modality: 'Presencial', behaviors: [], indicators: [] }] })
+  await command(page, 'Adicionar adendo à sessão de Ana Clara de 03/10/2026 às 15:00')
+  await expect(page.locator('#addendum-cancelled')).toBeVisible()
+  await page.evaluate(() => { window.deferTimeline = true })
+  await command(page, 'Adicionar adendo à sessão de Ana Clara de 03/10/2026 às 15:00')
+  await expect.poll(() => page.evaluate(() => typeof window.resolveTimeline)).toBe('function')
+  await command(page, 'Clicar em Cancelar')
+  await page.evaluate(async () => { window.deferTimeline = false; window.resolveTimeline(window.voiceTimeline); await new Promise(resolve => queueMicrotask(resolve)) })
+  await expect(page.locator('#addendum-cancelled')).toHaveCount(0)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+})
+
+test('iniciar sessão pela Agenda não reaplica consulta antiga de adendo', async ({ page }) => {
+  await openApp(page)
+  await page.evaluate(() => { window.voiceTimeline = [{ id: 'previous-final', patientId: 'ana', sessionDate: '2026-10-02', start: '15:00', end: '15:50', modality: 'Presencial', behaviors: [], indicators: [] }] })
+  await command(page, 'Abrir registros de Ana Clara')
+  await page.evaluate(() => { window.deferTimeline = true })
+  await command(page, 'Adicionar adendo à sessão de Ana Clara de 02/10/2026 às 15:00')
+  await expect.poll(() => page.evaluate(() => typeof window.resolveTimeline)).toBe('function')
+  await page.evaluate(() => { window.oldTimelineResolve = window.resolveTimeline; window.deferTimeline = false })
+  await command(page, 'Abrir Agenda')
+  await command(page, 'Iniciar sessão de Ana Clara hoje às 15:00')
+  await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toHaveAttribute('data-voice-record', 'draft')
+  await page.evaluate(async () => { window.oldTimelineResolve(window.voiceTimeline); await new Promise(resolve => queueMicrotask(resolve)) })
+  await expect(page.locator('#addendum-previous-final')).toHaveCount(0)
+  await expect(page.locator('details[aria-label="Evolução descritiva somente leitura"]')).not.toHaveAttribute('open', '')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
 })
 
 test('pedido natural encontra compromisso e abre cancelamento ou remarcação sem gravar', async ({ page }) => {

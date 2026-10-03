@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Complemento executado e empacotado0.2.48: adendo natural
+
+Pedido com paciente/data/horário abre o adendo da sessão finalizada única/exata após confirmar e consultar novamente. Nova rota não agenda, não chama savePending e não descarta rascunho/editor ao trocar paciente. Texto digitado durante consulta é preservado usando o editor atual; Cancelar/Salvar, navegação e remontagem invalidam resposta/foco atrasados. **234/234JS**, **53/53E2E em4,0min** (interface/biblioteca/transições/workflows), **83Rust release aprovados/1 opt-in ignorado**. Debug Rust falhou na compilação do OpenSSL antes dos testes. Lint/guard/build/diff aprovados com avisos anteriores. Revisão independente final sem achado novo, estática. [Pacote, tentativas intermediárias e limites](melhoria-continua-voz.md). Instalador local0.2.48 auditado, não instalado/publicado nesta rodada; sem microfone físico. As três rotas da auditoria pós47 estão resolvidas/incluídas, sem declarar cobertura universal.
+
 ## Complemento executado: biblioteca e contexto por pedido natural
 
 `Abrir biblioteca de comportamentos reutilizáveis` abre a gaveta existente e preserva edição não salva. `Abrir contexto do caso de Ana Clara` exige paciente ativo/exato/único e consulta concluída. A revisão independente reproduziu três falhas de pedido atrasado: ID antigo reutilizado, abertura em área oculta e sobrevivência ao fechamento de Sessões. Corrigidas com invalidação da carga e do pedido nas respectivas transições; nenhum novo achado de produção na revisão final. Teste de remontagem fortalecido para aguardar a segunda consulta e comprovar o conteúdo carregado antes da asserção de gaveta fechada.

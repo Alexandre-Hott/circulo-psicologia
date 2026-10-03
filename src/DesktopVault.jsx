@@ -203,6 +203,18 @@ export default function DesktopVault() {
       setSpace('analytics')
       return
     }
+    if (intent.type === 'session.addendum.open') {
+      const patient = patients.find(item => item.id === intent.target.patientId && item.archivedAt == null)
+      if (!patient) { setVoiceNotice('O paciente não está mais disponível. Atualize a lista e prepare o pedido novamente.'); return }
+      if (busyRef.current) return
+      if (sessionPatientId !== patient.id && (activeDraft || sessionsRef.current?.hasOtherUnsavedEditors())) {
+        setVoiceNotice('Salve e feche as edições atuais de Sessões antes de abrir o adendo de outro paciente.')
+        return
+      }
+      setSessionPatientId(patient.id); setSessionsOpen(true); setSpace('sessions')
+      setSessionVoiceDraft({ ...intent, commandId: crypto.randomUUID() })
+      return
+    }
     if (intent.type === 'patient.workspace.open') {
       const patient = patients.find(item => item.id === intent.target.patientId && item.archivedAt == null)
       if (!patient) { setVoiceNotice('O paciente não está mais disponível. Atualize a lista e prepare o pedido novamente.'); return }
@@ -770,6 +782,7 @@ export default function DesktopVault() {
       await sessionsRef.current?.savePending()
       const draft = await invoke('session_draft_start', { seriesId: occurrence.seriesId, originalDate: occurrence.originalDate })
       setSessionPatientId(draft.patientId)
+      setSessionVoiceDraft(null)
       setActiveDraft(draft)
       setAgendaOpen(false)
       setAgendaRecordPatientId('')
@@ -786,7 +799,7 @@ export default function DesktopVault() {
     setBusy(true); setError('')
     try {
       if (sessionPatientId !== patientId) await sessionsRef.current?.savePending()
-      if (sessionPatientId !== patientId) setActiveDraft(null)
+      if (sessionPatientId !== patientId) { setSessionVoiceDraft(null); setActiveDraft(null) }
       setSessionPatientId(patientId)
       setSessionsOpen(true)
       setSpace('sessions')
@@ -918,7 +931,7 @@ export default function DesktopVault() {
         
         </section>
         <section className="vault-panel" hidden={space !== 'agenda'} aria-label="Agenda"><div className="vault-section-heading"><div><p className="vault-eyebrow">AGENDA</p><h2>Compromissos</h2></div><button type="button" className="vault-secondary" onClick={() => setSpace('patients')}>Fechar Agenda</button></div>{agendaRecordPatientId && <p role="status">Paciente {patients.find(patient => patient.id === agendaRecordPatientId)?.name || 'selecionado'} já selecionado para um compromisso avulso. Confira data e horário e use “Criar e iniciar sessão”; você também pode iniciar uma sessão em um compromisso existente.</p>}{agendaOpen && <DesktopAgenda onConfirm={confirmAction} patients={patients} initialPatientId={agendaRecordPatientId} voiceCommandDraft={agendaVoiceDraft} onVoiceDraftApplied={commandId => setAgendaVoiceDraft(current => current?.commandId === commandId ? null : current)} voiceOccurrenceRequest={agendaVoiceAction} onVoiceOccurrenceApplied={commandId => setAgendaVoiceAction(current => current?.commandId === commandId ? null : current)} voiceViewRequest={agendaVoiceView} onVoiceViewApplied={commandId => setAgendaVoiceView(current => current?.commandId === commandId ? null : current)} onChanged={refreshWorkspace} onStartSession={startSessionFromAgenda} startAvulsaSignal={startAvulsaSignal} quickStart={quickStart} onQuickStartConsumed={() => setQuickStart(false)} />}</section>
-        <section className="vault-panel" hidden={space !== 'sessions'} aria-label="Sessões e registros"><div className="vault-section-heading"><div><p className="vault-eyebrow">SESSÕES / REGISTROS</p><h2>Sessões e registros</h2></div><button type="button" className="vault-secondary" disabled={busy} onClick={async () => { await toggleSessions(); if (sessionsOpen) setSpace('patients') }}>Fechar sessões</button></div><div className="vault-session-start"><p>Para começar um novo registro, crie ou escolha um compromisso na Agenda. Você também pode retomar um rascunho abaixo.</p><button type="button" onClick={() => { setAgendaRecordPatientId(''); setAgendaOpen(true); setSpace('agenda') }}>Criar compromisso avulso ou escolher agendado</button></div>{sessionsOpen && <DesktopSessions workspaceActive={space === 'sessions'} onConfirm={confirmAction} ref={sessionsRef} key={activeDraft?.id || 'timeline'} patientId={sessionPatientId} onPatientChange={setSessionPatientId} activeDraft={activeDraft} voiceCommandDraft={sessionVoiceDraft} onVoiceDraftApplied={commandId => setSessionVoiceDraft(current => current?.commandId === commandId ? null : current)} onDraftChange={setActiveDraft} onChanged={refreshWorkspace} onSessionMessage={setMessage} onStartRecord={openAgendaForRecord} />}</section>
+        <section className="vault-panel" hidden={space !== 'sessions'} aria-label="Sessões e registros"><div className="vault-section-heading"><div><p className="vault-eyebrow">SESSÕES / REGISTROS</p><h2>Sessões e registros</h2></div><button type="button" className="vault-secondary" disabled={busy} onClick={async () => { await toggleSessions(); if (sessionsOpen) setSpace('patients') }}>Fechar sessões</button></div><div className="vault-session-start"><p>Para começar um novo registro, crie ou escolha um compromisso na Agenda. Você também pode retomar um rascunho abaixo.</p><button type="button" onClick={() => { setAgendaRecordPatientId(''); setAgendaOpen(true); setSpace('agenda') }}>Criar compromisso avulso ou escolher agendado</button></div>{sessionsOpen && <DesktopSessions workspaceActive={space === 'sessions'} onConfirm={confirmAction} ref={sessionsRef} key={activeDraft?.id || 'timeline'} patientId={sessionPatientId} onPatientChange={setSessionPatientId} activeDraft={activeDraft} voiceCommandDraft={sessionVoiceDraft} onVoiceDraftApplied={commandId => setSessionVoiceDraft(current => current?.commandId === commandId ? null : current)} onDraftChange={next => { if (next?.id !== activeDraft?.id) setSessionVoiceDraft(null); setActiveDraft(next) }} onChanged={refreshWorkspace} onSessionMessage={setMessage} onStartRecord={openAgendaForRecord} />}</section>
         <section className="vault-panel" hidden={space !== 'settings'} aria-label="Ajustes"><p className="vault-eyebrow">AJUSTES</p><h2>Proteção e dados locais</h2><p className="vault-ok">Cofre desbloqueado neste dispositivo.</p><p>Seus registros ficam neste computador. Para recuperá-los em outro, crie também um backup portátil com senha independente.</p><p className="vault-idle-note">Ao mudar o dia, o cofre pode pedir a senha novamente. Use Bloquear para fechar agora.</p><button disabled={busy} className="vault-secondary" onClick={() => lock(false)}>Bloquear</button>
       {status && <section className="vault-backup" aria-label="Backup e restauração">
         <h2>Backup e restauração manual</h2>

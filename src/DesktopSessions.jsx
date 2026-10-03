@@ -38,6 +38,8 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   const mountedRef = useRef(true)
   const draftIdentityRef = useRef({ id: activeDraft?.id, patientId: activeDraft?.patientId })
   const appliedVoiceDraftRef = useRef('')
+  const sectionRequestEpochRef = useRef(0)
+  const addendumEditorRef = useRef({ id: addendumSessionId, content: addendumContent })
   const voiceConfirmationPendingRef = useRef(false)
   const voiceVersionRef = useRef(0)
   const approvedVoiceVersionRef = useRef(0)
@@ -58,6 +60,12 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     mountedRef.current = true
     return () => { mountedRef.current = false; clearTimeout(autosaveTimerRef.current) }
   }, [])
+  useLayoutEffect(() => {
+    addendumEditorRef.current = { id: addendumSessionId, content: addendumContent }
+  }, [addendumSessionId, addendumContent])
+  useLayoutEffect(() => {
+    sectionRequestEpochRef.current++
+  }, [workspaceActive, patientId])
   useLayoutEffect(() => {
     draftIdentityRef.current = { id: activeDraft?.id, patientId: activeDraft?.patientId }
     return () => { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null }
@@ -111,6 +119,39 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   useEffect(() => {
     const intent = voiceCommandDraft
     if (!intent?.commandId || appliedVoiceDraftRef.current === intent.commandId) return
+    if (intent.type === 'session.addendum.open') {
+      if (!workspaceActive || !patientId || intent.target?.patientId !== patientId) {
+        appliedVoiceDraftRef.current = intent.commandId
+        onVoiceDraftApplied?.(intent.commandId)
+        return
+      }
+      if (loadedPatientId !== patientId) return
+      appliedVoiceDraftRef.current = intent.commandId
+      const epoch = sectionRequestEpochRef.current
+      const stillCurrent = () => mountedRef.current && sectionRequestEpochRef.current === epoch && appliedVoiceDraftRef.current === intent.commandId
+      void invoke('session_timeline', { patientId }).then(nextTimeline => {
+        if (!stillCurrent()) return
+        const matches = nextTimeline.filter(item => item.patientId === patientId && item.sessionDate === intent.target.date && item.start === intent.target.start)
+        if (matches.length !== 1 || typeof matches[0].id !== 'string' || !matches[0].id) throw new Error(matches.length > 1 ? 'Há mais de uma sessão finalizada nesse horário. Escolha o registro na tela.' : 'Não encontrei a sessão finalizada exata. Nenhum adendo foi aberto.')
+        const editor = addendumEditorRef.current
+        if (busyRef.current) throw new Error('Aguarde o salvamento em andamento e prepare o pedido novamente.')
+        if (editor.id && editor.id !== matches[0].id && editor.content.trim()) throw new Error('Salve ou cancele o adendo atual antes de abrir outro registro.')
+        setTimeline(nextTimeline)
+        setAddendumSessionId(matches[0].id)
+        if (editor.id !== matches[0].id) setAddendumContent('')
+        setError('')
+        const panel = document.querySelector('details[aria-label="Evolução descritiva somente leitura"]')
+        if (panel) panel.open = true
+        window.requestAnimationFrame(() => {
+          if (!stillCurrent()) return
+          const field = document.getElementById(`addendum-${matches[0].id}`)
+          field?.scrollIntoView({ block: 'center' })
+          field?.focus({ preventScroll: true })
+        })
+      }).catch(reason => { if (stillCurrent()) setError(String(reason)) })
+        .finally(() => { if (mountedRef.current && appliedVoiceDraftRef.current === intent.commandId) onVoiceDraftApplied?.(intent.commandId) })
+      return
+    }
     if (intent.type === 'session.section.open') {
       const section = intent.target?.section
       if (!['library', 'context'].includes(section)) return
@@ -185,7 +226,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       onSessionMessage?.(`Indicador preenchido. Confira o formulário e clique em “Salvar rascunho” para gravar.`)
     } else onSessionMessage?.('Não apliquei o comando: o campo ou a operação não é compatível com este rascunho.')
     onVoiceDraftApplied?.(intent.commandId)
-  }, [voiceCommandDraft, activeDraft, patientId, loadedPatientId, workspaceActive, onVoiceDraftApplied, onSessionMessage, updateValues])
+  }, [voiceCommandDraft, activeDraft, patientId, loadedPatientId, workspaceActive, addendumSessionId, addendumContent, onVoiceDraftApplied, onSessionMessage, updateValues])
   const save = useCallback(() => {
     clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = null
@@ -361,8 +402,17 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       if (results.some(result => result.status === 'rejected')) setMessage('Nova revisão datada do contexto salva; a atualização da tela falhou. Reabra as sessões para atualizar os dados.')
     } finally { setBusy(false) }
   }
+  const invalidateAddendumRequest = () => {
+    sectionRequestEpochRef.current++
+    if (voiceCommandDraft?.type === 'session.addendum.open') onVoiceDraftApplied?.(voiceCommandDraft.commandId)
+  }
+  const cancelAddendum = () => {
+    invalidateAddendumRequest()
+    setAddendumSessionId(''); setAddendumContent('')
+  }
   const saveAddendum = async event => {
     event.preventDefault(); if (!addendumSessionId || !addendumContent.trim()) return
+    invalidateAddendumRequest()
     setBusy(true); setError(''); setMessage('')
     let saved
     try {
@@ -451,7 +501,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
         <dl><dt>Procedimentos realizados</dt><dd>{session.procedures?.trim() || 'não registrado'}</dd><dt>Resultado e decisão</dt><dd>{session.outcomeDecision?.trim() || 'não registrado'}</dd><dt>Encaminhamento ou encerramento</dt><dd>{session.referralClosure?.trim() || 'não registrado'}</dd></dl>
         <h4>Adendos datados</h4>
         {visibleAddenda.filter(item => item.sessionId === session.id).length ? <ol>{visibleAddenda.filter(item => item.sessionId === session.id).map(item => <li key={item.id}><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString('pt-BR')}</time> · {item.content}</li>)}</ol> : <p>Sem adendos.</p>}
-        {addendumSessionId === session.id ? <form onSubmit={saveAddendum}><label htmlFor={`addendum-${session.id}`}>Texto do adendo (até 4000 caracteres)</label><textarea id={`addendum-${session.id}`} disabled={busy} required maxLength={4000} value={addendumContent} onChange={event => setAddendumContent(event.target.value)} /><button type="submit" disabled={busy || !addendumContent.trim()}>Salvar adendo imutável</button><button type="button" className="vault-secondary" disabled={busy} onClick={() => { setAddendumSessionId(''); setAddendumContent('') }}>Cancelar</button></form> : <button type="button" className="vault-secondary" data-voice-alias="Adicionar adendo" data-voice-label={`Adicionar adendo de ${patients.find(patient => patient.id === patientId)?.name || 'Paciente'} em ${session.sessionDate} às ${session.start}–${session.end}`} disabled={busy} onClick={() => { setAddendumSessionId(session.id); setAddendumContent('') }}>Adicionar adendo</button>}
+        {addendumSessionId === session.id ? <form onSubmit={saveAddendum}><label htmlFor={`addendum-${session.id}`}>Texto do adendo (até 4000 caracteres)</label><textarea id={`addendum-${session.id}`} disabled={busy} required maxLength={4000} value={addendumContent} onChange={event => setAddendumContent(event.target.value)} /><button type="submit" disabled={busy || !addendumContent.trim()}>Salvar adendo imutável</button><button type="button" className="vault-secondary" disabled={busy} onClick={cancelAddendum}>Cancelar</button></form> : <button type="button" className="vault-secondary" data-voice-alias="Adicionar adendo" data-voice-label={`Adicionar adendo de ${patients.find(patient => patient.id === patientId)?.name || 'Paciente'} em ${session.sessionDate} às ${session.start}–${session.end}`} disabled={busy} onClick={() => { setAddendumSessionId(session.id); setAddendumContent('') }}>Adicionar adendo</button>}
       </li>)}</ol> : <p>Nenhuma sessão finalizada deste paciente.</p>}
       <h4>Registros longitudinais por escala compatível</h4>
       <p>Comparação apenas quando ID, versão e rótulos do snapshot coincidem exatamente. Escalas incompatíveis ficam separadas; não há média nem tendência calculada.</p>
