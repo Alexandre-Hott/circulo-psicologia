@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Complemento executado e empacotado0.2.49: transcrições nativas e alvos exatos
+
+Dois defeitos observados no áudio sintético corrigidos: sufixo biblioteca `comportamentos, utilizáveis` e data completa falada no adendo. Registro de modelo não aceita sufixo desconhecido/título ou paciente apenas contido. Corpus Rust17 capturado e avaliado com intents completas:15 correspondentes/0 divergentes/2 dependentes de UI. Três E2E fazem replay de textos realmente coletados (biblioteca, adendo/data/foco e botão Novo cadastro + confirmar), com captura/RPC simulados e nenhuma escrita. **240/240JS, 56/56E2E em3,9min, 83Rust release aprovados/1 ignorado**; opt-in17WAVs executado separadamenteexit0. [Avaliação detalhada](voz-audio-sintetico-20261003.md) e [pacote](melhoria-continua-voz.md). Instalador49 local/auditado, não instalado/publicado; sem microfone humano nem prova universal de fala.
+
 ## Complemento executado e empacotado0.2.48: adendo natural
 
 Pedido com paciente/data/horário abre o adendo da sessão finalizada única/exata após confirmar e consultar novamente. Nova rota não agenda, não chama savePending e não descarta rascunho/editor ao trocar paciente. Texto digitado durante consulta é preservado usando o editor atual; Cancelar/Salvar, navegação e remontagem invalidam resposta/foco atrasados. **234/234JS**, **53/53E2E em4,0min** (interface/biblioteca/transições/workflows), **83Rust release aprovados/1 opt-in ignorado**. Debug Rust falhou na compilação do OpenSSL antes dos testes. Lint/guard/build/diff aprovados com avisos anteriores. Revisão independente final sem achado novo, estática. [Pacote, tentativas intermediárias e limites](melhoria-continua-voz.md). Instalador local0.2.48 auditado, não instalado/publicado nesta rodada; sem microfone físico. As três rotas da auditoria pós47 estão resolvidas/incluídas, sem declarar cobertura universal.

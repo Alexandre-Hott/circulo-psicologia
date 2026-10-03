@@ -505,6 +505,7 @@ mod tests {
             .map(|value| value.parse::<usize>().expect("quantidade inteira de WAVs"))
             .unwrap_or(3);
         assert!((1..=20).contains(&count), "quantidade de WAVs entre 1 e 20");
+        let mut results = Vec::new();
         for index in 0..count {
             let wav_path = wav_directory.join(format!("synthetic-command-{index}.wav"));
             let bytes = fs::read(&wav_path).expect("ler áudio WAV sintético");
@@ -527,6 +528,8 @@ mod tests {
             .unwrap();
             assert!(!transcript.trim().is_empty());
             println!("Transcrição sintética Rust #{index}: {transcript}");
+            results.push(serde_json::json!({ "index": index, "transcript": transcript }));
         }
+        println!("CIRCULO_SYNTHETIC_RESULT_JSON:{}", serde_json::to_string(&results).unwrap());
     }
 }

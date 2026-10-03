@@ -17,18 +17,27 @@ const indicators = [
 const session = { id: 'session-draft-ana-001', patientId: 'patient-ana', patientName: 'Ana Clara', originalDate: '2026-09-30' }
 const context = { patients, behaviors, indicators, activeSessionDraft: session }
 
+test('registro de comportamento exige título e paciente completos, modelo ativo e sessão compatível', () => {
+  const text = 'Registrar comportamento Pede ajuda para Ana Clara na sessão'
+  assert.equal(parseCentralCommand({ text, context }).status, 'draft')
+  for (const input of ['Registrar comportamento Pede ajuda inexistente para Ana Clara na sessão', 'Registrar comportamento Pede ajuda para Ana Clara desconhecida na sessão', 'Registrar comportamento Pede ajuda para Ana Clara na sessão com algo mais']) assert.equal(parseCentralCommand({ text: input, context }).status, 'clarification')
+  for (const patch of [{ behaviors: [{ ...behaviors[0], archivedAt: 1 }] }, { behaviors: [behaviors[0], { ...behaviors[0], id: 'same-title' }] }, { activeSessionDraft: null }, { activeSessionDraft: { id: 'other', patientId: 'patient-caio' } }]) assert.equal(parseCentralCommand({ text, context: { ...context, ...patch } }).status, 'clarification')
+})
+
 test('adendo natural abre somente sessão com paciente exato, data e horário explícitos', () => {
-  for (const text of ['Adicionar adendo à sessão de Ana Clara de 03/10/2026 às 15:00', 'Abrir o adendo da sessão de Ana Clara no dia 03/10/2026 às três da tarde']) {
+  for (const text of ['Adicionar adendo à sessão de Ana Clara de 03/10/2026 às 15:00', 'Abrir o adendo da sessão de Ana Clara no dia 03/10/2026 às três da tarde', 'Adicionar adendo a sessão de Ana Clara de 3 de outubro de dois mil e vinte e seis às quinze horas']) {
     const result = parseCentralCommand({ text, context })
     assert.equal(result.status, 'draft')
     assert.deepEqual(result.intent, { type: 'session.addendum.open', target: { patientId: 'patient-ana', date: '2026-10-03', start: '15:00' } })
   }
   for (const text of ['Adicionar adendo à sessão de Ana de 03/10/2026 às 15:00', 'Adicionar adendo à sessão de Ana Clara de 31/02/2026 às 15:00', 'Adicionar adendo à sessão de Ana Clara de 03/10/2026 às três', 'Adicionar adendo à sessão de Ana Clara', 'Não adicionar adendo à sessão de Ana Clara de 03/10/2026 às 15:00', 'Adicionar adendo à sessão de Ana Clara de 03/10/2026 às 15:00 e abrir agenda']) assert.notEqual(parseCentralCommand({ text, context }).status, 'draft')
   for (const alternatives of [[{ ...patients[0], archivedAt: '2026-10-01' }], [patients[0], { ...patients[0], id: 'duplicate' }]]) assert.notEqual(parseCentralCommand({ text: 'Adicionar adendo à sessão de Ana Clara de 03/10/2026 às 15:00', context: { patients: alternatives } }).status, 'draft')
+  for (const text of ['Adicionar adendo à sessão de Ana Clara de três de outubro às quinze horas', 'Adicionar adendo à sessão de Ana Clara de trinta e um de fevereiro de 2026 às quinze horas', 'Adicionar adendo à sessão de Ana Clara de três de outubro de dois mil e banana às quinze horas']) assert.equal(parseCentralCommand({ text, context }).status, 'clarification')
+  assert.equal(parseCentralCommand({ text: 'Adicionar adendo à sessão de Ana de Clara de três de outubro de 2026 às quinze horas', context: { patients: [{ id: 'with-de', name: 'Ana de Clara' }] } }).intent.target.patientId, 'with-de')
 })
 
 test('abrir biblioteca e contexto usa rotas de leitura e paciente exato ativo', () => {
-  for (const text of ['Abrir biblioteca', 'Abra a biblioteca de comportamentos', 'Abrir biblioteca de comportamentos reutilizáveis.']) {
+  for (const text of ['Abrir biblioteca', 'Abra a biblioteca de comportamentos', 'Abrir biblioteca de comportamentos reutilizáveis.', 'Abrir biblioteca de comportamentos, utilizáveis.']) {
     assert.deepEqual(parseCentralCommand({ text, context }).intent, { type: 'workspace.open', target: { space: 'sessions', section: 'library' } })
   }
   for (const text of ['Abrir contexto do caso de Ana Clara', 'Abra o contexto de Ana Clara.']) {

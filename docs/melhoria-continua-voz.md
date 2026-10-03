@@ -1,5 +1,17 @@
 # Melhoria contínua de voz
 
+## Entrega local0.2.49 — compreensão do áudio nativo
+
+Pacote local `Círculo_0.2.49_x64-setup.exe`, **135.877.292 bytes**, SHA-256 `cb4aea88e3459b3462fac7d4f0fc27e2aa01a519222aa48e5f291754fb4b6033`. Build NSIS offline/locked exit0; override temporário removido após terminal, configuração oficial updater preservada. Auditoria `%TEMP%\\circulo-0249-audit-20261003.json`: PE0.2.49/x64/NotSigned, tamanho/hash conferidos. Não instalado nem aberto nesta rodada; instalado permanece0.2.47. Sem Release, assinatura updater/Authenticode ou alteração de perfil.
+
+Áudio: corpus expandido de12 para17 frases SAPI, testado no `native_voice::transcribe` (subprocesso Whisper local usado pelo app). Novo avaliador consome JSON das transcrições Rust e exige a intent inteira esperada, não apenas texto não vazio ou subconjunto de campos. Primeira avaliação13Passed/2Failed/2NotEvaluated; corrigidas a biblioteca transcrita como `comportamentos, utilizáveis` e a data do adendo por extenso. Nova execuçãoexit0: **17 capturados, 15Passed, 0Failed, 2NotEvaluated**. Os dois exigem UI/proposta; E2E separado faz replay dos textos nativos `Clicar em Novo cadastro` e `Confirmar comando`, além de biblioteca/adendo, com captura/RPC simulados. Isso não transforma NotEvaluated do parser central em aprovação de fala física. [Corpus, tentativas e limites](voz-audio-sintetico-20261003.md).
+
+A data exige dia/mês/ano explícitos, válidos e interpretação única; paciente continua exato. Registro de comportamento agora recusa títulos/pacientes excedentes, modelos arquivados/duplicados e sessão incompatível; não seleciona `Pede ajuda` para `Pede ajuda inexistente`. Não foram reescritos nomes/textos clínicos ou alterados prompt/modelo.
+
+**240/240JS**, **56/56E2E interface/biblioteca/transições/workflows em3,9min**, **83Rust release aprovados, 1 opt-in ignorado em9,93s**; lint exit0 (cinco avisos anteriores), build/guard/diff aprovados. Opt-in com17 WAVs foi executado separadamente e terminouexit0. Revisor independente final sem novo bloqueador, estático. Vite mantém aviso de chunk>500KiB; linker mantém PDB OpenSSL LNK4099. Debug não repetido após falha de compilação documentada na48.
+
+O avaliador tolera grafia (caixa/acento/espaços/pontuação terminal) somente nos campos de exibição; IDs/tipos/datas/horários são exatos e chaves adicionais reprovam. Essa aprovação é semântica, não preservação literal da grafia. `InferenceSeconds` refere-se à CLI de comparação, não à execução Rust; `NetworkUsed=false` é declaração do roteiro local/offline, não medição de tráfego. Microfone humano, ruído, sotaques e jornada instalada permanecem sem validação nova. Não houve dados reais, limpeza de recovery ou compatibilidade antiga. Meta ativa, sem alegação de cobertura universal.
+
 ## Entrega local0.2.48 — adendo natural e acessos da biblioteca/contexto
 
 Pacote local `Círculo_0.2.48_x64-setup.exe`, **135.881.324 bytes**, SHA-256 `a6297c0fe761c7a0dbd3318c5451d65425c025f2840d151aca6573de02e93b95`. Build Tauri NSIS offline/locked exit0; override temporário de artifacts updater removido depois do terminal. Metadados auditados em `%TEMP%\\circulo-0248-audit-20261003.json`: PE0.2.48/x64/NotSigned, tamanho/hash conferidos. Sem extração, instalação ou abertura nesta rodada. Instalado local permanece0.2.47; pacote não publicado em Release e sem assinatura updater/Authenticode. Configuração oficial do updater preservada.

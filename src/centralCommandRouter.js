@@ -1,5 +1,6 @@
 import { addCivilDays, parseCivilDate } from './calendarDate.js'
 import { inSupportedRange } from './analyticsRange.js'
+import { normalizeVoiceFieldValue } from './voiceFieldValue.js'
 
 const normalize = value => String(value ?? '')
   .normalize('NFD')
@@ -350,16 +351,23 @@ const parseOccurrenceTime = phrase => {
 
 const parseAddendumNavigation = (text, context) => {
   if (!/^(?:adicionar|adicione|adiciona|abrir|abra|abre)\s+(?:um\s+|o\s+)?adendo\b/u.test(text)) return null
-  const match = /^(?:adicionar|adicione|adiciona|abrir|abra|abre)\s+(?:um\s+|o\s+)?adendo\s+(?:a|na|da)\s+sessao\s+de\s+(.+?)\s+(?:de|em|no dia)\s+(\d{2})\/(\d{2})\/(\d{4})\s+as\s+(.+)$/u.exec(text)
-  if (!match) return refuse('Informe o paciente, a data DD/MM/AAAA e o horário da sessão finalizada para abrir o adendo.')
-  const patient = exactTarget(match[1], (context.patients || []).filter(item => item.archivedAt == null), 'paciente')
+  const match = /^(?:adicionar|adicione|adiciona|abrir|abra|abre)\s+(?:um\s+|o\s+)?adendo\s+(?:a|na|da)\s+sessao\s+de\s+(.+)\s+as\s+(.+)$/u.exec(text)
+  if (!match) return refuse('Informe o paciente, a data completa e o horário da sessão finalizada para abrir o adendo.')
+  // Test each explicit separator, not each patient name. The existing typed-date
+  // converter requires a complete civil date/year; no inferred date or entity.
+  const dates = [...match[1].matchAll(/\s+(?:de|em|no dia)\s+/gu)].map(separator => ({
+    name: match[1].slice(0, separator.index),
+    date: normalizeVoiceFieldValue('date', match[1].slice(separator.index + separator[0].length)),
+  })).filter(item => item.date)
+  if (dates.length !== 1) return refuse('Informe uma única data completa e válida, como 03/10/2026 ou três de outubro de dois mil e vinte e seis.')
+  const { name, date } = dates[0]
+  const patient = exactTarget(name, (context.patients || []).filter(item => item.archivedAt == null), 'paciente')
   if (patient.error) return refuse(patient.error)
-  const date = `${match[4]}-${match[3]}-${match[2]}`
-  const start = parseOccurrenceTime(match[5])
+  const start = parseOccurrenceTime(match[2])
   if (!isCivilDate(date)) return refuse('Informe uma data válida para a sessão finalizada.')
   if (!start) return refuse('Informe um horário explícito e sem ambiguidade, como 15:00 ou três da tarde.')
   return draft({ type: 'session.addendum.open', target: { patientId: patient.entity.id, date, start } },
-    `Abrir adendo da sessão finalizada de ${patient.entity.name} em ${match[2]}/${match[3]}/${match[4]} às ${start}.`,
+    `Abrir adendo da sessão finalizada de ${patient.entity.name} em ${date.split('-').reverse().join('/')} às ${start}.`,
     ['Apenas abre o formulário da sessão finalizada exata; nenhum adendo ou compromisso será salvo.'])
 }
 
@@ -465,7 +473,7 @@ const parseAnalyticsNavigation = (text, context, referenceDate) => {
 const parseWorkspaceNavigation = text => {
   const match = /^(?:abrir|abra|abre)\s+(?:(?:a|o|as|os)\s+)?(.+)$/u.exec(text)
   if (!match) return null
-  if (/^(?:biblioteca|biblioteca de comportamentos(?: reutilizaveis)?)$/u.test(match[1])) {
+  if (/^(?:biblioteca|biblioteca de comportamentos(?:,? (?:reutilizaveis|utilizaveis))?)$/u.test(match[1])) {
     return draft({ type: 'workspace.open', target: { space: 'sessions', section: 'library' } },
       'Abrir biblioteca de comportamentos reutilizáveis.', ['Apenas abre a biblioteca; nenhum comportamento ou registro será salvo.'])
   }
@@ -566,12 +574,12 @@ const parseSessionDraft = ({ text, rawText, context }) => {
     sessionDate: target.session.originalDate || target.session.date || null,
   }
 
-  const behaviorCommand = /\b(?:selecionar|marcar|adicionar|registrar)\s+(?:o\s+)?comportamento\s+(.+?)\s+(?:para|na sessao de|na sessao do|na sessao da)\s+(.+?)\s+na sessao\b/u.exec(text)
-    || /\b(?:selecionar|marcar|adicionar)\s+(?:o\s+)?comportamento\s+(.+?)\s+na sessao de\s+(.+?)\s*$/u.exec(text)
+  const behaviorCommand = /^(?:selecionar|marcar|adicionar|registrar)\s+(?:o\s+)?comportamento\s+(.+?)\s+(?:para|na sessao de|na sessao do|na sessao da)\s+(.+?)\s+na sessao$/u.exec(text)
+    || /^(?:selecionar|marcar|adicionar)\s+(?:o\s+)?comportamento\s+(.+?)\s+na sessao de\s+(.+?)\s*$/u.exec(text)
   if (behaviorCommand) {
-    const behaviorResult = uniqueEntity(behaviorCommand[1], context.behaviors || [], 'modelo de comportamento', item => item.title)
+    const behaviorResult = exactTarget(behaviorCommand[1], (context.behaviors || []).filter(item => item.archivedAt == null), 'modelo de comportamento', item => item.title)
     if (behaviorResult.error) return refuse(behaviorResult.error)
-    const patientInCommand = uniqueEntity(behaviorCommand[2], [target.patient], 'paciente')
+    const patientInCommand = exactTarget(behaviorCommand[2], [target.patient], 'paciente')
     if (patientInCommand.error) return refuse(patientInCommand.error)
     const behavior = behaviorResult.entity
     return draft(

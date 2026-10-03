@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test'
+import { readFileSync } from 'node:fs'
+
+const nativeVoiceCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-20261003.json', import.meta.url), 'utf8'))
 
 async function openApp(page, { emptyLibrary = false, archivedPatient = false } = {}) {
   await page.clock.install({ time: new Date('2026-10-03T15:00:00Z') })
@@ -697,6 +700,49 @@ test('iniciar sessão pela Agenda não reaplica consulta antiga de adendo', asyn
   await page.evaluate(async () => { window.oldTimelineResolve(window.voiceTimeline); await new Promise(resolve => queueMicrotask(resolve)) })
   await expect(page.locator('#addendum-previous-final')).toHaveCount(0)
   await expect(page.locator('details[aria-label="Evolução descritiva somente leitura"]')).not.toHaveAttribute('open', '')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+})
+
+test('transcrição nativa observada abre biblioteca após confirmação sem gravar', async ({ page }) => {
+  await openApp(page)
+  await page.evaluate(text => { window.voiceTranscript = text }, nativeVoiceCorpus.find(item => item.Index === 12).Transcript)
+  const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
+  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await expect(page.locator('.voice-command-preview')).toContainText('Abrir biblioteca de comportamentos reutilizáveis')
+  await expect(page.locator('#session-behaviors')).toHaveCount(0)
+  await propose(page, 'confirmar')
+  await expect(page.locator('#session-behaviors')).toHaveAttribute('open', '')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+})
+
+test('transcrição nativa com data falada abre o adendo exato só após confirmar', async ({ page }) => {
+  await openApp(page)
+  await page.evaluate(text => {
+    window.voiceTranscript = text
+    window.voiceTimeline = [{ id: 'spoken-date', patientId: 'ana', sessionDate: '2026-10-03', start: '15:00', end: '15:50', modality: 'Presencial', behaviors: [], indicators: [] }]
+  }, nativeVoiceCorpus.find(item => item.Index === 15).Transcript)
+  const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
+  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await expect(page.locator('.voice-command-preview')).toContainText('Ana Clara em 03/10/2026 às 15:00')
+  await expect(page.locator('#addendum-spoken-date')).toHaveCount(0)
+  await propose(page, 'confirmar')
+  await expect(page.locator('#addendum-spoken-date')).toBeVisible()
+  await expect(page.locator('#addendum-spoken-date')).toBeFocused()
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+})
+
+test('transcrições nativas de botão e confirmação usam a tela visível sem gravar', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Abrir Pacientes')
+  const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
+  await page.evaluate(text => { window.voiceTranscript = text }, nativeVoiceCorpus.find(item => item.Index === 5).Transcript)
+  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await expect(page.locator('.voice-command-preview')).toContainText('Novo cadastro')
+  await expect(page.getByRole('form', { name: 'Novo cadastro' })).toHaveCount(0)
+  await page.evaluate(text => { window.voiceTranscript = text }, nativeVoiceCorpus.find(item => item.Index === 6).Transcript)
+  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await expect(page.getByRole('form', { name: 'Novo cadastro' })).toBeVisible()
+  await expect(page.locator('.voice-command-preview')).toHaveCount(0)
   expect(await page.evaluate(() => window.writes)).toEqual([])
 })
 
