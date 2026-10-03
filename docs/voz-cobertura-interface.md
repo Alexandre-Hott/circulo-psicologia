@@ -170,6 +170,27 @@ Não comprova arquivo portátil real, integridade/criação de cópia cifrada, s
 
 A rodada inicial específica teve2/5 porque três expectativas procuravam Ana como heading; o componente a apresenta em `<strong>` no cartão identificado pelo ID. Corrigida somente a asserção. O teste de sucesso foi reforçado para exigir o paciente do backup fictício e ausência do anterior, não apenas uma mensagem de sucesso. Produção e instalador0.2.44 não mudaram.
 
+## Incremento: assistente também na entrada do cofre
+
+**78/78 E2E** shell/interface/settings em4,2min, porta5196; **2/2 E2E** de transição de captura em20,6s, porta5197. **229/229JS**, lint, guard, build frontend e diff check aprovados. Lint com quatro avisos preexistentes; bundle frontend acima500KiB. Sem suíte Rust nova, porque backend/contratos não foram modificados.
+
+O assistente agora é montado na tela bloqueada/primeira configuração, com contexto vazio e ajuda limitada aos controles visíveis. Só aceita `interface.control` e respostas a confirmações abertas; intenções de pacientes/agenda continuam barradas antes do desbloqueio. Senhas e seletor de arquivos permanecem manuais. Criação/desbloqueio usam o mesmo formulário e validação HTML do mouse, sem invocar uma API alternativa. O epoch inclui bloqueado/desbloqueado.
+
+- `E`: [settings](../test/e2e/desktop-voice-settings.spec.js), cofre bloqueado: nenhum `patient_list` inicial, comando de cadastrar recusado, senha por comando recusada, gaveta avançada aberta por comando e desbloqueio após senha manual; depois acesso aos pacientes.
+- `E`: primeira configuração: confirmar Criar cofre cifrado sem senha não chama backend; senha manual + proposta confirmada chama criação normal e abre os espaços.
+- `E`: bloquear remove os registros e o comando anterior, mas mantém um assistente vazio para os controles da entrada.
+- `E`: [lock-transition](../test/e2e/desktop-voice-lock-transition.spec.js), captura/transcrição sintéticas: áudio iniciado bloqueado não aceita confirmação nova de instalação após desbloquear no mesmo espaço; bloquear descarta áudio antigo; próxima transcrição bloqueada recebe `patientNames: []` e pode propor botão visível.
+
+Revisor independente identificou áudio antigo cruzando desbloqueio. Reproduzido em confirmação do updater no Início, sem navegação: teste red1/2, diálogo novo indevidamente aceito. Corrigidos aborto no início da entrada, aborto em toda troca de desbloqueio e invalidação de geração ao desmontar o assistente; teste green2/2 em20,6s. Nenhuma atualização ou alteração de dados reais ocorreu: backend/updater/captura sintéticos.
+
+A rodada inicial de settings teve18/19 porque o teste tentou clicar em Licenças, ausente da tela bloqueada; ajuda/teste corrigidos, sem habilitar controle oculto. A regressão intermediária teve75/78 por seletores de texto parciais que passaram a encontrar também o exemplo na ajuda: ajustados para o summary exato da gaveta. Não são erros de recuperação do banco, e nenhum handler de recovery/legado foi alterado.
+
+Ainda não empacotado no instalado0.2.44. Microfone humano, criação/desbloqueio nativos por voz e todos os controles avançados de restauração bloqueada não foram homologados nesta rodada. A senha manual permanece uma limitação explícita, não uma cobertura total por áudio.
+
+Revisão independente após a correção: cenário reproduzido eliminado, sem novo achado concreto no diff. Lacunas adicionais registradas: RPC de desbloqueio atrasado/falhando e áudio ainda na fase de gravação (os testes novos retêm a resposta do backend de transcrição). Não foram executados testes pelo revisor.
+
+Painel isolado:9/9 E2E em21,0s. Rodada anterior8/9 por timeout no `page.goto` do primeiro teste, antes de interagir; repetição completa aprovada sem alterar timeout ou código. Todas as execuções acima são testes de UI com mídia/transcrição simuladas, não microfone físico.
+
 ## Prioridades restantes para o agente principal
 
 Homologação dos testes novos de homônimos, identidade de seleção e helper: **concluída pelo principal**, conforme nota de execução. Não é mais prioridade pendente.
@@ -177,4 +198,4 @@ Homologação dos testes novos de homônimos, identidade de seleção e helper: 
 1. **Continuar cobertura dos controles restantes:** entrada de Sessões, demonstração com recusa/repetição, fechamento de vínculos, cabeçalhos semanal/diário e navegação Início foram comprovados pelo assistente. Revisar itens ainda `S` sem suplemento `E`; comandos digitados e cenários por mouse não substituem reconhecimento físico ou banco nativo.
 2. **Manter regressão dos caminhos comprovados:** pacote instalado0.2.44 consolida retries e cabeçalhos. Não tomar os testes já aprovados como prova dos caminhos ainda pendentes nem repetir build sem mudança de produção.
 3. **Consolidar evidência nativa de Ajustes:** seleção/verificação/restauração de backup pelo assistente foi comprovada na fronteira simulada, assim como descarte dos cinco editores e updater. Ainda faltam arquivo/seletor/restauração nativos; senhas/chooser manuais, sem limpeza ou backups antigos. Troca de senha após seleção e respostas tardias ainda exigem cenários próprios. Não confundir mocks com arquivo nativo validado.
-4. **Fechar evidência nativa e decidir a lacuna do cofre bloqueado:** anexar resultados do principal para microfone físico/reconhecimento no Windows, chooser cancelado e arquivos reais de backup/exportação em destino de teste autorizado. Mocks não validam essas etapas; não executar recuperação/substituição/limpeza nesta auditoria. O cofre bloqueado tem controles existentes sem acesso por voz porque não monta o assistente; senha permanece manual. Essa é uma lacuna real de cobertura, e uma implementação para atendê-la exige decisão explícita, sem presumir que esteja automaticamente fora do objetivo.
+4. **Empacotar e fechar evidência nativa:** assistente da tela bloqueada implementado e principais percursos comprovados na simulação, ainda não no instalado0.2.44. Consolidar no próximo instalador; microfone físico/reconhecimento no Windows, chooser e arquivos reais em destino fictício autorizado permanecem sem prova. Não executar recuperação/substituição/limpeza de perfil real nesta auditoria. Controles avançados bloqueados ainda precisam de cenários próprios, e senhas permanecem manuais.

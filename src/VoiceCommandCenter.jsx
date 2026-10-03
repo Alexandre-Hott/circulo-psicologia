@@ -21,12 +21,14 @@ export function VoiceCommandCenter({
   onCancel,
   autoInterpret = false,
   compact = false,
+  interfaceOnly = false,
   pendingIntent,
 }) {
   const [command, setCommand] = useState('')
   const [result, setResult] = useState(null)
   const [transcribing, setTranscribing] = useState(false)
   const transcriptGeneration = useRef(0)
+  useEffect(() => () => { transcriptGeneration.current += 1 }, [])
   useEffect(() => {
     if (pendingIntent === null) {
       transcriptGeneration.current += 1
@@ -120,7 +122,7 @@ export function VoiceCommandCenter({
           onDraft?.(null)
         }
       }}
-      placeholder="Ex.: criar sessão semanal para Ana Clara toda quinta às 15:00"
+      placeholder={interfaceOnly ? 'Ex.: clicar em Desbloquear (digite a senha primeiro)' : 'Ex.: criar sessão semanal para Ana Clara toda quinta às 15:00'}
       onKeyDown={event => {
         if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') interpret(command)
       }}
@@ -139,7 +141,7 @@ export function VoiceCommandCenter({
       {(compact ? result.notes?.filter(note => /apenas nesta sessão|somente ao rascunho|mantido literalmente/.test(note)) : result.notes)?.map(note => <small key={note}>{note}</small>)}
       <small>{onApply ? 'Diga “confirmar” para aplicar ou “cancelar comando” para descartar.' : 'Nada foi salvo nem alterado. Revise na tela correspondente.'}</small>
     </div>}
-    <details className="voice-command-help"><summary>O que posso pedir?</summary><ul>
+    <details className="voice-command-help"><summary>O que posso pedir?</summary>{interfaceOnly ? <><ul><li>“Clicar em Desbloquear” após digitar sua senha</li><li>“Clicar em Criar cofre cifrado” na primeira configuração</li><li>“Clicar em Opções avançadas de backup e restauração” quando disponível</li></ul><small>Somente botões visíveis nesta tela. Digite as senhas manualmente; pacientes e agenda ficam disponíveis após desbloquear.</small></> : <><ul>
       <li>“Cadastrar paciente Ana Clara com 8 anos”</li>
       <li>“Criar comportamento Pede ajuda”</li>
       <li>“Agendar sessão para Ana Clara amanhã às três da tarde”</li>
@@ -157,7 +159,7 @@ export function VoiceCommandCenter({
       <li>“Selecionar Modalidade como Online”</li>
       <li>“Marcar Pede ajuda” ou “Desmarcar Pede ajuda” na sessão</li>
       <li>“Clicar em Salvar rascunho” ou “Finalizar sessão”</li>
-    </ul><small>Use o texto do botão ou campo. Se houver opções iguais, acrescente o paciente. Senhas e escolhas de arquivos continuam nas janelas próprias.</small></details>
+    </ul><small>Use o texto do botão ou campo. Se houver opções iguais, acrescente o paciente. Senhas e escolhas de arquivos continuam nas janelas próprias.</small></>}</details>
   </section>
 }
 

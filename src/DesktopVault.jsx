@@ -119,7 +119,6 @@ export default function DesktopVault() {
     setVoiceIntent(null)
   }, [space])
   useEffect(() => {
-    if (status?.unlocked) return
     voiceCaptureRef.current?.abort()
     voiceCaptureRef.current = null
   }, [space, status?.unlocked])
@@ -170,6 +169,7 @@ export default function DesktopVault() {
       return { status: 'clarification', message: 'Há uma confirmação aberta. Diga “confirmar” ou “voltar”.' }
     }
     const control = parseVoiceInterfaceCommand(request.text)
+    if (!vaultUnlocked.current) return control || { status: 'clarification', message: 'Digite sua senha para acessar pacientes e agenda. Aqui você pode pedir para clicar nos botões visíveis.' }
     if (control?.status === 'draft' || /^criar comportamento reutiliz[aá]vel[.!?]*$/iu.test(request.text.trim())) return control
     const specific = parseCentralCommand(request)
     if (specific.status === 'draft') return specific
@@ -181,12 +181,13 @@ export default function DesktopVault() {
     setVoiceNotice('')
     setVoiceIntent(null)
     if (intent.type === 'confirmation.answer') { answerConfirmation(intent.accepted); return }
-    if (!vaultUnlocked.current || busyRef.current) { setVoiceNotice('Aguarde a operação atual antes de aplicar o comando.'); return }
+    if (busyRef.current) { setVoiceNotice('Aguarde a operação atual antes de aplicar o comando.'); return }
     if (confirmationRef.current) { setVoiceNotice('Responda à confirmação aberta antes de continuar.'); return }
     if (intent.type === 'interface.control') {
       try { applyVoiceInterfaceCommand(intent) } catch (reason) { setVoiceNotice(reason.message) }
       return
     }
+    if (!vaultUnlocked.current) { setVoiceNotice('Desbloqueie o cofre antes de acessar pacientes e agenda.'); return }
     if (intent.type === 'workspace.open') {
       const destination = intent.target.space
       if (destination === 'agenda') { setAgendaOpen(true); setQuickStart(false); setAgendaRecordPatientId('') }
@@ -476,6 +477,8 @@ export default function DesktopVault() {
   }
   const enter = async (event) => {
     event.preventDefault()
+    voiceCaptureRef.current?.abort()
+    voiceCaptureRef.current = null
     setBusy(true)
     setError('')
     try {
@@ -813,7 +816,7 @@ export default function DesktopVault() {
   }
 
   const nameOption = entityOptionSuffix
-  return <main data-voice-epoch={`${space}:${sessionPatientId}:${activeDraft?.id || ''}:${editing?.id || ''}:${partyPatientId}`} className={`vault-page ${status?.unlocked ? 'vault-page-unlocked' : ''}`}>
+  return <main data-voice-epoch={`${status?.unlocked ? 'unlocked' : 'locked'}:${space}:${sessionPatientId}:${activeDraft?.id || ''}:${editing?.id || ''}:${partyPatientId}`} className={`vault-page ${status?.unlocked ? 'vault-page-unlocked' : ''}`}>
     <section className="vault-card">
       <header className="vault-header"><div><p className="vault-eyebrow">CÍRCULO</p><h1>Círculo</h1><p>Um lugar para organizar o cuidado.</p></div>{status?.unlocked && space !== 'settings' && <button disabled={busy} className="vault-secondary vault-header-lock" onClick={() => lock(false)}>Bloquear</button>}</header>
       {updateState.phase === 'available' && <aside className="vault-updater" role="status"><strong>Atualização disponível: Círculo {updateState.version}</strong><p>Você pode continuar usando o aplicativo. A instalação só começa após sua confirmação.</p><button type="button" onClick={applyUpdate}>Baixar e instalar</button></aside>}
@@ -826,6 +829,10 @@ export default function DesktopVault() {
       {error && <p className="vault-error" role="alert">{error}</p>}
       {message && <p className="vault-ok" role="status">{message}</p>}
       {confirmation && <section className="vault-voice-confirmation" role="alertdialog" aria-label="Confirmar ação"><p>{confirmation}</p><small>Diga “confirmar” para continuar ou “voltar” para cancelar.</small><div><button type="button" onClick={() => answerConfirmation(true)}>Confirmar ação</button><button type="button" className="vault-secondary" onClick={() => answerConfirmation(false)}>Voltar</button></div></section>}
+      {status && !status.unlocked && <>
+        <VoiceCommandCenter interfaceOnly onDraft={setVoiceIntent} onTranscribe={transcribeLocalVoice} parseCommand={prepareVoiceCommand} onApply={applyVoiceCommand} onCancel={() => setVoiceIntent(null)} pendingIntent={voiceIntent} autoInterpret compact />
+        {voiceNotice && <p className="vault-error" role="alert">{voiceNotice}</p>}
+      </>}
       {status?.profileState === 'empty' && !status.initialized && <details className="vault-advanced"><summary>Opções avançadas de restauração</summary><section className="vault-fresh-choice" aria-label="Começar neste dispositivo">
         <h2>Já tem um backup CBK1?</h2>
         <p>Restaure o cofre existente diretamente neste dispositivo. Você precisará do arquivo, da senha independente do backup e de uma nova senha local. Verificar o arquivo não cria nem substitui um cofre.</p>

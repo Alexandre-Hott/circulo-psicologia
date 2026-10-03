@@ -5,8 +5,9 @@ async function openApp(page, update = false) {
   const options = typeof update === 'object' ? update : { update }
   await page.clock.install({ time: new Date('2026-10-03T15:00:00Z') })
   await page.clock.pauseAt(new Date('2026-10-03T15:00:00Z'))
-  await page.addInitScript(({ update = false, checkFailure = false, agendaFailure = false }) => {
-    let unlocked = true
+  await page.addInitScript(({ update = false, checkFailure = false, agendaFailure = false, initiallyLocked = false, initialized = true }) => {
+    let unlocked = !initiallyLocked
+    let hasVault = initialized
     let downloads = 0
     window.settingsFixture = { calls: [], unexpected: [], checkFailure, agendaFailure, timeline: [], patients: [{ id: 'ana', name: 'Ana Clara', age: 8, revision: 1, archivedAt: null }], backupPreview: null, backupSelectError: '', backupRestoreError: '', backupRestoreResult: true, backupRestorePatients: null }
     const callbacks = new Map()
@@ -15,7 +16,8 @@ async function openApp(page, update = false) {
       unregisterCallback(id) { callbacks.delete(id) },
       invoke: async (command, args = {}) => {
         window.settingsFixture.calls.push({ command, args: structuredClone(args) })
-        if (command === 'vault_status') return { initialized: true, unlocked, profileState: 'ready' }
+        if (command === 'vault_status') return { initialized: hasVault, unlocked, profileState: hasVault ? 'ready' : 'empty' }
+        if (command === 'vault_unlock' || command === 'vault_create') { hasVault = true; unlocked = true; return null }
         if (command === 'vault_lock') { unlocked = false; return null }
         if (command === 'auto_backup_status') return { available: false, dirty: false }
         if (command === 'auto_backup_retry') return { available: true, dirty: false, lastVerifiedAt: 1791039600 }
@@ -231,7 +233,40 @@ test('ajustes: inspeção, cópia automática, licenças e bloqueio por voz', as
   expect(await calls(page, 'backup_create')).toEqual([{ command: 'backup_create', args: { password: 'senha-ficticia-1234' } }])
   await command(page, 'Clicar em Bloquear')
   expect(await calls(page, 'vault_lock')).toHaveLength(1)
-  await expect(page.getByRole('region', { name: 'Comando do Círculo' })).toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'Comando do Círculo' })).toBeVisible()
+  await expect(page.getByLabel('Seu comando')).toHaveValue('')
+  await expect(page.locator('[data-voice-record="patient:ana"]')).toHaveCount(0)
+})
+
+test('cofre bloqueado: comandos visíveis sem dados clínicos; senha manual e desbloqueio normal', async ({ page }) => {
+  await openApp(page, { initiallyLocked: true })
+  expect(await calls(page, 'patient_list')).toHaveLength(0)
+  await propose(page, 'Cadastrar paciente Bia Fictícia com 20 anos')
+  await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+  await expect(page.locator('.voice-command-error')).toContainText('Digite sua senha')
+  await propose(page, 'Preencher Senha do cofre com senha-ficticia-2026')
+  await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+  await expect(page.locator('#vault-password')).toHaveValue('')
+  await command(page, 'Clicar em Opções avançadas de backup e restauração')
+  await expect(page.locator('#backup-password')).toBeVisible()
+  await page.locator('#vault-password').fill('senha-ficticia-2026')
+  await command(page, 'Clicar em Desbloquear')
+  expect(await calls(page, 'vault_unlock')).toEqual([{ command: 'vault_unlock', args: { password: 'senha-ficticia-2026' } }])
+  await command(page, 'Abrir pacientes')
+  await expect(page.locator('[data-voice-record="patient:ana"]')).toContainText('Ana Clara')
+})
+
+test('cofre novo: comando só cria após senha manual e proposta confirmada', async ({ page }) => {
+  await openApp(page, { initiallyLocked: true, initialized: false })
+  await command(page, 'Clicar em Criar cofre cifrado')
+  expect(await calls(page, 'vault_create')).toHaveLength(0)
+  await page.locator('#vault-password').fill('senha-ficticia-2026')
+  await propose(page, 'Clicar em Criar cofre cifrado')
+  await expect(page.locator('.voice-command-preview')).toBeVisible()
+  expect(await calls(page, 'vault_create')).toHaveLength(0)
+  await propose(page, 'confirmar')
+  await expect.poll(() => calls(page, 'vault_create')).toEqual([{ command: 'vault_create', args: { password: 'senha-ficticia-2026' } }])
+  await expect(page.getByRole('navigation', { name: 'Espaços do Círculo' })).toBeVisible()
 })
 
 test('exportação por voz: recusar não exporta; confirmar usa o paciente selecionado', async ({ page }) => {
