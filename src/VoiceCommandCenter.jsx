@@ -144,8 +144,10 @@ export function VoiceCommandCenter({
       <li>“Criar comportamento Pede ajuda”</li>
       <li>“Agendar sessão para Ana Clara amanhã às três da tarde”</li>
       <li>“Abrir Agenda” ou “Abrir Análises”</li>
+      <li>“Mostrar agenda de hoje”, “desta semana” ou “deste mês”</li>
       <li>“Clicar em Novo compromisso”</li>
       <li>“Preencher Nome com Ana Clara”</li>
+      <li>“Limpar Nome” ou “Limpar Busca”</li>
       <li>“Selecionar Modalidade como Online”</li>
       <li>“Marcar Pede ajuda” ou “Desmarcar Pede ajuda” na sessão</li>
       <li>“Clicar em Salvar rascunho” ou “Finalizar sessão”</li>

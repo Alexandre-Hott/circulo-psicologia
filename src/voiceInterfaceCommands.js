@@ -63,9 +63,11 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   if (/^(?:nao|nunca)\b/.test(normalized)) return refusal('Pedido negado. Nenhuma ação preparada.')
   let operation, query, value
   const field = /^(?:preencher|preencha|preenche|definir|defina|selecionar|selecione|seleciona)\s+(?:o campo |a op[cç][aã]o |o |a )?(.+?)\s+(?:com|como|para)\s+(.+)$/iu.exec(raw)
+  const clearField = /^(?:limpar|limpe|esvaziar|esvazie)\s+(?:o campo |o |a )?(.+)$/iu.exec(raw)
   const check = /^(marcar|marque|desmarcar|desmarque)\s+(?:a op[cç][aã]o |o |a )?(.+)$/iu.exec(raw)
   const click = /^(?:clicar|clique|clica|acionar|acione|apertar|aperte)\s+(?:no bot[aã]o |na opc[aã]o |no |na |em )?(.+)$/iu.exec(raw)
   if (field) { operation = 'fill'; query = field[1]; value = clean(field[2]) }
+  else if (clearField) { operation = 'fill'; query = clearField[1]; value = '' }
   else if (check) { operation = /^des/i.test(check[1]) ? 'uncheck' : 'check'; query = check[2] }
   else if (click) { operation = 'click'; query = click[1] }
   else if (/^(?:confirmar|confirma|confirmar acao|confirmar ação)$/.test(normalized)) { operation = 'click'; query = 'Confirmar ação' }
@@ -84,6 +86,7 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   if (operation === 'uncheck' && item.element.type === 'radio') return refusal('Escolha outra opção deste grupo para alterar a seleção.')
   if (operation === 'fill') {
     if (item.element.tagName === 'SELECT') {
+      if (clearField) return refusal('Para mudar uma seleção, diga “selecionar” e o nome da opção.')
       const options = [...item.element.options].filter(option => !option.disabled && (fold(option.textContent) === fold(value) || fold(option.value) === fold(value)))
       if (options.length !== 1) return refusal(`Para “${item.name}”, escolha: ${[...item.element.options].filter(option => !option.disabled).map(option => option.textContent).join(', ')}.`)
       value = options[0].value
@@ -95,13 +98,13 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
     if (item.element.tagName === 'INPUT') {
       const probe = item.element.cloneNode()
       probe.value = value
-      if (probe.value !== value || !probe.checkValidity()) return refusal(`Valor inválido para “${item.name}”. Confira o formato e os limites do campo.`)
+      if (probe.value !== value || (!clearField && !probe.checkValidity())) return refusal(`Valor inválido para “${item.name}”. Confira o formato e os limites do campo.`)
     }
   }
   return {
     status: 'draft',
     intent: { type: 'interface.control', operation, target: fingerprint(item), ...(operation === 'fill' ? { value } : {}) },
-    preview: operation === 'fill' ? `${item.name}: ${item.element.tagName === 'SELECT' ? [...item.element.options].find(option => option.value === value)?.textContent : value}`
+    preview: clearField ? `Limpar ${item.name}.` : operation === 'fill' ? `${item.name}: ${item.element.tagName === 'SELECT' ? [...item.element.options].find(option => option.value === value)?.textContent : value}`
       : `${operation === 'click' ? 'Acionar' : operation === 'check' ? 'Marcar' : 'Desmarcar'} ${item.name}${item.context ? ` · ${item.context}` : ''}.`,
     notes: [],
   }

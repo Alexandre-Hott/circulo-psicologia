@@ -87,6 +87,25 @@ test('Home captura áudio, chama o backend local, mostra texto editável e limpa
   await expect.poll(() => page.evaluate(() => window.voiceSavedWrites)).toBe(0)
 })
 
+test('pedido natural consulta dia, semana e mês da Agenda sem gravar dados', async ({ page }) => {
+  await openHome(page)
+  const command = page.getByRole('region', { name: 'Comando do Círculo' })
+  for (const [text, mode, date] of [
+    ['Mostrar agenda de hoje', 'Dia', '2026-10-05'],
+    ['Abrir agenda de amanhã', 'Dia', '2026-10-06'],
+    ['Mostrar agenda desta semana', 'Semana', '2026-10-05'],
+    ['Mostrar agenda deste mês', 'Mês', '2026-10-05'],
+    ['Mostrar agenda do dia 10/10/2026', 'Dia', '2026-10-10'],
+  ]) {
+    await command.getByRole('textbox', { name: 'Seu comando' }).fill(text)
+    await command.getByRole('button', { name: 'Preparar rascunho' }).click()
+    await page.getByRole('button', { name: 'Revisar no formulário' }).click()
+    await expect(page.getByLabel('Data de referência')).toHaveValue(date)
+    await expect(page.getByRole('group', { name: 'Visualização da Agenda' }).getByRole('button', { name: mode, exact: true })).toHaveAttribute('aria-pressed', 'true')
+    await expect.poll(() => page.evaluate(() => window.voiceSavedWrites)).toBe(0)
+  }
+})
+
 test('demonstração web explica que ditado offline exige o aplicativo Windows', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('complementary', { name: 'Demonstração no navegador' }))

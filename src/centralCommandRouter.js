@@ -285,6 +285,37 @@ const parseBehaviorManagement = (text, context) => {
     `Rascunho de alteração do comportamento ${result.entity.title}.`, ['Texto mantido literalmente, sem interpretação clínica.'])
 }
 
+const parseAgendaNavigation = (text, referenceDate) => {
+  const command = /^(?:mostrar|mostre|mostra|abrir|abra|abre)\s+(?:a\s+)?agenda\s+(.+)$/u.exec(text)
+  if (!command) return null
+  // Match the entire qualifier: extra dates, actions or words require clarification.
+  const relative = /^(de hoje|de amanha|desta semana|deste mes)$/u.exec(command[1])
+  const explicit = /^(do dia|da semana de|do mes de)\s+(\d{2})\/(\d{2})\/(\d{4})$/u.exec(command[1])
+  if (!relative && !explicit) {
+    return refuse('Informe de hoje, de amanhã, do dia DD/MM/AAAA, desta semana, deste mês, da semana de DD/MM/AAAA ou do mês de DD/MM/AAAA.')
+  }
+  let view
+  let date
+  if (explicit) {
+    view = { 'do dia': 'day', 'da semana de': 'week', 'do mes de': 'month' }[explicit[1]]
+    date = `${explicit[4]}-${explicit[3]}-${explicit[2]}`
+  } else {
+    if (!isCivilDate(referenceDate)) return refuse('Informe uma data civil de referência válida (AAAA-MM-DD).')
+    view = { 'de hoje': 'day', 'de amanha': 'day', 'desta semana': 'week', 'deste mes': 'month' }[relative[1]]
+    date = referenceDate
+    if (relative[1] === 'de amanha') {
+      const tomorrow = new Date(`${date}T00:00:00Z`)
+      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
+      date = tomorrow.toISOString().slice(0, 10)
+    }
+  }
+  if (!isCivilDate(date)) return refuse('Informe uma data válida para visualizar a agenda.')
+  const [year, month, day] = date.split('-')
+  const label = { day: 'do dia', week: 'da semana de', month: 'do mês de' }[view]
+  return draft({ type: 'agenda.view', target: { view, referenceDate: date } },
+    `Mostrar agenda ${label} ${day}/${month}/${year}.`)
+}
+
 const parseWorkspaceNavigation = text => {
   const match = /^(?:abrir|abra|abre)\s+(?:(?:a|o|as|os)\s+)?(.+)$/u.exec(text)
   if (!match) return null
@@ -452,10 +483,10 @@ export function parseCentralCommand({ text, context = {}, referenceDate } = {}) 
   const commandRegion = normalized.split(/\s+com\s+descricao\s+/u)[0]
     .replace(/^(?:preencher|anotar|registrar)\s+(?:observacao|evolucao|procedimentos?|resultado|decisao|encaminhamento|fechamento)\s+(?:da|do)\s+sessao\s+de\s+(.+?)\s+com\s+.+$/u, '$1')
   if (/^(?:(?:por favor|por gentileza)\s*[,،]?\s*)?(?:nao|nunca|jamais)\b/u.test(normalized)
-    || /\b(?:nao|nunca|jamais)\s+(?:cadastre|cadastra|cadastrar|crie|cria|criar|adicione|adiciona|adicionar|editar|edite|edita|mudar|mude|muda|renomear|renomeie|arquivar|arquive|arquiva|restaurar|restaure|restaura|agendar|agende|agenda|marcar|marque|marca|abrir|abra|abre|registrar|preencher|selecionar|definir)\b/u.test(commandRegion)) {
+    || /\b(?:nao|nunca|jamais)\s+(?:cadastre|cadastra|cadastrar|crie|cria|criar|adicione|adiciona|adicionar|editar|edite|edita|mudar|mude|muda|renomear|renomeie|arquivar|arquive|arquiva|restaurar|restaure|restaura|agendar|agende|agenda|marcar|marque|marca|abrir|abra|abre|mostrar|mostre|mostra|registrar|preencher|selecionar|definir)\b/u.test(commandRegion)) {
     return refuse('O pedido contém uma negação. Informe um único comando afirmativo.')
   }
-  if (/(?:\s+e\s+|;\s*|\s+depois\s+)(?:cadastrar|cadastre|cadastra|criar|crie|cria|adicionar|adicione|adiciona|editar|edite|mudar|mude|renomear|arquivar|arquive|restaurar|restaure|agendar|agende|marcar|marque|abrir|abra|finalizar|excluir)\b/u.test(commandRegion)) {
+  if (/(?:\s+e\s+|;\s*|\s+depois\s+)(?:cadastrar|cadastre|cadastra|criar|crie|cria|adicionar|adicione|adiciona|editar|edite|mudar|mude|renomear|arquivar|arquive|restaurar|restaure|agendar|agende|marcar|marque|abrir|abra|abre|mostrar|mostre|mostra|finalizar|excluir)\b/u.test(commandRegion)) {
     return refuse('Informe apenas uma ação por comando.')
   }
   if (/^(?:apague|apagar|exclua|excluir|delete|deletar|remova|remover|finalize|finalizar|cancele|cancelar)\b/u.test(normalized)) {
@@ -469,6 +500,8 @@ export function parseCentralCommand({ text, context = {}, referenceDate } = {}) 
   if (patientManagement) return patientManagement
   const behavior = parseBehaviorManagement(rawText, context)
   if (behavior) return behavior
+  const agendaNavigation = parseAgendaNavigation(normalized, referenceDate)
+  if (agendaNavigation) return agendaNavigation
   const navigation = parseWorkspaceNavigation(normalized)
   if (navigation) return navigation
   const session = parseSessionDraft({ text: normalized, rawText, context })

@@ -111,6 +111,23 @@ test('campos, opções e gavetas são controláveis de qualquer área; ocultos e
   await expect(page.getByRole('button', { name: 'Hoje', exact: true })).toHaveAttribute('aria-pressed', 'true')
 })
 
+test('limpar campos por voz altera apenas o formulário e não grava ou escolhe opção', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Cadastrar paciente Bia Fictícia com 27 anos online')
+  await command(page, 'Limpar Nome')
+  await expect(page.getByRole('form', { name: 'Novo cadastro' }).getByLabel('Nome', { exact: true })).toHaveValue('')
+  await command(page, 'Limpar Idade')
+  await expect(page.getByLabel('Idade em anos (opcional)')).toHaveValue('')
+  await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(0)
+  await propose(page, 'Limpar Modalidade')
+  await expect(page.locator('.voice-command-error')).toContainText('selecionar')
+  await expect(page.getByRole('form', { name: 'Novo cadastro' }).getByLabel('Modalidade')).toHaveValue('Online')
+  await command(page, 'Criar comportamento Espera a vez com descrição Aguarda no jogo')
+  await command(page, 'Limpar Descrição opcional')
+  await expect(page.getByLabel('Descrição opcional')).toHaveValue('')
+  await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(0)
+})
+
 test('voz transcrita prepara cadastro e segundo áudio confirma sem voltar ao início', async ({ page }) => {
   await openApp(page)
   await command(page, 'Abrir Pacientes')

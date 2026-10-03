@@ -35,7 +35,7 @@ const rangeFor = (day, mode) => {
   return [`${day.slice(0, 7)}-01`, civilMonthEnd(day)]
 }
 
-export default function DesktopAgenda({ patients, onChanged, onStartSession, onConfirm = async message => window.confirm(message), initialPatientId = '', voiceCommandDraft = null, onVoiceDraftApplied, startAvulsaSignal = 0, quickStart = false, onQuickStartConsumed }) {
+export default function DesktopAgenda({ patients, onChanged, onStartSession, onConfirm = async message => window.confirm(message), initialPatientId = '', voiceCommandDraft = null, onVoiceDraftApplied, voiceViewRequest = null, onVoiceViewApplied, startAvulsaSignal = 0, quickStart = false, onQuickStartConsumed }) {
   const [allPatients, setAllPatients] = useState(patients)
   const [day, setDay] = useState(() => currentCivilDate(AGENDA_TIME_ZONE))
   const [mode, setMode] = useState('Semana')
@@ -75,6 +75,21 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, onC
   const currentRangeRef = useRef('')
   const appliedInitialPatientEntryRef = useRef('')
   const appliedVoiceCommandRef = useRef('')
+  const appliedVoiceViewRef = useRef('')
+
+  useEffect(() => {
+    if (!voiceViewRequest?.commandId || appliedVoiceViewRef.current === voiceViewRequest.commandId) return
+    const modes = { day: 'Dia', week: 'Semana', month: 'Mês' }
+    if (!modes[voiceViewRequest.view] || !isCivilDate(voiceViewRequest.referenceDate)) return
+    const frame = window.requestAnimationFrame(() => {
+      appliedVoiceViewRef.current = voiceViewRequest.commandId
+      setDay(voiceViewRequest.referenceDate)
+      setMode(modes[voiceViewRequest.view])
+      onVoiceViewApplied?.(voiceViewRequest.commandId)
+      calendarRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [voiceViewRequest, onVoiceViewApplied])
 
   useEffect(() => {
     if (!initialPatientId) {

@@ -377,6 +377,107 @@ test('navega para um único espaço tipado e recusa espaços ambíguos', () => {
   for (const text of ['Abrir agenda e análises', 'Abrir relatórios', 'Abrir sessões de Ana Clara']) assert.equal(parseCentralCommand({ text }).status, 'clarification', text)
 })
 
+test('navegação de agenda prepara somente view e data civil com preview legível', () => {
+  const cases = [
+    ['de hoje', 'day', '2026-10-03', 'do dia 03/10/2026'],
+    ['de amanhã', 'day', '2026-10-04', 'do dia 04/10/2026'],
+    ['do dia 10/10/2026', 'day', '2026-10-10', 'do dia 10/10/2026'],
+    ['desta semana', 'week', '2026-10-03', 'da semana de 03/10/2026'],
+    ['deste mês', 'month', '2026-10-03', 'do mês de 03/10/2026'],
+    ['da semana de 10/10/2026', 'week', '2026-10-10', 'da semana de 10/10/2026'],
+    ['do mês de 10/10/2026', 'month', '2026-10-10', 'do mês de 10/10/2026'],
+  ]
+  const frozenContext = Object.freeze({ patients: Object.freeze([]) })
+  for (const verb of ['mostrar', 'mostre', 'mostra', 'abrir', 'abra', 'abre']) {
+    for (const article of ['', 'a ']) {
+      for (const [qualifier, view, date, preview] of cases) {
+        const text = `${verb} ${article}agenda ${qualifier}`
+        const input = Object.freeze({ text, context: frozenContext, referenceDate: '2026-10-03' })
+        const result = parseCentralCommand(input)
+        assert.deepEqual(result, {
+          status: 'draft', intent: { type: 'agenda.view', target: { view, referenceDate: date } },
+          preview: `Mostrar agenda ${preview}.`, notes: [],
+        }, text)
+        assert.equal(formatCentralCommandPreview(result), `Mostrar agenda ${preview}.`)
+        assert.equal(input.referenceDate, '2026-10-03')
+      }
+    }
+  }
+  assert.equal(parseCentralCommand({ text: '  MOSTRAR   AGENDA DE AMANHA! ', referenceDate: '2026-10-03' }).intent.target.referenceDate, '2026-10-04')
+})
+
+test('agenda usa a referência fornecida e resolve amanhã nas viradas civis', () => {
+  for (const [referenceDate, tomorrow] of [
+    ['2026-12-31', '2027-01-01'], ['2026-01-31', '2026-02-01'],
+    ['2024-02-28', '2024-02-29'], ['2024-02-29', '2024-03-01'], ['2026-02-28', '2026-03-01'],
+  ]) {
+    assert.equal(parseCentralCommand({ text: 'abrir agenda de amanhã', referenceDate }).intent.target.referenceDate, tomorrow)
+    for (const qualifier of ['de hoje', 'desta semana', 'deste mês']) {
+      assert.equal(parseCentralCommand({ text: `mostrar agenda ${qualifier}`, referenceDate }).intent.target.referenceDate, referenceDate)
+    }
+  }
+  for (const qualifier of ['do dia', 'da semana de', 'do mês de']) {
+    const text = `mostrar agenda ${qualifier} 29/02/2024`
+    assert.equal(parseCentralCommand({ text }).intent.target.referenceDate, '2024-02-29')
+    assert.equal(parseCentralCommand({ text, referenceDate: 'inválida' }).intent.target.referenceDate, '2024-02-29')
+  }
+})
+
+test('agenda recusa referência ausente ou inválida para períodos relativos', () => {
+  for (const referenceDate of [undefined, null, '', '2026-02-30', '03/10/2026', '2026-10-03T00:00:00Z']) {
+    for (const qualifier of ['de hoje', 'de amanhã', 'desta semana', 'deste mês']) {
+      const result = parseCentralCommand({ text: `mostrar agenda ${qualifier}`, referenceDate })
+      assert.equal(result.status, 'clarification')
+      assert.equal(result.intent, undefined)
+      assert.match(result.message, /data civil de referência válida/u)
+    }
+  }
+  assert.equal(parseCentralCommand({ text: 'mostrar agenda de amanhã', referenceDate: '9999-12-31' }).status, 'clarification')
+})
+
+test('agenda recusa datas impossíveis, períodos ambíguos e argumentos adicionais', () => {
+  for (const qualifier of ['do dia', 'da semana de', 'do mês de']) {
+    for (const date of ['31/02/2026', '29/02/2026', '31/04/2026', '00/10/2026', '10/00/2026', '10/13/2026', '10/10/0000', '10/10', '1/10/2026', '2026-10-10']) {
+      const result = parseCentralCommand({ text: `mostrar agenda ${qualifier} ${date}`, referenceDate: '2026-10-03' })
+      assert.equal(result.status, 'clarification', `${qualifier} ${date}`)
+      assert.equal(result.intent, undefined)
+    }
+  }
+  for (const text of [
+    'mostrar agenda', 'mostrar agenda da semana', 'abrir agenda do mês',
+    'mostrar agenda da próxima semana', 'mostrar agenda de ontem',
+    'mostrar agenda de hoje ou amanhã', 'mostrar agenda de hoje e amanhã',
+    'mostrar agenda do dia 10/10/2026 e 11/10/2026',
+    'mostrar agenda desta semana deste mês', 'mostrar agenda de hoje para Ana Clara',
+    'mostrar agenda de hoje às 15:00', 'mostrar agenda de hoje não',
+  ]) {
+    const result = parseCentralCommand({ text, referenceDate: '2026-10-03' })
+    assert.equal(result.status, 'clarification', text)
+    assert.equal(result.intent, undefined, text)
+  }
+})
+
+test('agenda mantém recusa de negação e ações múltiplas em ambas as ordens', () => {
+  for (const text of [
+    'não mostrar agenda de hoje', 'nunca mostre agenda deste mês',
+    'por favor, não abrir agenda de amanhã', 'mostrar agenda de hoje e não mostre agenda de amanhã',
+    'mostrar agenda de hoje e abrir pacientes', 'abrir agenda de amanhã; mostrar agenda deste mês',
+    'mostrar agenda desta semana depois criar paciente Bia',
+    'criar paciente Bia e mostrar agenda de hoje', 'criar paciente Bia; mostre agenda de hoje',
+    'criar paciente Bia depois mostra agenda de hoje', 'criar paciente Bia e abre agenda de hoje',
+  ]) {
+    const result = parseCentralCommand({ text, referenceDate: '2026-10-03' })
+    assert.equal(result.status, 'clarification', text)
+    assert.equal(result.intent, undefined, text)
+  }
+})
+
+test('abrir agenda sem período preserva navegação existente sem referência', () => {
+  for (const text of ['abrir agenda', 'abra a agenda', 'abre agenda.']) {
+    assert.deepEqual(parseCentralCommand({ text }).intent, { type: 'workspace.open', target: { space: 'agenda' } })
+  }
+})
+
 test('negações e pedidos de várias ações não geram intents', () => {
   for (const text of ['Não cadastre paciente Bia', 'Por favor, não criar comportamento Pede ajuda', 'Nunca arquivar paciente Ana Clara', 'Não restaure paciente Ana Clara', 'Não abrir agenda', 'Não agendar sessão para Ana Clara amanhã às três da tarde', 'Criar paciente Bia e arquivar paciente Ana Clara', 'Arquivar paciente Ana Clara e restaurar paciente Caio Fictício', 'Editar paciente Ana Clara com 9 anos e abrir agenda', 'Abrir agenda; excluir paciente Ana Clara']) {
     const result = parseCentralCommand({ text, context, referenceDate: '2026-10-03' })
