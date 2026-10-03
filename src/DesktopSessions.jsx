@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
+import { entityOptionSuffix } from './voiceEntityLabels.js'
 import { invoke } from '@tauri-apps/api/core'
 import { groupIndicatorHistory } from './desktopIndicatorEvolution.js'
 import './DesktopSessions.css'
@@ -378,7 +379,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     {message && <p role="status" className="vault-ok">{message}</p>}
     <label htmlFor="session-patient">Paciente para evolução e sessões</label>
     <select id="session-patient" disabled={busy} value={patientId || ''} onChange={event => changePatient(event.target.value)}>
-      <option value="">Selecione</option>{patients.map(patient => <option key={patient.id} value={patient.id}>{patient.name}{patient.archivedAt != null ? ' · arquivado' : ''}</option>)}
+      <option value="">Selecione</option>{patients.map(patient => <option key={patient.id} value={patient.id}>{patient.name}{entityOptionSuffix(patient, patients)}{patient.archivedAt != null ? ' · arquivado' : ''}</option>)}
     </select>
     {patientId && <section className="session-primary" aria-label="Registrar comportamento ou evolução">
       <h3>Registrar comportamento nesta sessão</h3>

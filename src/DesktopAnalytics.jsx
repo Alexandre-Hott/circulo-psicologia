@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { entityOptionSuffix } from './voiceEntityLabels.js'
 import { invoke } from '@tauri-apps/api/core'
 import { AGENDA_TIME_ZONE, currentCivilDate } from './calendarDate.js'
 import { inSupportedRange } from './analyticsRange.js'
@@ -87,7 +88,7 @@ export default function DesktopAnalytics({ voiceRequest = null, onVoiceRequestAp
       <div className="analytics-presets" role="group" aria-label="Período rápido">{[['day', 'Hoje'], ['month', 'Este mês'], ['year', '12 meses']].map(([key, title]) => <button key={key} type="button" className="vault-secondary" aria-pressed={view === key} onClick={() => chooseRange(key)}>{title}</button>)}</div>
       <label>De <input type="date" value={from} onChange={event => { setView('custom'); setFrom(event.target.value) }} /></label>
       <label>Até <input type="date" value={to} onChange={event => { setView('custom'); setTo(event.target.value) }} /></label>
-      <label>Paciente <select aria-label="Paciente" value={patientId} onChange={event => setPatientId(event.target.value)}><option value="">Todos os pacientes</option>{patients.map(item => <option key={item.id} value={item.id}>{item.name}{item.archivedAt ? ' (arquivado)' : ''}</option>)}</select></label>
+      <label>Paciente <select aria-label="Paciente" value={patientId} onChange={event => setPatientId(event.target.value)}><option value="">Todos os pacientes</option>{patients.map(item => <option key={item.id} value={item.id}>{item.name}{entityOptionSuffix(item, patients)}{item.archivedAt ? ' (arquivado)' : ''}</option>)}</select></label>
     </div>
     {!valid ? <p role="alert">Escolha um período válido, em ordem cronológica e de até cinco anos.</p> : phase === 'loading' ? <p role="status">Carregando análises…</p> : phase === 'error' ? <div role="alert"><p>Não foi possível carregar as análises. Seus dados não foram alterados.</p><button type="button" onClick={() => setRetry(value => value + 1)}>Tentar novamente</button></div> : <>
       <div className="analytics-summary"><section><span>Sessões finalizadas no período</span><strong>{data.totalCompletedSessions}</strong></section><section><span>Pacientes distintos</span><strong>{data.uniquePatients}</strong></section></div>

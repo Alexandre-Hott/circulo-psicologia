@@ -1,6 +1,10 @@
 // The voice shortcut uses the same visible controls and validation as a click.
 // No hidden control, arbitrary selector or backend command can be requested.
-const fold = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').replace(/[.!?]+$/g, '').trim()
+const optionNumbers = { um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10 }
+const fold = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  .replace(/·/g, ' ')
+  .replace(/\bopcao\s+(um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez)\b/g, (_, word) => `opcao ${optionNumbers[word]}`)
+  .replace(/\s+/g, ' ').replace(/[.!?]+$/g, '').trim()
 const clean = value => String(value ?? '').trim().replace(/[.!?]+$/g, '').replace(/^["“]|["”]$/g, '').trim()
 const refusal = message => ({ status: 'clarification', message })
 
@@ -72,7 +76,7 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   const normalized = fold(raw)
   if (!root || !normalized) return null
   if (/^(?:nao|nunca)\b/.test(normalized)) return refusal('Pedido negado. Nenhuma ação preparada.')
-  let operation, query, value
+  let operation, query, value, optionLabel
   const fieldPayload = /^(?:preencher|preencha|preenche|definir|defina|selecionar|selecione|seleciona)\s+(.+)$/iu.exec(raw)?.[1]
   // An article can be part of the actual label ("O próprio paciente...").
   // Resolve both forms against visible controls instead of stripping it blindly.
@@ -110,6 +114,7 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
       const options = [...item.element.options].filter(option => !option.disabled && (fold(option.textContent) === fold(value) || fold(option.value) === fold(value)))
       if (options.length !== 1) return refusal(`Para “${item.name}”, escolha: ${[...item.element.options].filter(option => !option.disabled).map(option => option.textContent).join(', ')}.`)
       value = options[0].value
+      optionLabel = options[0].textContent
     } else if (item.element.type === 'date' && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(value)) {
       const [day, month, year] = value.split('/')
       value = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
@@ -123,7 +128,7 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   }
   return {
     status: 'draft',
-    intent: { type: 'interface.control', operation, target: fingerprint(item), ...(operation === 'fill' ? { value } : {}) },
+    intent: { type: 'interface.control', operation, target: fingerprint(item), ...(operation === 'fill' ? { value } : {}), ...(optionLabel !== undefined ? { optionLabel } : {}) },
     preview: clearField ? `Limpar ${item.name}.` : operation === 'fill' ? `${item.name}: ${item.element.tagName === 'SELECT' ? [...item.element.options].find(option => option.value === value)?.textContent : value}`
       : `${operation === 'click' ? 'Acionar' : operation === 'check' ? 'Marcar' : 'Desmarcar'} ${item.name}${item.context ? ` · ${item.context}` : ''}.`,
     notes: [],
@@ -138,6 +143,12 @@ export function applyVoiceInterfaceCommand(intent, root = globalThis.document) {
   })
   if (found.length !== 1) throw new Error('A tela mudou. Prepare o comando novamente antes de aplicar.')
   const element = found[0].element
+  if (intent.operation === 'fill' && element.tagName === 'SELECT') {
+    const options = [...element.options].filter(option => !option.disabled && option.value === intent.value)
+    if (options.length !== 1 || (intent.optionLabel !== undefined && options[0].textContent !== intent.optionLabel)) {
+      throw new Error('As opções mudaram. Prepare o comando novamente antes de aplicar.')
+    }
+  }
   element.scrollIntoView({ block: 'center', behavior: 'smooth' })
   element.focus({ preventScroll: true })
   if (intent.operation === 'click') element.click()
