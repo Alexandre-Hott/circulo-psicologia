@@ -1,6 +1,6 @@
 # Campos de data e horário por voz
 
-Incremento de código posterior ao instalador local 0.2.42. Ainda não empacotado no Windows.
+Incremento consolidado no instalador local 0.2.43. [Pacote e evidência](validacao-voz-0.2.43.md).
 
 O gateway normaliza somente campos HTML de data e hora visíveis. Não modifica nomes, observações ou demais textos. O valor convertido aparece na proposta; confirmar dispara os eventos normais do formulário, sem escrita direta no backend. Limites, obrigatoriedade e validações existentes continuam valendo.
 

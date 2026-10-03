@@ -1,5 +1,9 @@
 # Melhoria contínua de voz
 
+## Entrega instalada 0.2.43 — 03/10/2026
+
+[Pacote e evidência](validacao-voz-0.2.43.md). O incremento de datas/horários abaixo agora está empacotado no NSIS 0.2.43. Build offline/locked e auditoria aprovados; instalação silenciosa exit0, versão conferida e quatro arquivos principais do perfil preservados, snapshot0243 verificado. Sem nova abertura/microfone humano, Release ou assinatura updater. 229/229 JS passaram novamente na versão43. Meta ativa; referências abaixo a “ainda não incluído” são histórico anterior ao empacotamento.
+
 ## Incremento de código após o instalador 0.2.42 — datas e horários
 
 [Formatos e limites](voz-datas-horarios.md). Campos de data/hora aceitam datas completas faladas e horários explícitos em português; a proposta mostra o valor convertido e mantém confirmação/eventos normais. Textos livres não são reescritos. Revisão encontrou e corrigiu separação errada de “vinte horas e três” e rejeição de horas compostas; preservados formatos numéricos com segundos quando o campo permite. 229/229 JS aprovados. Rodada de 24 E2E passou antes dos ajustes finais da revisão; teste específico ampliado está sendo reexecutado. Lint/guard/build passaram, com avisos anteriores.
