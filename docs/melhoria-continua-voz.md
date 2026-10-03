@@ -2,6 +2,8 @@
 
 ## Entrega instalada 0.2.43 — 03/10/2026
 
+Rodada posterior apenas de cobertura: **19/19 E2E de interface em 1,3 min** e **229/229 JS** aprovados. Três provas novas cobrem o CTA de evolução sem rascunho/com rascunho disponível/com ativo, todas as âncoras de etapas, foco nos comportamentos, biblioteca vazia e consulta de paciente arquivado sem escrita. Percurso inicial corrigido para abrir a gaveta antes de acionar seu botão oculto; produção não mudou. [Matriz atualizada](voz-cobertura-interface.md). Sem novo instalador ou repetição nativa/microfone.
+
 [Pacote e evidência](validacao-voz-0.2.43.md). O incremento de datas/horários abaixo agora está empacotado no NSIS 0.2.43. Build offline/locked e auditoria aprovados; instalação silenciosa exit0, versão conferida e quatro arquivos principais do perfil preservados, snapshot0243 verificado. Sem nova abertura/microfone humano, Release ou assinatura updater. 229/229 JS passaram novamente na versão43. Meta ativa; referências abaixo a “ainda não incluído” são histórico anterior ao empacotamento.
 
 ## Incremento de código após o instalador 0.2.42 — datas e horários

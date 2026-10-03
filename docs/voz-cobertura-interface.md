@@ -93,11 +93,21 @@ Arquivo [desktop-voice-agenda-mutations](../test/e2e/desktop-voice-agenda-mutati
 
 Esses estados substituem as lacunas correspondentes `S` da matriz original. Ainda não é reconhecimento de microfone físico, escrita cifrada nativa ou prova de todas as opções possíveis.
 
+## Atualização de execução: caminhos de evolução e etapas da sessão
+
+[desktop-voice-interface](../test/e2e/desktop-voice-interface.spec.js): **19/19 aprovados em 1,3 min**, porta 5196, com três cenários novos; **229/229 JS** também aprovados. Sem alteração de produção, instalação ou novo pacote; instalado permanece 0.2.43.
+
+- `E`: CTA Registrar nova sessão ou continuar rascunho nos três caminhos existentes: sem rascunho abre Agenda com paciente/tipo avulso; rascunho disponível retoma o ID/conteúdo existentes; rascunho ativo rola até seu formulário. Nenhuma nova sessão ou gravação nesses percursos.
+- `E`: âncoras Comportamentos, Evolução descritiva, Indicadores e escalas e Salvar ou finalizar; URLs correspondentes verificadas. Escolher comportamentos desta sessão move o foco ao fieldset.
+- `E`: biblioteca vazia, Criar na biblioteca abre a gaveta; seleção explícita de paciente arquivado em Sessões consulta o timeline com o ID correto e oculta o rascunho do outro paciente, sem escrita.
+
+A rodada inicial específica teve 2/3: o teste tentou acionar um botão dentro da gaveta fechada após a remontagem ao retomar. Corrigido o percurso para abrir a gaveta por comando, a rodada completa passou; não se habilitou botão oculto nem mudou o aplicativo. O scroll do CTA ativo foi observado mantendo a execução do método nativo. Estes resultados substituem as lacunas `S` correspondentes da matriz acima, não provas de ditado humano ou banco nativo.
+
 ## Prioridades restantes para o agente principal
 
 Homologação dos testes novos de homônimos, identidade de seleção e helper: **concluída pelo principal**, conforme nota de execução. Não é mais prioridade pendente.
 
 1. **Fechar navegação restante por voz:** Fechar vínculos, abertura de Início, demais CTAs de Sessões e cabeçalhos semanais; demonstração sintética com recusa e retry da prévia do Início. Os cenários por mouse não substituem essa evidência.
-2. **Cobrir caminhos ainda só `S`:** Voltar do encerramento de série, recolher gavetas administrativas, âncoras de Sessões, CTA de evolução com os três caminhos e paciente arquivado em Sessões. Selects e comando local da Agenda foram comprovados na atualização acima. Usar dados sintéticos e verificar alvo/payload, sem adicionar funções.
-3. **Cobrir retries restantes:** prévia do Início e demais estados do updater, sem instalação real; caminhos de evolução, âncoras e paciente arquivado em Sessões. Não confundir alcance pelo código com prova específica de voz.
+2. **Cobrir caminhos ainda só `S`:** Voltar do encerramento de série e recolher gavetas administrativas. Selects/comando local da Agenda e caminhos de evolução/âncoras/paciente arquivado foram comprovados nas atualizações acima. Usar dados sintéticos e verificar alvo/payload, sem adicionar funções.
+3. **Cobrir retries restantes:** prévia do Início e demais estados do updater, sem instalação real. Não confundir alcance pelo código com prova específica de voz.
 4. **Fechar evidência nativa e decidir a lacuna do cofre bloqueado:** anexar resultados do principal para microfone físico/reconhecimento no Windows, chooser cancelado e arquivos reais de backup/exportação em destino de teste autorizado. Mocks não validam essas etapas; não executar recuperação/substituição/limpeza nesta auditoria. O cofre bloqueado tem controles existentes sem acesso por voz porque não monta o assistente; senha permanece manual. Essa é uma lacuna real de cobertura, e uma implementação para atendê-la exige decisão explícita, sem presumir que esteja automaticamente fora do objetivo.

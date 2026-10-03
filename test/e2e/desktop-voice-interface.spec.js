@@ -1,13 +1,16 @@
 import { expect, test } from '@playwright/test'
 
-async function openApp(page) {
+async function openApp(page, { emptyLibrary = false, archivedPatient = false } = {}) {
   await page.clock.install({ time: new Date('2026-10-03T15:00:00Z') })
-  await page.addInitScript(() => {
+  await page.addInitScript(({ emptyLibrary, archivedPatient }) => {
     window.writes = []
     window.voiceTranscript = ''
     window.analyticsRequests = []
+    window.voiceNativeCalls = []
     const patients = [{ id: 'ana', name: 'Ana Clara', age: 8, revision: 1, preferredModality: 'Presencial', archivedAt: null }]
     const behaviors = [{ id: 'help', title: 'Pede ajuda', description: '', version: 1 }]
+    if (emptyLibrary) behaviors.length = 0
+    if (archivedPatient) patients.push({ id: 'archived', name: 'Bia Arquivada', age: 30, revision: 1, preferredModality: 'Online', archivedAt: '2026-09-01' })
     const occurrence = { id: 'occ', seriesId: 'series', patientId: 'ana', date: '2026-10-03', originalDate: '2026-10-03', start: '15:00', end: '15:50', frequency: 'Avulsa', modality: 'Presencial', status: 'scheduled' }
     let draft = { id: 'draft', patientId: 'ana', originalDate: '2026-10-03', observation: '', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicators: [] }
     class SyntheticAudioContext {
@@ -31,6 +34,7 @@ async function openApp(page) {
     Object.defineProperty(window, 'AudioContext', { configurable: true, value: SyntheticAudioContext })
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } })
     window.__TAURI_INTERNALS__ = { invoke: async (command, args) => {
+      window.voiceNativeCalls.push({ command, args })
       if (command === 'vault_status') return { initialized: true, unlocked: true, profileState: 'ready' }
       if (command === 'auto_backup_status') return { available: false, dirty: false }
       if (command === 'patient_list') return patients.filter(patient => args?.includeArchived || patient.archivedAt == null)
@@ -56,7 +60,7 @@ async function openApp(page) {
       if (command === 'plugin:updater|check') return null
       return null
     } }
-  })
+  }, { emptyLibrary, archivedPatient })
   await page.goto('/')
   await expect(page.getByRole('region', { name: 'Comando do Círculo' })).toBeVisible()
 }
@@ -71,6 +75,62 @@ async function command(page, text) {
   await expect(page.locator('.voice-command-preview')).toBeVisible()
   await propose(page, 'confirmar')
 }
+
+test('evolução por voz sem rascunho abre Agenda para o paciente sem criar dados', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Abrir evolução de Ana Clara')
+  await command(page, 'Clicar em Registrar nova sessão ou continuar rascunho')
+  const form = page.getByRole('form', { name: 'Novo compromisso', exact: true })
+  await expect(form).toBeVisible()
+  await expect(form.getByLabel('Paciente', { exact: true })).toHaveValue('ana')
+  await expect(form.getByLabel('Tipo', { exact: true })).toHaveValue('Avulsa')
+  await expect(form.getByLabel('Tipo', { exact: true })).toBeDisabled()
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  expect(await page.evaluate(() => window.voiceNativeCalls.filter(call => call.command === 'session_draft_start'))).toEqual([])
+})
+
+test('evolução por voz retoma rascunho e âncoras não criam nem gravam outra sessão', async ({ page }) => {
+  await openApp(page)
+  await page.evaluate(() => { window.voiceDrafts = [{ id: 'resume', patientId: 'ana', seriesId: 'resume-series', originalDate: '2026-10-02', observation: 'Observação fictícia preservada', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicators: [] }] })
+  await command(page, 'Abrir evolução de Ana Clara')
+  await command(page, 'Clicar em Registrar nova sessão ou continuar rascunho')
+  await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toHaveAttribute('data-voice-record', 'resume')
+  await expect(page.getByLabel('Observações descritivas')).toHaveValue('Observação fictícia preservada')
+  for (const [label, hash] of [['Comportamentos', 'draft-behaviors'], ['Indicadores e escalas', 'draft-indicators'], ['Salvar ou finalizar', 'draft-actions'], ['Evolução descritiva', 'session-observation']]) {
+    await command(page, `Clicar em ${label}`)
+    await expect(page).toHaveURL(new RegExp(`#${hash}$`))
+  }
+  await command(page, 'Clicar em Escolher comportamentos desta sessão')
+  await expect(page.locator('#draft-behaviors')).toBeFocused()
+  // Retaking a draft remounts the session workspace, closing secondary drawers.
+  // Voice must open the drawer before targeting its hidden action.
+  await command(page, 'Clicar em Evolução e escalas registradas · Adicionar adendo')
+  await page.evaluate(() => {
+    window.voiceScrolledIds = []
+    const scroll = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = function (...args) { window.voiceScrolledIds.push(this.id); return scroll.apply(this, args) }
+  })
+  await command(page, 'Clicar em Registrar nova sessão ou continuar rascunho')
+  expect(await page.evaluate(() => window.voiceScrolledIds)).toContain('session-draft')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  expect(await page.evaluate(() => window.voiceNativeCalls.filter(call => call.command === 'session_draft_start'))).toEqual([])
+})
+
+test('biblioteca vazia abre pelo atalho de voz e paciente arquivado continua consultável', async ({ page }) => {
+  await openApp(page, { emptyLibrary: true, archivedPatient: true })
+  await page.evaluate(() => { window.voiceDrafts = [{ id: 'empty-library', patientId: 'ana', originalDate: '2026-10-02', observation: '', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicators: [] }] })
+  await command(page, 'Abrir registros de Ana Clara')
+  await command(page, 'Clicar em Retomar sessão de 2026-10-02')
+  await command(page, 'Clicar em Criar na biblioteca')
+  await expect(page.locator('#session-behaviors')).toHaveAttribute('open', '')
+  await expect(page.getByLabel('Título descritivo')).toBeVisible()
+  await expect(page).toHaveURL(/#session-behaviors$/)
+  await command(page, 'Selecionar Paciente para evolução e sessões como Bia Arquivada arquivado')
+  await expect(page.getByLabel('Paciente para evolução e sessões')).toHaveValue('archived')
+  await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toHaveCount(0)
+  await expect.poll(() => page.evaluate(() => window.voiceNativeCalls.filter(call => call.command === 'session_timeline').at(-1)?.args)).toEqual({ patientId: 'archived' })
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+})
 
 test('cadastro, edição e comportamento usam formulários existentes sem gravação antecipada', async ({ page }) => {
   await openApp(page)
