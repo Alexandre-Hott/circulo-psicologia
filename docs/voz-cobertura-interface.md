@@ -103,11 +103,22 @@ Esses estados substituem as lacunas correspondentes `S` da matriz original. Aind
 
 A rodada inicial específica teve 2/3: o teste tentou acionar um botão dentro da gaveta fechada após a remontagem ao retomar. Corrigido o percurso para abrir a gaveta por comando, a rodada completa passou; não se habilitou botão oculto nem mudou o aplicativo. O scroll do CTA ativo foi observado mantendo a execução do método nativo. Estes resultados substituem as lacunas `S` correspondentes da matriz acima, não provas de ditado humano ou banco nativo.
 
+## Atualização de execução: Início e novas tentativas
+
+[desktop-voice-settings](../test/e2e/desktop-voice-settings.spec.js): **7/7 aprovados em 38,6 s**, porta 5196, incluindo três novos casos e ampliação da prova de formulário aberto; **229/229 JS** aprovados. Lint com quatro avisos anteriores. Sem mudanças de produção; pacote instalado permanece 0.2.43.
+
+- `E`: Tentar novamente na prévia da Agenda do Início; falha seguida de sucesso consulta novamente e atualiza a prévia. Ver pacientes, Ver agenda e Início navegam por voz sem criar compromisso/rascunho.
+- `E`: Tentar novamente no erro de verificação de atualizações: nova falha mantém aviso, sucesso remove aviso e não baixa/instala.
+- `E`: Tentar novamente com formulário de cadastro aberto mantém Nome e estado forms-open, sem download ou descarte.
+- `E`: duas mensagens de erro com botões Tentar novamente simultâneos: nome simples é recusado, nenhum retry executado. Navegação para Pacientes delimita o updater; resolvê-lo e retornar ao Início permite retry da prévia. Não houve escolha arbitrária. Limite de usabilidade: ainda exige navegar quando ambos têm o mesmo rótulo; não declarar que comando direto com nome da área está implementado.
+
+A rodada intermediária teve 5/6 por uma expectativa incorreta de título na fixture (“Seus pacientes”, enquanto a tela mostra “Pacientes”). A expectativa foi corrigida sem mudar o produto; a rodada final com sete casos passou. Updater, arquivos e persistência continuam simulados. Não se instalou atualização real nem se validou microfone humano.
+
 ## Prioridades restantes para o agente principal
 
 Homologação dos testes novos de homônimos, identidade de seleção e helper: **concluída pelo principal**, conforme nota de execução. Não é mais prioridade pendente.
 
-1. **Fechar navegação restante por voz:** Fechar vínculos, abertura de Início, demais CTAs de Sessões e cabeçalhos semanais; demonstração sintética com recusa e retry da prévia do Início. Os cenários por mouse não substituem essa evidência.
+1. **Fechar navegação restante por voz:** Fechar vínculos, demais CTAs de Sessões e cabeçalhos semanais; demonstração sintética com recusa. Início/Ver pacientes/Ver agenda/retry da prévia foram comprovados acima. Os cenários por mouse não substituem essa evidência.
 2. **Cobrir caminhos ainda só `S`:** Voltar do encerramento de série e recolher gavetas administrativas. Selects/comando local da Agenda e caminhos de evolução/âncoras/paciente arquivado foram comprovados nas atualizações acima. Usar dados sintéticos e verificar alvo/payload, sem adicionar funções.
-3. **Cobrir retries restantes:** prévia do Início e demais estados do updater, sem instalação real. Não confundir alcance pelo código com prova específica de voz.
+3. **Cobrir descarte de outros formulários do updater:** vínculo, Agenda, contexto, adendo e biblioteca, sem instalação real. Os retries check-error/forms-open e prévia do Início foram comprovados; rótulos dos retries simultâneos ainda podem ser simplificados para evitar navegação adicional. Não confundir alcance pelo código com prova específica de voz.
 4. **Fechar evidência nativa e decidir a lacuna do cofre bloqueado:** anexar resultados do principal para microfone físico/reconhecimento no Windows, chooser cancelado e arquivos reais de backup/exportação em destino de teste autorizado. Mocks não validam essas etapas; não executar recuperação/substituição/limpeza nesta auditoria. O cofre bloqueado tem controles existentes sem acesso por voz porque não monta o assistente; senha permanece manual. Essa é uma lacuna real de cobertura, e uma implementação para atendê-la exige decisão explícita, sem presumir que esteja automaticamente fora do objetivo.

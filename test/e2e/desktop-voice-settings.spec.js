@@ -2,12 +2,13 @@ import { expect, test } from '@playwright/test'
 
 // UI/voice are real; native file dialogs, updater and storage are synthetic.
 async function openApp(page, update = false) {
+  const options = typeof update === 'object' ? update : { update }
   await page.clock.install({ time: new Date('2026-10-03T15:00:00Z') })
   await page.clock.pauseAt(new Date('2026-10-03T15:00:00Z'))
-  await page.addInitScript(({ update }) => {
+  await page.addInitScript(({ update = false, checkFailure = false, agendaFailure = false }) => {
     let unlocked = true
     let downloads = 0
-    window.settingsFixture = { calls: [], unexpected: [] }
+    window.settingsFixture = { calls: [], unexpected: [], checkFailure, agendaFailure }
     const callbacks = new Map()
     window.__TAURI_INTERNALS__ = {
       transformCallback(callback) { const id = callbacks.size + 1; callbacks.set(id, callback); return id },
@@ -20,9 +21,13 @@ async function openApp(page, update = false) {
         if (command === 'auto_backup_retry') return { available: true, dirty: false, lastVerifiedAt: 1791039600 }
         if (command === 'recovery_inventory') return { categories: [], eligibleCount: 0, eligibleBytes: 0, cleanupBlocked: false }
         if (command === 'patient_list') return [{ id: 'ana', name: 'Ana Clara', age: 8, revision: 1, archivedAt: null }]
+        if (command === 'agenda_occurrences' && window.settingsFixture.agendaFailure) throw new Error('Falha sintética da prévia da Agenda')
         if (['behavior_list', 'indicator_catalog', 'agenda_list_series', 'agenda_history', 'agenda_occurrences', 'related_party_list', 'session_timeline', 'session_draft_list', 'session_addendum_list', 'case_context_list'].includes(command)) return []
         if (command === 'record_copy_export' || command === 'backup_create') return false // chooser cancelled; no file
-        if (command === 'plugin:updater|check') return update ? { rid: 1, currentVersion: '0.2.39', version: '0.2.40' } : null
+        if (command === 'plugin:updater|check') {
+          if (window.settingsFixture.checkFailure) throw new Error('Falha sintética de verificação')
+          return update ? { rid: 1, currentVersion: '0.2.39', version: '0.2.40' } : null
+        }
         if (command === 'plugin:resources|close') return null
         if (command === 'plugin:updater|download_and_install') {
           if (++downloads === 1) throw new Error('Falha sintética de download')
@@ -34,7 +39,7 @@ async function openApp(page, update = false) {
         throw new Error(`Invoke sem fixture: ${command}`)
       },
     }
-  }, { update })
+  }, options)
   await page.goto('/')
   await expect(page.getByRole('region', { name: 'Comando do Círculo' })).toBeVisible()
 }
@@ -55,6 +60,63 @@ async function command(page, text) {
 
 const calls = (page, command) => page.evaluate(name => window.settingsFixture.calls.filter(item => item.command === name), command)
 test.afterEach(async ({ page }) => expect(await page.evaluate(() => window.settingsFixture?.unexpected || [])).toEqual([]))
+
+test('Início: retry da prévia e navegação por voz sem mutação', async ({ page }) => {
+  await openApp(page, { agendaFailure: true })
+  await expect(page.getByText('Não foi possível consultar a agenda agora.')).toBeVisible()
+  const before = (await calls(page, 'agenda_occurrences')).length
+  await page.evaluate(() => { window.settingsFixture.agendaFailure = false })
+  await command(page, 'Clicar em Tentar novamente')
+  await expect(page.getByText('Nenhum compromisso para hoje.')).toBeVisible()
+  expect((await calls(page, 'agenda_occurrences')).length).toBeGreaterThan(before)
+  await command(page, 'Clicar em Ver pacientes')
+  await expect(page.getByRole('region', { name: 'Pacientes', exact: true }).getByRole('heading', { name: 'Pacientes', exact: true })).toBeVisible()
+  await command(page, 'Clicar em Início')
+  await command(page, 'Clicar em Ver agenda')
+  await expect(page.getByRole('region', { name: 'Agenda', exact: true })).toBeVisible()
+  await command(page, 'Clicar em Início')
+  await expect(page.getByText('Nenhum compromisso para hoje.')).toBeVisible()
+  expect(await calls(page, 'agenda_create_series')).toHaveLength(0)
+  expect(await calls(page, 'session_draft_start')).toHaveLength(0)
+})
+
+test('updater: retry da verificação por voz não baixa nem instala', async ({ page }) => {
+  await openApp(page, { checkFailure: true })
+  await expect(page.getByText('Não foi possível verificar atualizações. Você pode continuar normalmente.')).toBeVisible()
+  const before = (await calls(page, 'plugin:updater|check')).length
+  await command(page, 'Clicar em Tentar novamente')
+  await expect(page.getByText('Não foi possível verificar atualizações. Você pode continuar normalmente.')).toBeVisible()
+  expect((await calls(page, 'plugin:updater|check')).length).toBe(before + 1)
+  await page.evaluate(() => { window.settingsFixture.checkFailure = false })
+  await command(page, 'Clicar em Tentar novamente')
+  await expect(page.getByText('Não foi possível verificar atualizações. Você pode continuar normalmente.')).toHaveCount(0)
+  expect((await calls(page, 'plugin:updater|check')).length).toBe(before + 2)
+  expect(await calls(page, 'plugin:updater|download_and_install')).toHaveLength(0)
+})
+
+test('dois retries visíveis recusam escolha ambígua e navegação delimita o alvo', async ({ page }) => {
+  await openApp(page, { checkFailure: true, agendaFailure: true })
+  await expect(page.getByRole('button', { name: 'Tentar novamente', exact: true })).toHaveCount(2)
+  const checks = (await calls(page, 'plugin:updater|check')).length
+  const agenda = (await calls(page, 'agenda_occurrences')).length
+  await propose(page, 'Clicar em Tentar novamente')
+  await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+  await expect(page.locator('.voice-command-error')).toContainText('mais de uma opção')
+  expect(await calls(page, 'plugin:updater|check')).toHaveLength(checks)
+  expect(await calls(page, 'agenda_occurrences')).toHaveLength(agenda)
+  await command(page, 'Abrir pacientes')
+  await page.evaluate(() => { window.settingsFixture.checkFailure = false })
+  await command(page, 'Clicar em Tentar novamente')
+  expect(await calls(page, 'plugin:updater|check')).toHaveLength(checks + 1)
+  await command(page, 'Clicar em Início')
+  await expect(page.getByText('Não foi possível consultar a agenda agora.')).toBeVisible()
+  await page.evaluate(() => { window.settingsFixture.agendaFailure = false })
+  const beforeRetry = (await calls(page, 'agenda_occurrences')).length
+  await command(page, 'Clicar em Tentar novamente')
+  expect((await calls(page, 'agenda_occurrences')).length).toBeGreaterThan(beforeRetry)
+  await expect(page.getByText('Nenhum compromisso para hoje.')).toBeVisible()
+  expect(await calls(page, 'plugin:updater|download_and_install')).toHaveLength(0)
+})
 
 test('ajustes: inspeção, cópia automática, licenças e bloqueio por voz', async ({ page }) => {
   await openApp(page)
@@ -112,6 +174,9 @@ test('atualização não descarta cadastro aberto sem confirmação explícita p
   await openApp(page, true)
   await command(page, 'Cadastrar paciente Bia Fictícia de 9 anos')
   await command(page, 'Clicar em Baixar e instalar')
+  await expect(page.getByText('Feche os formulários antes de instalar Círculo 0.2.40.')).toBeVisible()
+  await command(page, 'Clicar em Tentar novamente')
+  await expect(page.getByLabel('Nome', { exact: true })).toHaveValue('Bia Fictícia')
   await expect(page.getByText('Feche os formulários antes de instalar Círculo 0.2.40.')).toBeVisible()
   expect(await calls(page, 'plugin:updater|download_and_install')).toHaveLength(0)
   await command(page, 'Clicar em Descartar edições e fechar formulários')
