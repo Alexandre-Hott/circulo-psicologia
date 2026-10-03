@@ -4,7 +4,9 @@
 
 [Evidência atual](validacao-voz-0.2.42.md). Pacientes e vínculos homônimos têm opções distintas e identidade/revisão; seletores de paciente nas três áreas usam o mesmo helper. Pode dizer “opção dois”, sem ponto separador. Seleção confirmada revalida valor/rótulo disponível. 225 JS, 20 E2E de regressão/seleção e quatro E2E de homônimos passaram. NSIS instalado, perfil preservado e smoke de processo aprovado. Sem Release/updater assinado nem teste de microfone humano.
 
-Próximos pontos: matriz consolidada por ação, datas/horas faladas em campos e provas ainda ausentes da interface. Meta ativa; seções seguintes são histórico. Não investigar limpeza de recovery ou compatibilidade de backups antigos.
+Rodada de cobertura sem alterações de produção: **7/7 E2E em 46,7 s** para navegação do calendário, início de sessão com falha/retry sem duplicação, encaminhamento e recusa da finalização, filtros diretos de Análises e erro/retry sem dados antigos. **225/225 JS** aprovados. [Matriz consolidada e lacunas](voz-cobertura-interface.md). Instalador permanece 0.2.42; não houve novo teste de microfone humano, Rust ou instalação nesta rodada.
+
+Próximos pontos: controles restantes de navegação, selects/comando local da Agenda, evolução e retries do Início/updater; datas/horas faladas em campos. Meta ativa; seções seguintes são histórico. Não investigar limpeza de recovery ou compatibilidade de backups antigos.
 
 ## Estado atual: instalado 0.2.41 — 03/10/2026
 
