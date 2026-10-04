@@ -1,5 +1,13 @@
 # Melhoria contínua de voz
 
+## Entrega local0.2.50 — registros por voz sem ambiguidade
+
+Pacote `Círculo_0.2.50_x64-setup.exe`, **135.888.303 bytes**, SHA-256 `91e8ba3648ff72506f31524ac1519bfaaa34844bb934a28eaca7bc680b71ccad`. Build NSIS offline/locked exit0; override temporário de updater removido após término, configuração oficial preservada. Auditoria `%TEMP%\\circulo-0250-audit-20261003.json`: PE0.2.50/x64/NotSigned, hash/tamanho conferidos. Não extraído, instalado ou aberto nesta rodada; instalado verificado permanece0.2.47. Nenhum perfil alterado. Sem `.sig`, assinatura Authenticode, Release ou atualização oferecida pelo GitHub.
+
+Inclui o incremento de alvos/texto descrito abaixo. **243/243JS** reexecutados na versão50 e guard aprovado. **57/57E2E em3,8min** executados no snapshot funcional0212070 antes da mudança somente de versão/empacotamento; não repetidos como jornada do instalador. Sem nova execução Rust/WAV: backend funcional não alterado; compilação Rust release aprovada, avisos LNK4099 de PDB OpenSSL e chunk>500KiB anteriores. Meta permanece ativa; instalador não comprova microfone físico nem cobertura de todas as ações.
+
+**Pendência concreta da revisão de continuidade:** retry de Registrar sessão após sucesso parcial. Fixture de calendário reutiliza rascunho, enquanto `vault/sessions.rs::start_session_draft` ainda pode inserir outro ID para a mesma ocorrência; probe SQLite em memória aceitou dois. `DesktopAgenda.create` também interrompe início/revelação do compromisso se atualização auxiliar falha depois de criar; `DesktopVault.startSessionFromAgenda` pode retornarfalse após sessão criada/aberta se refreshWorkspace falha. Revisão somente leitura:10 unitários e3 probes em memória, sem Playwright/perfil. Cenário de voz proposto: criar fora da semana, falhar refresh uma vez após início, voltar e iniciar novamente; exigir um compromisso/rascunho/ID e conteúdo preservado. A versão50 não corrige essa pendência. Próxima prioridade da meta, não novo recurso nem investigação de recovery/legados.
+
 ## Incremento após0.2.49 — alvos e texto dos registros de sessão
 
 Comandos de comportamento e indicador passam a usar título, rótulo e paciente completos do catálogo, inclusive títulos com delimitadores como “para”, “em” e “como” e pontuação final. Todas as interpretações sintáticas são enumeradas antes de verificar a sessão aberta; ambiguidades entre pacientes/modelos/rótulos são recusadas, não resolvidas pela sessão atualmente selecionada. Nomes entre aspas consideram tanto o nome literal cadastrado quanto as aspas como delimitador, recusando quando correspondem a pacientes diferentes.

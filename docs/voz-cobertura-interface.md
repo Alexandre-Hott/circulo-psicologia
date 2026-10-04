@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Consolidação local0.2.50
+
+Incremento de alvos/texto completo incluído no instalador50, compilado offline/locked e auditado PE/x64/hash; sem instalação, microfone físico ou Release.243/243JS e guard reexecutados após versionamento;57/57E2E do snapshot funcional antes da mudança somente de versão. Aplicativo instalado continua0.2.47. [Artefato e limitações](melhoria-continua-voz.md). As notas “ainda não empacotado” abaixo são históricas deste incremento, agora consolidado.
+
 ## Complemento após0.2.49: registros de sessão com alvos completos
 
 Comportamentos/indicadores respeitam títulos e rótulos completos, delimitadores e pontuação. Interpretações ambíguas são recusadas antes de validar o rascunho aberto. Texto de observação pode mencionar outro paciente e preserva aspas internas. **243/243JS e57/57E2E em3,8min** no snapshot final; revisão independente sem achado novo (135 checks em memória). Build/lint/guard aprovados com avisos anteriores. Captura/RPC simulados, não microfone físico. Fonte posterior ao instalador49, ainda não empacotada/instalada; detalhes de falhas intermediárias e limites em [registro](melhoria-continua-voz.md). Meta ativa.
