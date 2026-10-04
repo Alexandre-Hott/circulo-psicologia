@@ -1,6 +1,6 @@
 # Validação de voz do Círculo 0.2.84
 
-Esta entrega inclui a [correção da confirmação digitada](voz-confirmacao-digitada.md): “Confirmar.” não apaga a proposta antes da aplicação explícita. O [instalador para Windows x64](../src-tauri/target/release/bundle/nsis/Círculo_0.2.84_x64-setup.exe) foi gerado para teste local com dados fictícios. Tem 187.080.647 bytes e SHA-256 `280fed1625ece9ddbb91f9b77dfa91cc6c6be57ac90e64e1903dcb87efb1bdcb`. Não foi instalado, executado, assinado ou publicado. A meta continua ativa.
+Esta entrega inclui a [correção da confirmação digitada](voz-confirmacao-digitada.md): “Confirmar.” não apaga a proposta antes da aplicação explícita. O [instalador para Windows x64](../src-tauri/target/release/bundle/nsis/Círculo_0.2.84_x64-setup.exe) foi gerado para teste local com dados fictícios. Tem 187.080.647 bytes e SHA-256 `280fed1625ece9ddbb91f9b77dfa91cc6c6be57ac90e64e1903dcb87efb1bdcb`. Não foi instalado, executado, assinado ou publicado. O fechamento funcional das oito áreas e seus limites estão registrados abaixo.
 
 ## Reconhecimento de quatro pedidos
 
@@ -54,6 +54,31 @@ Build Tauri/NSIS release/offline/locked terminou com código zero e compilação
 
 Auditoria de metadados em `C:\Users\alexandre\AppData\Local\Temp\circulo-0284-audit-20261004.json`: PE0.2.84, Authenticode NotSigned, alvo declarado do aplicativo x64. O stub NSIS é distinto do executável do aplicativo; o conteúdo interno não foi inspecionado. Sem instalação, execução, desinstalação ou publicação em Releases desta versão. Perfil e aplicativo instalados preservados.
 
-## Limites e próxima prova
+## Fechamento funcional das oito áreas
 
-Os quatro textos Rust foram conferidos na interface; a diferença no título permanece como limitação explícita. Reconhecimento nativo e aplicação UI são provas separadas; não há homologação de microfone físico, precisão geral ou cobertura universal. Senhas, seletores de arquivos e início explícito do áudio permanecem manuais. Limpeza de recovery, backups antigos e novas funcionalidades clínicas ficaram fora do escopo. A próxima auditoria procura lacunas funcionais reais nas oito áreas, sem criar funcionalidades ou prolongar o ciclo apenas com testes redundantes.
+A expansão das ações existentes usa pedidos naturais, comandos sobre controles visíveis e o dispatcher do ditado, em português. A auditoria de fonte confrontou os controles habilitados com essas rotas; a execução conferiu identidade, conteúdo, confirmação e preservação dos registros concorrentes. Não se conclui cobertura só pela existência de testes ou pela ausência de uma lacuna estática.
+
+O principal executou 40 casos selecionados de nove arquivos: todos passaram em 5,6 min, com um worker e zero retries. Os hashes dos 73 arquivos de fonte e dos nove arquivos de teste permaneceram iguais antes/depois, comparados por caminho e hash. A primeira comparação por ordem da enumeração diferiu; a conferência por caminho confirmou zero arquivos adicionados, removidos ou alterados. A tabela relaciona os requisitos às provas executadas e aos mecanismos existentes, não a todas as combinações de estados ou frases.
+
+| Área | Ações conferidas nas jornadas e provas específicas |
+| --- | --- |
+| Assistente e navegação | Preparar, confirmar, invalidar proposta antiga, escolher destinos, separar comando e trecho, limitar conteúdo e liberar captura |
+| Pacientes e vínculos | Cadastro, edição, busca, arquivamento/restauração, vínculos e seleção de homônimos com ID/revisão exatos |
+| Agenda | Compromisso avulso e recorrente, detalhe correto, criação/início rápido, remarcação, cancelamento e encerramento de série |
+| Sessões | Iniciar/retomar, quatro campos literais, salvar/finalizar, cancelar e preservar os demais rascunhos |
+| Biblioteca e indicadores | Criar/editar comportamento reutilizável, selecionar/desmarcar, registrar/limpar valor e nota, manter versão e concorrentes |
+| Contexto e evolução | Revisão do paciente correto, adendo, consulta/âncoras e exportação após aviso explícito |
+| Análises | Paciente, datas, presets e retry com filtros exatos, sem escrita clínica |
+| Cofre e Ajustes | Criação/desbloqueio com senha manual, bloqueio, cópia automática, backup portátil, recuperação e updater com confirmação |
+
+Arquivos da seleção: [jornadas principais](../test/e2e/desktop-voice-primary-journeys.spec.js), [jornadas secundárias](../test/e2e/desktop-voice-secondary-journeys.spec.js), [controles residuais](../test/e2e/desktop-voice-residual-controls.spec.js), [navegação do rascunho](../test/e2e/desktop-voice-draft-navigation-pcm.spec.js), [calendário](../test/e2e/desktop-voice-calendar-controls.spec.js), [ditado local](../test/e2e/voice-dictation-local-controls.spec.js), [updater](../test/e2e/desktop-voice-updater.spec.js), [Ajustes](../test/e2e/desktop-voice-settings.spec.js) e [confirmação](../test/e2e/desktop-voice-routing.spec.js). A seleção executou os quatro primeiros arquivos completos; nos demais, os casos essenciais descritos na tabela. As provas específicas anteriores de datas, opções, homônimos, textareas e lifecycle permanecem complementares.
+
+O backup portátil recebeu uma única jornada PCM nova. Três focais preliminares falharam por semear um paciente depois da carga do catálogo, não redigitar a senha limpa após cancelar a criação e usar “Confirmar comando.” no aviso que exige “Confirmar” ou “Voltar”. Somente o teste foi ajustado; o primeiro focal verde passou 1/1 em 21,3 s. A criação nessa jornada aciona o handler e cancela o chooser: não prova arquivo criado no Windows. Senhas e escolha de arquivo continuam manuais; o mock de restauração é sintético.
+
+A revisão encontrou um P2 na prova: o mock compartilhado permitia efeitos de outras funções. Após os 40 casos, foi acrescentada uma guarda exclusiva do modo PCM que só permite leituras e os três handlers portáteis, rejeitando outros efeitos antes de executá-los. A revisão fechou o P2; focal reforçado 1/1 em 21,9 s no autor, seguido de 26/26 no arquivo completo de Ajustes em 1,7 min no principal. O modo legado permanece intacto. Esses resultados são rodadas separadas: os 40 casos pertencem ao hash anterior de Ajustes `1C3A11C9AA3A922844B1A7E2E01A5390695DDA0E2007F8615375A6278B6AB442`; os 26 ao hash final `50FF887A6B93E03C50224D0B89CA593436AB9738D13C276DDAE77BD739DBB087`. As demais fontes/testes mantiveram seus hashes; o hash final foi conferido antes/depois da rodada de 26.
+
+JavaScript foi novamente executado com código zero, sem nova contagem preservada na saída. Rust release/offline/locked passou 138 testes e ignorou o opt-in, em 8,61 s. Nenhuma nova ASR, síntese, mudança de produção, instalação, acesso ao perfil ou publicação ocorreu neste fechamento. O hash do instalador84 foi revalidado; não há motivo funcional para outro build somente por testes/documentação. A cobertura funcional das ações existentes fica sustentada por esses resultados, pelas provas específicas anteriores e pelos mecanismos N/G/local auditados, com as exceções abaixo.
+
+## Limites da entrega
+
+Os quatro textos Rust foram conferidos na interface; a diferença no título permanece como limitação explícita. Reconhecimento nativo e aplicação UI são provas separadas; não há homologação de microfone físico, precisão geral ou execução de todo botão em todo estado. Senhas, seletores de arquivos e início explícito do áudio permanecem manuais. Limpeza de recovery, backups antigos e novas funcionalidades clínicas ficaram fora do escopo. Instalação física e assinatura/publicação não foram realizadas. Esta entrega permite testar a expansão funcional com dados fictícios; não constitui aprovação para atendimento clínico real ou garantia de transcrição correta. Revise o conteúdo antes de confirmar e salvar.

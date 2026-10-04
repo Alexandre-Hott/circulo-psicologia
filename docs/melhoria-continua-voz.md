@@ -2,6 +2,10 @@
 
 ## Estado atual — 04/10/2026
 
+O [fechamento funcional das oito áreas](validacao-voz-0.2.84.md#fechamento-funcional-das-oito-áreas) passou pela regressão integrada40/40 em5,6min e, após reforçar a prova do backup portátil, pelo arquivo completo de Ajustes26/26 em1,7min. Rodadas separadas, sem retries, com hashes conferidos; fontes de produção intactas. A cobertura das ações existentes combina os mecanismos N/G/local, as jornadas executadas e as provas específicas anteriores. O instalador84 permanece válido para teste fictício, sem nova instalação, assinatura ou publicação. Senhas, arquivos e início do microfone continuam manuais; reconhecimento pode divergir e o microfone físico não foi homologado. Esse é o fechamento da expansão funcional solicitada, não uma garantia de qualquer fala ou aprovação clínica.
+
+### Histórico até o fechamento
+
 O comando falado de correção passou pela rota funcional: uma nova inferência Rust retornou “Preencher título descritivo com espera a vez.”; preparar não muda o campo e a confirmação separada aplica somente “espera a vez”, sem Save. Focal1/1 no autor e arquivo completo6/6 no principal em28,4s, sem retries. A fidelidade literal falhou pela inicial minúscula frente a “Espera a vez”; esse limite não foi normalizado. [Evidência](validacao-voz-0.2.84.md#comando-falado-de-correção). Corpus anterior intacto, sem nova produção ou instalador. Meta ativa; a próxima auditoria confronta ações atuais com as provas existentes para escolher lacunas concretas, não repetir testes já cobertos.
 
 Prova adicional de usabilidade: após o título reconhecido “Espera a vez.”, o comando digitado “Preencher Título descritivo com Espera a vez” prepara a correção sem efeito; confirmar muda somente o campo, sem Save. Caso focal1/1 no autor e arquivo completo5/5 no principal em24,7s, sem retries. [Evidência e limites](validacao-voz-0.2.84.md#correção-explícita-do-título). Sem nova produção, instalador ou inferência; a falha literal nativa permanece registrada. A meta continua ativa para a cobertura das oito áreas, com alterações somente quando houver uma lacuna concreta.

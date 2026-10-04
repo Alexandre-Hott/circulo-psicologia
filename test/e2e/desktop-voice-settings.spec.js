@@ -5,16 +5,75 @@ async function openApp(page, update = false) {
   const options = typeof update === 'object' ? update : { update }
   await page.clock.install({ time: new Date('2026-10-03T15:00:00Z') })
   await page.clock.pauseAt(new Date('2026-10-03T15:00:00Z'))
-  await page.addInitScript(({ update = false, checkFailure = false, agendaFailure = false, initiallyLocked = false, initialized = true }) => {
+  await page.addInitScript(({ update = false, checkFailure = false, agendaFailure = false, initiallyLocked = false, initialized = true, pcm = false }) => {
     let unlocked = !initiallyLocked
     let hasVault = initialized
     let downloads = 0
     window.settingsFixture = { calls: [], unexpected: [], checkFailure, agendaFailure, timeline: [], patients: [{ id: 'ana', name: 'Ana Clara', age: 8, revision: 1, archivedAt: null }], backupPreview: null, backupSelectError: '', backupRestoreError: '', backupRestoreResult: true, backupRestorePatients: null }
     const callbacks = new Map()
+    if (pcm) {
+      window.settingsFixture.patients.push({ id: 'bia', name: 'Bia Fictícia', age: 9, revision: 1, archivedAt: null })
+      window.settingsFixture.timeline = [{ id: 'history-bia', patientId: 'bia', observation: 'Histórico concorrente preservado.' }]
+      const media = window.settingsFixture.media = { queue: [], captures: [], refs: [], requests: 0, stops: 0, closes: 0, sources: 0, processors: 0 }
+      class SyntheticAudioContext {
+        constructor() { this.sampleRate = 8000; this.state = 'running'; this.destination = {} }
+        createMediaStreamSource() { return { connect() {}, disconnect() { media.sources++ } } }
+        createScriptProcessor() {
+          const processor = { onaudioprocess: null, disconnect() { media.processors++ } }
+          processor.connect = () => queueMicrotask(() => {
+            let frames = 0
+            const emit = () => {
+              if (!processor.onaudioprocess) return
+              const amplitude = frames++ < 2 ? 0.1 : 0
+              processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(amplitude) }, outputBuffer: { getChannelData: () => new Float32Array(4096) } })
+              if (processor.onaudioprocess) setTimeout(emit, 200)
+            }
+            emit()
+          })
+          return processor
+        }
+        resume() { return Promise.resolve() }
+        close() { this.state = 'closed'; media.closes++; return Promise.resolve() }
+      }
+      Object.defineProperty(window, 'AudioContext', { configurable: true, value: SyntheticAudioContext })
+      Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => {
+        media.requests++
+        return { getTracks: () => [{ stop() { media.stops++ } }] }
+      } } })
+    }
     window.__TAURI_INTERNALS__ = {
       transformCallback(callback) { const id = callbacks.size + 1; callbacks.set(id, callback); return id },
       unregisterCallback(id) { callbacks.delete(id) },
       invoke: async (command, args = {}) => {
+        // PCM journey permits reads and only its three portable-backup handlers.
+        // Keep the shared legacy mock unchanged when pcm is false.
+        if (pcm && !new Set([
+          'voice_transcribe', 'vault_status', 'auto_backup_status', 'recovery_inventory',
+          'patient_list', 'behavior_list', 'indicator_catalog', 'agenda_list_series',
+          'agenda_history', 'agenda_occurrences', 'related_party_list', 'session_timeline',
+          'session_draft_list', 'session_addendum_list', 'case_context_list', 'plugin:updater|check',
+          'backup_create', 'backup_select', 'backup_restore',
+        ]).has(command)) {
+          window.settingsFixture.unexpected.push(command)
+          throw new Error(`IPC proibido no modo PCM: ${command}`)
+        }
+        if (pcm && command === 'voice_transcribe') {
+          const media = window.settingsFixture.media
+          const text = media.queue.shift()
+          if (Object.keys(args).sort().join('|') !== 'patientNames|sampleRate|samples'
+            || args.sampleRate !== 8000 || !Array.isArray(args.samples) || !args.samples.length
+            || args.samples.length / args.sampleRate >= 12 || !args.samples.every(Number.isFinite)
+            || !args.samples.some(value => value !== 0) || !args.samples.some(value => value === 0)
+            || JSON.stringify(args.patientNames) !== JSON.stringify(window.settingsFixture.patients.map(patient => patient.name))
+            || typeof text !== 'string' || !text.trim()) {
+            window.settingsFixture.unexpected.push('PCM inválido')
+            throw new Error('PCM inválido')
+          }
+          media.captures.push({ text, sampleCount: args.samples.length, sampleRate: args.sampleRate })
+          media.refs.push(args)
+          window.settingsFixture.calls.push({ command })
+          return text
+        }
         window.settingsFixture.calls.push({ command, args: structuredClone(args) })
         if (command === 'vault_status') return { initialized: hasVault, unlocked, profileState: hasVault ? 'ready' : 'empty' }
         if (command === 'vault_unlock' || command === 'vault_create') { hasVault = true; unlocked = true; return null }
@@ -75,6 +134,94 @@ async function command(page, text) {
 
 const calls = (page, command) => page.evaluate(name => window.settingsFixture.calls.filter(item => item.command === name), command)
 test.afterEach(async ({ page }) => expect(await page.evaluate(() => window.settingsFixture?.unexpected || [])).toEqual([]))
+
+test('PCM backup portátil: criar, selecionar e restaurar com senhas e chooser manuais', async ({ page, baseURL }) => {
+  test.setTimeout(60000)
+  const boundary = []
+  page.on('dialog', async dialog => { boundary.push(dialog.type()); await dialog.dismiss() })
+  await page.route('**/*', async route => {
+    if (new URL(route.request().url()).origin === new URL(baseURL).origin) await route.continue()
+    else { boundary.push(route.request().url()); await route.abort() }
+  })
+  await openApp(page, { pcm: true })
+  const preserved = await page.evaluate(() => structuredClone({ patients: window.settingsFixture.patients, timeline: window.settingsFixture.timeline }))
+  const audio = async text => {
+    await page.evaluate(text => window.settingsFixture.media.queue.push(text), text)
+    const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
+    await expect(assistant.getByRole('button', { name: 'Ouvir comando', exact: true })).toBeEnabled()
+    await assistant.getByLabel('Seu comando').press('Control+Alt+m')
+    await page.clock.runFor(1600)
+    await expect(assistant.getByRole('button', { name: 'Ouvir comando', exact: true })).toBeEnabled()
+    await expect(assistant.getByLabel('Seu comando')).toHaveValue(text)
+    await expect(assistant.getByText(/A captura atingiu .*segundos/u)).toHaveCount(0)
+  }
+  const effects = () => page.evaluate(() => window.settingsFixture.calls.filter(item => ['backup_create', 'backup_select', 'backup_restore'].includes(item.command)))
+  const pair = async text => {
+    const before = await effects()
+    await audio(text)
+    await expect(page.locator('.voice-command-preview')).toBeVisible()
+    expect(await effects()).toEqual(before)
+    await audio('Confirmar comando.')
+    await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+  }
+  try {
+    await pair('Abrir ajustes')
+    // Passwords are manually entered; native chooser outcomes below are synthetic.
+    await page.locator('#backup-password').fill('backup-ficticio-2026')
+    await audio('Clicar em Criar backup cifrado')
+    await expect(page.locator('.voice-command-preview')).toBeVisible()
+    expect(await effects()).toEqual([])
+    await page.getByRole('button', { name: 'Início', exact: true }).click()
+    await audio('Confirmar comando.')
+    await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+    expect(await effects()).toEqual([])
+    await pair('Abrir ajustes')
+    await page.locator('#backup-password').fill('backup-ficticio-2026')
+    await pair('Clicar em Criar backup cifrado')
+    expect(await calls(page, 'backup_create')).toEqual([{ command: 'backup_create', args: { password: 'backup-ficticio-2026' } }])
+    await expect(page.getByText('Criação de backup cancelada.')).toBeVisible()
+    await expect(page.locator('#backup-password')).toHaveValue('')
+    await page.locator('#backup-password').fill('backup-ficticio-2026')
+    await pair('Clicar em Selecionar e verificar backup')
+    await expect(page.getByText('Seleção de backup cancelada.')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Confirmar restauração', exact: true })).toHaveCount(0)
+    expect(await calls(page, 'backup_restore')).toEqual([])
+    await page.evaluate(() => { window.settingsFixture.backupPreview = { schemaVersion: 5, createdAt: 1791039600, sizeBytes: 4096, profileState: 'ready', replacesExisting: true } })
+    await pair('Clicar em Selecionar e verificar backup')
+    await expect(page.getByText(/Backup verificado · formato v1/)).toBeVisible()
+    expect(await calls(page, 'backup_select')).toEqual(Array(2).fill({ command: 'backup_select', args: { password: 'backup-ficticio-2026' } }))
+    await page.locator('#local-restore-password').fill('local-ficticio-2026')
+    await pair('Clicar em Confirmar restauração')
+    await expect(page.getByRole('alertdialog')).toContainText('SUBSTITUIR o único perfil local')
+    expect(await calls(page, 'backup_restore')).toEqual([])
+    await audio('Voltar')
+    await expect(page.getByRole('alertdialog')).toHaveCount(0)
+    await expect(page.locator('#local-restore-password')).toHaveValue('local-ficticio-2026')
+    expect(await calls(page, 'backup_restore')).toEqual([])
+    expect(await page.evaluate(() => ({ patients: window.settingsFixture.patients, timeline: window.settingsFixture.timeline }))).toEqual(preserved)
+    await pair('Clicar em Confirmar restauração')
+    await expect(page.getByRole('alertdialog')).toBeVisible()
+    expect(await calls(page, 'backup_restore')).toEqual([])
+    // Protected native-action warning has its existing narrower confirmation grammar.
+    await audio('Confirmar')
+    await expect(page.getByText('Restauração concluída. O cofre local está desbloqueado.')).toBeVisible()
+    expect(await calls(page, 'backup_restore')).toEqual([{ command: 'backup_restore', args: { backupPassword: 'backup-ficticio-2026', localPassword: 'local-ficticio-2026', confirmed: true, quarantineConfirmed: false } }])
+    await expect(page.locator('#backup-password')).toHaveValue('')
+    await expect(page.getByText(/Backup verificado · formato v1/)).toHaveCount(0)
+    expect(await page.evaluate(() => ({ patients: window.settingsFixture.patients, timeline: window.settingsFixture.timeline }))).toEqual(preserved)
+  } finally {
+    expect(boundary).toEqual([])
+    const media = await page.evaluate(() => {
+      const m = window.settingsFixture.media
+      return { queue: m.queue, count: m.captures.length, releases: [m.requests, m.stops, m.closes, m.sources, m.processors], short: m.captures.every(item => item.sampleCount / item.sampleRate < 12), cleared: m.refs.every(args => args.samples.every(value => value === 0) && args.patientNames.every(value => value === '')) }
+    })
+    expect(media.queue).toEqual([])
+    expect(media.count).toBeGreaterThan(0)
+    expect(media.releases).toEqual(Array(5).fill(media.count))
+    expect(media.short).toBe(true)
+    expect(media.cleared).toBe(true)
+  }
+})
 
 async function selectSyntheticBackup(page) {
   await command(page, 'Abrir ajustes')
