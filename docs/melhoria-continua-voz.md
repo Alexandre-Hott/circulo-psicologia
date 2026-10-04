@@ -1,5 +1,13 @@
 # Melhoria contínua de voz
 
+## Incremento após 0.2.51 — data com “em” na ocorrência
+
+Iniciar, remarcar e cancelar uma sessão existente aceitam tanto “em DD/MM/AAAA” quanto “no dia DD/MM/AAAA”. O nome completo permanece exigido; datas incompletas/impossíveis, pacientes homônimos e conteúdo extra são recusados. Nomes cadastrados que incluem literalmente “em DD/MM/AAAA” não são truncados. O pedido continua sendo uma proposta: iniciar exige confirmação; remarcação/cancelamento apenas abrem seus formulários normais, sem salvar antecipadamente.
+
+Teste novo reproduziu recusa antes da alteração (0/1), passou após a correção (1/1); suíte lógica final **245/245** aprovada. Build, lint e guard aprovados, com cinco avisos de lint e chunk>500KiB anteriores. Teste integrado novo verifica prévia, ausência de `session_draft_start` antes da confirmação, ocorrência exata após confirmar e ausência de criação de compromisso. Arquivo calendário **13/13 em1,1min** antes da correção de revisão; teste integrado novo reexecutado no snapshot final **1/1 em16,3s**. Não declarar nova regressão completa de 13 no snapshot final. Backend em memória; não equivale a teste do microfone físico. Incremento posterior ao instalador 0.2.51, ainda não empacotado. Nenhum perfil/dado real alterado. Meta ativa.
+
+Revisão independente inicialmente encontrou que uma captura greedy absorvia alternativas, negações e segunda ação em nomes artificiais contendo comandos completos. Mantida a captura lazy original, com teste de recusa dos três casos e contrato completo do nome literal com data. Revisão final: dois testes focados aprovados e nenhum achado novo no diff restrito. As 546 probes e oito testes anteriores do revisor pertencem ao snapshot intermediário, não à revisão final. Sem ampliação de recovery ou compatibilidade.
+
 ## Entrega local 0.2.51 — retomada e bloqueio
 
 Pacote `Círculo_0.2.51_x64-setup.exe`, **135.872.833 bytes**, SHA-256 `41a28cbfa5e30a5622e9135c933e97316fe9e5dd4ae00ffbc1f27d5b810f08a5`. Build NSIS offline/locked exit0; override temporário de updater removido após término e configuração oficial preservada. Auditoria `%TEMP%\\circulo-0251-audit-20261004.json`: PE0.2.51/x64/NotSigned. Conteúdo interno não extraído, pacote não instalado nem aberto nesta rodada; instalado permanece 0.2.47. Sem `.sig`, assinatura Authenticode, Release ou atualização publicada pelo GitHub.

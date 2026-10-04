@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Complemento após 0.2.51: ocorrência com “em DD/MM/AAAA”
+
+Iniciar/remarcar/cancelar sessão existente aceitam “em” além de “no dia”. Data completa válida, nome exato e confirmação continuam necessários; nomes literais com datas são preservados. 245/245 testes JS finais aprovados; teste integrado novo verifica que preparar o comando não inicia nem cria compromisso. Calendário13/13 no snapshot intermediário, focado1/1 final após correção de revisão, sem achado novo. Incremento ainda fora do instalador 0.2.51. [Evidências e limites](melhoria-continua-voz.md).
+
 ## Consolidação local 0.2.51
 
 Retry nativo e proteção de continuações antigas abaixo estão incluídos no instalador 0.2.51, compilado offline/locked e auditado PE/x64/hash. 243/243 testes JS reexecutados após versionamento; regressão funcional final anterior: 59/59 E2E e 86 testes Rust aprovados, um áudio opt-in ignorado. Não instalado nem validado com microfone físico; instalado permanece 0.2.47. Controle nativo conectou e listou janelas, sem Círculo aberto: isso não comprova operação da aplicação. Sem Release ou assinatura updater. [Artefato e limites](melhoria-continua-voz.md). Meta ativa.

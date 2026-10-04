@@ -373,13 +373,13 @@ const parseAddendumNavigation = (text, context) => {
 
 const parseOccurrenceAction = (text, context, referenceDate) => {
   if (!/^(?:iniciar|remarcar|cancelar)\s+sessao\b/u.test(text)) return null
-  const match = /^(iniciar|remarcar|cancelar)\s+sessao\s+de\s+(.+?)\s+(hoje|amanha|no dia \d{2}\/\d{2}\/\d{4})\s+as\s+(.+)$/u.exec(text)
+  const match = /^(iniciar|remarcar|cancelar)\s+sessao\s+de\s+(.+?)\s+(hoje|amanha|(?:no dia|em) \d{2}\/\d{2}\/\d{4})\s+as\s+(.+)$/u.exec(text)
   if (!match) return refuse('Informe uma sessão com nome exato do paciente, hoje, amanhã ou no dia DD/MM/AAAA e horário explícito.')
   const patient = exactTarget(match[2], (context.patients || []).filter(item => item.archivedAt == null), 'paciente')
   if (patient.error) return refuse(patient.error)
   let date
-  if (match[3].startsWith('no dia ')) {
-    const [day, month, year] = match[3].slice(7).split('/')
+  if (/^(?:no dia|em) /u.test(match[3])) {
+    const [day, month, year] = match[3].replace(/^(?:no dia|em) /u, '').split('/')
     date = `${year}-${month}-${day}`
   } else {
     if (!isCivilDate(referenceDate)) return refuse('Informe uma data civil de referência válida (AAAA-MM-DD).')

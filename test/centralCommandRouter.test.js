@@ -807,6 +807,39 @@ test('ações naturais de ocorrência preparam somente o contrato de abertura e 
   }
 })
 
+test('ocorrência aceita em e no dia para uma data explícita, sem referência implícita', () => {
+  for (const [verb, action] of [['Iniciar', 'start'], ['Remarcar', 'remarcar'], ['Cancelar', 'cancelar']]) {
+    for (const qualifier of ['em', 'no dia']) {
+      const result = parseCentralCommand({ text: `${verb} sessão de Ana Clara ${qualifier} 31/10/2026 às 15 horas`, context })
+      assert.equal(result.status, 'draft')
+      assert.deepEqual(result.intent, {
+        type: 'agenda.occurrence.action', target: { patientId: 'patient-ana', date: '2026-10-31', start: '15:00', action },
+      })
+      assert.match(result.preview, /Ana Clara em 31\/10\/2026 às 15:00/u)
+    }
+    for (const argument of ['em 31/02/2026', 'em 31/10', 'em outubro', 'em 31/10/2026 ou 01/11/2026']) {
+      assert.equal(parseCentralCommand({ text: `${verb} sessão de Ana Clara ${argument} às 15 horas`, context }).status, 'clarification')
+    }
+    assert.equal(parseCentralCommand({ text: `${verb} sessão de Ana Clara em 31/10/2026 às 15 horas`, context: { patients: [...patients, { id: 'duplicate-em', name: 'Ana Clara' }] } }).status, 'clarification')
+  }
+  const literalContext = { patients: [{ id: 'literal-em', name: 'Ana em 31/10/2026' }] }
+  assert.deepEqual(parseCentralCommand({ text: 'Iniciar sessão de Ana em 31/10/2026 em 01/11/2026 às 15 horas', context: literalContext }).intent, {
+    type: 'agenda.occurrence.action', target: { patientId: 'literal-em', date: '2026-11-01', start: '15:00', action: 'start' },
+  })
+})
+
+test('ocorrência não absorve alternativas, negações ou segunda ação como nome de paciente', () => {
+  const commands = [
+    ['Ana Clara hoje às 15:00 ou', 'Iniciar sessão de Ana Clara hoje às 15:00 ou amanhã às 16:00'],
+    ['Ana Clara com descrição hoje às 15:00 e não cancelar sessão de Caio Fictício', 'Iniciar sessão de Ana Clara com descrição hoje às 15:00 e não cancelar sessão de Caio Fictício amanhã às 16:00'],
+    ['Ana Clara com descrição hoje às 15:00 e cancelar sessão de Caio Fictício', 'Iniciar sessão de Ana Clara com descrição hoje às 15:00 e cancelar sessão de Caio Fictício amanhã às 16:00'],
+  ]
+  for (const [name, text] of commands) {
+    const collision = { patients: [...patients, { id: 'literal-command', name }] }
+    assert.equal(parseCentralCommand({ text, context: collision, referenceDate: '2026-10-03' }).status, 'clarification', text)
+  }
+})
+
 test('ocorrência exige nome completo único e ativo, mesmo com nomes sobrepostos no cadastro', () => {
   const expanded = { ...context, patients: [...patients,
     { id: 'short', name: 'Ana' }, { id: 'archived', name: 'Ana Clara', archivedAt: '2026-09-01' },

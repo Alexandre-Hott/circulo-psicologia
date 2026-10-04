@@ -113,6 +113,18 @@ async function command(page, text) {
 
 const calls = (page, commandName) => page.evaluate(name => window.calendarVoice.calls.filter(item => item.command === name), commandName)
 
+test('pedido natural com em data exige confirmação antes de iniciar a sessão exata', async ({ page }) => {
+  await openApp(page, { seed: true })
+  await propose(page, 'Iniciar sessão de Lia Exemplo em 31/10/2026 às 14 horas')
+  await expect(page.locator('.voice-command-preview')).toContainText('Lia Exemplo em 31/10/2026 às 14:00')
+  expect(await calls(page, 'session_draft_start')).toEqual([])
+  await propose(page, 'confirmar')
+  await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toBeVisible()
+  expect((await calls(page, 'session_draft_start')).map(item => item.args)).toEqual([{ seriesId: 'seed', originalDate: '2026-10-31' }])
+  expect(await calls(page, 'agenda_create_series')).toEqual([])
+  expect(await page.evaluate(() => window.calendarVoice.unexpected)).toEqual([])
+})
+
 for (const natural of [false, true]) test(`resultado antigo de início não libera busy do novo desbloqueio: ${natural ? 'pedido natural' : 'botão'}`, async ({ page }) => {
   await openApp(page, { seed: natural })
   if (!natural) await command(page, 'Clicar em Registrar sessão')
