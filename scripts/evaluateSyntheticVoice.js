@@ -39,8 +39,9 @@ function matches(actual, desired, key = '') {
 }
 
 export function evaluateSyntheticVoice(cases, { scenario = 'core' } = {}) {
-  if (!['core', 'behavior-save'].includes(scenario)) throw new Error('Cenário de áudio desconhecido.')
-  const expectations = scenario === 'core' ? expected : [null, null, null]
+  if (!['core', 'behavior-save', 'occurrence-date'].includes(scenario)) throw new Error('Cenário de áudio desconhecido.')
+  const expectations = scenario === 'core' ? expected : scenario === 'behavior-save' ? [null, null, null]
+    : ['start', 'remarcar', 'cancelar'].map(action => ({ type: 'agenda.occurrence.action', target: { patientId: 'ana', date: '2026-10-03', start: '15:00', action } }))
   if (!Array.isArray(cases) || cases.length !== expectations.length) throw new Error(`Corpus nativo deve conter exatamente${expectations.length} casos.`)
   const seen = new Set()
   const results = cases.map(item => {

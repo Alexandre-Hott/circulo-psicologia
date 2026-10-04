@@ -1,5 +1,21 @@
 # Melhoria contínua de voz
 
+## Entrega local 0.2.53 — data verbal nas ações de ocorrência
+
+Pacote `Círculo_0.2.53_x64-setup.exe`, **135.881.152 bytes**, SHA-256 `54ac9e18825eb40749202a899153a5207c8f98d625b3e66cc951b1bcf8d18949`. Build NSIS offline/locked exit0; Rust release compilado em1m15s, aviso anterior LNK4099/PDB OpenSSL. Override temporário de updater removido após término, configuração oficial preservada. Auditoria `%TEMP%\\circulo-0253-audit-20261004.json`: PE0.2.53/x64/NotSigned. Sem extração interna, instalação, abertura ou microfone físico nesta rodada; instalado permanece52. Nenhum perfil alterado. Sem `.sig`, Authenticode, Release ou atualização publicada pelo GitHub.
+
+Inclui o incremento abaixo. **250/250JS** após versionamento, **60/60E2E interface/calendário finais em4,3min**, incluindo asserções fortalecidas do alvo de remarcação/cancelamento. **3WAVs nativos/3intents completos** e replay inicial3/3 aprovados. Build/lint/guard/diff aprovados, avisos anteriores de lint/chunk. Backend Rust funcional não mudou; teste opt-in de3WAVs executado separadamente, suíte completa Rust anterior86 aprovados/1 ignorado não reexecutada nesta rodada. Componente/RPC sintético não é jornada de instalador. Meta ativa.
+
+## Incremento após 0.2.52 — data falada nas ações de ocorrência
+
+Iniciar/remarcar/cancelar sessão existente passam a aceitar “em/no dia três de outubro de dois mil e vinte e seis”, inclusive dia transcrito como3. Reaproveitado conversor de data completa, sem inferir ano. Gramática relativa/numericamente explícita é preservada; fallback verbal testa separadores completos e nome exato. Não agenda nem cancela automaticamente: proposta/confirmar são exigidos, e remarcação/cancelamento apenas abrem o formulário existente.
+
+Teste novo red0/1 antes da correção; primeira implementação falhou247/248 porque fallback também aceitava1/10/2026. Fallback restringido a `dia de mês de ano`, mantendo ISO/números com um dígito recusados nas ações de ocorrência. **250/250 JS finais** aprovados, build/lint/guard/diff aprovados (avisos anteriores). Revisão independente:79 testes,234probes,36comparações com HEAD aprovados, sem achado bloqueante; asserções de ISO/dígitos acrescidas pelo principal. Limite conservador: nome com palavra isolada `as` recusa o fallback para não absorver trecho anterior de horário/ação; permanece acesso via formulário/gateway já existente.
+
+Novo cenário `occurrence-date` gera3WAVs fictícios com recursos da instalação52. Teste Rust de transcrição exit0, **3 intents completos correspondentes/0falhos/0nãoavaliados** no evaluator. Fixture `native-voice-occurrence-20261004.json` contém textos efetivamente coletados, inclusive “seção” e dia3. ReplayE2E inicial **3/3 em22,3s**: prévia sem efeito, segundo áudio de confirmar, início com série/data exatos; remarcação/cancelamento só abrem formulário sem RPC de escrita. Revisão estática sugeriu verificar alvo no formulário; adicionados registro/paciente/data/horário. Regressão ampliada final **60/60 em4,3min** aprovada.
+
+Captura/RPC simulados no replay, não microfone físico/host IPC instalado. Backend Rust funcional não mudou. Incremento agora incluído no pacote53, mas não na instalação atual52. Nenhum perfil real acessado nem ampliação de recovery/legados. Meta ativa.
+
 ## Áudio sintético para os pedidos curtos de salvamento
 
 Novo cenário separado `behavior-save` no harness, mantendo core17 padrão. Três WAVs SAPI passaram pelo backend Rust com recursos da instalação52: “Salvar comportamento.”, “Salve o comportamento.”, “Confirmar comando.”, transcrições idênticas. Capturas preservadas em fixture. Evaluator declara0passados/0falhos/3nãoavaliados, pois todas as ações exigem UI/proposta; sucesso do script significa coleta concluída, não cobertura funcional total.

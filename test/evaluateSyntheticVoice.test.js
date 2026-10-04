@@ -14,6 +14,28 @@ const phrases = [
 ]
 const corpus = () => phrases.map((Transcript, Index) => ({ Index, IntendedCommand: Transcript, Transcript }))
 
+test('corpus de data falada exige ação, paciente, data e horário completos', () => {
+  const cases = ['Iniciar', 'Remarcar', 'Cancelar'].map((verb, Index) => ({ Index, Transcript: `${verb} sessão de Ana Clara em três de outubro de dois mil e vinte e seis às quinze horas.` }))
+  const result = evaluateSyntheticVoice(cases, { scenario: 'occurrence-date' })
+  assert.equal(result.Passed, 3)
+  assert.equal(result.NotEvaluated, 0)
+  assert.equal(result.Failed, 0)
+  const changed = structuredClone(cases)
+  changed[0].Transcript = changed[0].Transcript.replace('quinze', 'dezesseis')
+  changed[1].Transcript = changed[1].Transcript.replace('três', 'quatro')
+  changed[2].Transcript = changed[2].Transcript.replace('Cancelar', 'Iniciar')
+  assert.equal(evaluateSyntheticVoice(changed, { scenario: 'occurrence-date' }).Failed, 3)
+  assert.throws(() => evaluateSyntheticVoice(cases))
+})
+
+test('datas faladas capturadas no backend instalado preservam as três ações de ocorrência', () => {
+  const recorded = JSON.parse(readFileSync(new URL('./fixtures/native-voice-occurrence-20261004.json', import.meta.url), 'utf8'))
+  const result = evaluateSyntheticVoice(recorded, { scenario: 'occurrence-date' })
+  assert.equal(result.Passed, 3, JSON.stringify(result.Results))
+  assert.equal(result.Failed, 0)
+  assert.equal(result.NotEvaluated, 0)
+})
+
 test('corpus de salvar comportamento depende de interface e não recebe aprovação semântica antecipada', () => {
   const cases = ['Salvar comportamento.', 'Salve o comportamento.', 'Confirmar comando.'].map((Transcript, Index) => ({ Index, Transcript }))
   const result = evaluateSyntheticVoice(cases, { scenario: 'behavior-save' })

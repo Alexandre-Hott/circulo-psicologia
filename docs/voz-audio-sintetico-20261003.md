@@ -1,5 +1,11 @@
 # Áudio sintético offline — 03/10/2026
 
+## Cenário de data verbal na ocorrência — 04/10/2026 UTC
+
+Mesmo harness com `-Scenario occurrence-date`:3WAVs SAPI Microsoft Maria Portuguese(Brazil), iniciar/remarcar/cancelar sessão de Ana Clara em/no dia três de outubro de dois mil e vinte e seis às quinze horas. Recursos da instalação52, backend Rust opt-in, exit0. Corpus em `test/fixtures/native-voice-occurrence-20261004.json`: dia transcrito como3; remarcação/cancelamento transcritos “seção”. Parser normaliza a variante já existente e converte a data completa. Avaliador exige ação/paciente/data/horário exatos: **Passed3/Failed0/NotEvaluated0**.
+
+ReplayE2E inicial3/3 em22,3s: primeiro áudio só prévia; áudio de confirmação coletado no cenário de salvamento autoriza abertura. Iniciar exige `seriesId:series/originalDate:2026-10-03`; remarcação/cancelamento não chamam escrita da Agenda. Alvo no formulário foi fortalecido após revisão, regressão final60/60 em4,3min aprovada. Não é microfone físico nem reconhecimento nativo durante o E2E. Parser incluído no pacote53, instalado permanece52; não confundir recursos instalados de reconhecimento com parser instalado atualizado.
+
 ## Cenário de salvamento de comportamento — 04/10/2026 UTC
 
 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/testWhisperSynthetic.ps1 -VoiceDirectory "$env:LOCALAPPDATA\Círculo\voice" -Scenario behavior-save` gera três WAVs separados: “Salvar comportamento.”, “Salve o comportamento.” e “Confirmar comando.”. Recursos da instalação0.2.52, SAPI Microsoft Maria Desktop Portuguese(Brazil), sem rede. Backend Rust transcreveu exatamente essas três frases; fixture em `test/fixtures/native-voice-save-20261004.json`. Script exit0. Reexecução com `-Scenario Behavior-Save` também exit0, após normalização de caixa, com resultados idênticos.

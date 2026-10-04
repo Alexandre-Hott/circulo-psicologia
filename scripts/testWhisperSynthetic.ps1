@@ -1,6 +1,6 @@
 ﻿param(
     [string]$VoiceDirectory,
-    [ValidateSet('core', 'behavior-save')][string]$Scenario = 'core'
+    [ValidateSet('core', 'behavior-save', 'occurrence-date')][string]$Scenario = 'core'
 )
 
 # Keep the UTF-8 BOM: Windows PowerShell 5.1 otherwise reads Portuguese text as ANSI.
@@ -64,6 +64,13 @@ try {
     )
     if ($Scenario -eq 'behavior-save') {
         $commands = @('Salvar comportamento.', 'Salve o comportamento.', 'Confirmar comando.')
+    }
+    if ($Scenario -eq 'occurrence-date') {
+        $commands = @(
+            'Iniciar sessão de Ana Clara em três de outubro de dois mil e vinte e seis às quinze horas.',
+            'Remarcar sessão de Ana Clara no dia três de outubro de dois mil e vinte e seis às quinze horas.',
+            'Cancelar sessão de Ana Clara em três de outubro de dois mil e vinte e seis às quinze horas.'
+        )
     }
     $results = foreach ($index in 0..($commands.Count - 1)) {
         $wav = Join-Path $testDirectory "synthetic-command-$index.wav"

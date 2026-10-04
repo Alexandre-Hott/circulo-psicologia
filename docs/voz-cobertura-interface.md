@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Complemento após 0.2.52: datas faladas de ocorrência
+
+Iniciar/remarcar/cancelar aceitam data verbal completa com ano após “em/no dia”, sem adivinhar data ou paciente. Corpus3WAVs do backend Rust com recursos instalados resultou3/3intents completos, e replay inicial3/3E2E aprovou prévia/confirmar/alvo correto, sem cancelamento/remarcação automática. Asserções de alvo fortalecidas após revisão; regressão final60/60 em4,3min. JS250/250 final; review79tests/234probes/36comparações aprovado, limite conservador de nome com `as` documentado. Incluído no pacote53 PE/x64/hash auditado; não instalado/publicado, instalado permanece52. Sem prova de microfone físico. [Tentativas e limites](melhoria-continua-voz.md).
+
 ## Pedidos curtos com transcrições capturadas
 
 “Salvar comportamento”, “salve o comportamento” e “confirmar comando” transcritos pelo backend Rust com recursos instalados52, usando3WAVs SAPI fictícios, sem rede. ReplayE2E2/2 verifica criação/edição com preview e segundo áudio de confirmação, zero escrita anterior e um invoke de gravação exato. Captura/RPC simulados no replay, sem validação de microfone físico. Evaluator0passados/3nãoavaliados propositalmente: não confundir transcrição com ação. JS247/247 final, revisão estática sem achado novo após canonicalizar cenário. Produção/pacote52 inalterados; só ferramentas/testes. [Corpus e limites](voz-audio-sintetico-20261003.md).

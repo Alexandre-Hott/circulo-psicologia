@@ -373,14 +373,29 @@ const parseAddendumNavigation = (text, context) => {
 
 const parseOccurrenceAction = (text, context, referenceDate) => {
   if (!/^(?:iniciar|remarcar|cancelar)\s+sessao\b/u.test(text)) return null
-  const match = /^(iniciar|remarcar|cancelar)\s+sessao\s+de\s+(.+?)\s+(hoje|amanha|(?:no dia|em) \d{2}\/\d{2}\/\d{4})\s+as\s+(.+)$/u.exec(text)
-  if (!match) return refuse('Informe uma sessão com nome exato do paciente, hoje, amanhã ou no dia DD/MM/AAAA e horário explícito.')
+  let match = /^(iniciar|remarcar|cancelar)\s+sessao\s+de\s+(.+?)\s+(hoje|amanha|(?:no dia|em) \d{2}\/\d{2}\/\d{4})\s+as\s+(.+)$/u.exec(text)
+  if (!match) {
+    // Preserve the established relative/numeric grammar. A complete spoken
+    // date can be converted only at an explicit separator, never by guessing
+    // a year or searching for a patient substring inside the request.
+    const spoken = /^(iniciar|remarcar|cancelar)\s+sessao\s+de\s+(.+?)\s+as\s+(.+)$/u.exec(text)
+    if (spoken) {
+      const dates = [...spoken[2].matchAll(/\s+(?:em|no dia)\s+/gu)].map(separator => {
+        const dateText = spoken[2].slice(separator.index + separator[0].length)
+        return {
+          name: spoken[2].slice(0, separator.index),
+          date: /^.+ de [a-z]+ de .+$/u.test(dateText) ? normalizeVoiceFieldValue('date', dateText) : null,
+        }
+      }).filter(item => item.date)
+      if (dates.length === 1) match = [null, spoken[1], dates[0].name, `em ${dates[0].date}`, spoken[3]]
+    }
+  }
+  if (!match) return refuse('Diga o nome exato do paciente, hoje/amanhã ou uma data completa com ano, e o horário da sessão.')
   const patient = exactTarget(match[2], (context.patients || []).filter(item => item.archivedAt == null), 'paciente')
   if (patient.error) return refuse(patient.error)
   let date
   if (/^(?:no dia|em) /u.test(match[3])) {
-    const [day, month, year] = match[3].replace(/^(?:no dia|em) /u, '').split('/')
-    date = `${year}-${month}-${day}`
+    date = normalizeVoiceFieldValue('date', match[3].replace(/^(?:no dia|em) /u, ''))
   } else {
     if (!isCivilDate(referenceDate)) return refuse('Informe uma data civil de referência válida (AAAA-MM-DD).')
     date = referenceDate

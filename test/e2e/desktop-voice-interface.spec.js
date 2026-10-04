@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 
 const nativeVoiceCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-20261003.json', import.meta.url), 'utf8'))
 const nativeSaveCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-save-20261004.json', import.meta.url), 'utf8'))
+const nativeOccurrenceCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-occurrence-20261004.json', import.meta.url), 'utf8'))
 
 async function openApp(page, { emptyLibrary = false, archivedPatient = false, specialCatalog = false } = {}) {
   await page.clock.install({ time: new Date('2026-10-03T15:00:00Z') })
@@ -788,6 +789,32 @@ test('transcrições nativas de botão e confirmação usam a tela visível sem 
   await expect(page.getByRole('form', { name: 'Novo cadastro' })).toBeVisible()
   await expect(page.locator('.voice-command-preview')).toHaveCount(0)
   expect(await page.evaluate(() => window.writes)).toEqual([])
+})
+
+for (const [index, action] of ['start', 'remarcar', 'cancelar'].entries()) test(`data falada capturada ${action} abre a ocorrência exata somente após confirmar`, async ({ page }) => {
+  await openApp(page)
+  const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
+  await page.evaluate(text => { window.voiceTranscript = text }, nativeOccurrenceCorpus.find(item => item.Index === index).Transcript)
+  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await expect(page.locator('.voice-command-preview')).toContainText('Ana Clara em 03/10/2026 às 15:00')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  expect(await page.evaluate(() => window.voiceNativeCalls.filter(item => item.command === 'session_draft_start'))).toEqual([])
+  await expect(page.getByRole('form', { name: 'Alterar ocorrência individual' })).toHaveCount(0)
+  await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toHaveCount(0)
+  await page.evaluate(text => { window.voiceTranscript = text }, nativeSaveCorpus.find(item => item.Index === 2).Transcript)
+  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  if (action === 'start') {
+    await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toBeVisible()
+    expect(await page.evaluate(() => window.voiceNativeCalls.filter(item => item.command === 'session_draft_start').map(item => item.args))).toEqual([{ seriesId: 'series', originalDate: '2026-10-03' }])
+  } else {
+    const form = page.getByRole('form', { name: 'Alterar ocorrência individual' })
+    await expect(form).toBeVisible()
+    await expect(form).toHaveAttribute('data-voice-record', 'series:2026-10-03')
+    await expect(form).toContainText('Ana Clara · série series · original 2026-10-03 · efetiva 2026-10-03 às 15:00–15:50')
+    await expect(form.getByLabel('Ação explícita')).toHaveValue(action)
+    expect(await page.evaluate(() => window.voiceNativeCalls.filter(item => item.command.startsWith('agenda_') && !['agenda_list_series', 'agenda_occurrences', 'agenda_history'].includes(item.command)))).toEqual([])
+    expect(await page.evaluate(() => window.writes)).toEqual([])
+  }
 })
 
 test('pedido natural encontra compromisso e abre cancelamento ou remarcação sem gravar', async ({ page }) => {

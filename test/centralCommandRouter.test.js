@@ -828,6 +828,23 @@ test('ocorrência aceita em e no dia para uma data explícita, sem referência i
   })
 })
 
+test('ocorrência aceita data falada completa sem inferir ano ou truncar nome do paciente', () => {
+  for (const [verb, action] of [['Iniciar', 'start'], ['Remarcar', 'remarcar'], ['Cancelar', 'cancelar']]) {
+    for (const qualifier of ['em', 'no dia']) {
+      for (const date of ['três de outubro de dois mil e vinte e seis', '3 de outubro de 2026']) {
+        const result = parseCentralCommand({ text: `${verb} sessão de Ana Clara ${qualifier} ${date} às quinze horas`, context })
+        assert.deepEqual(result.intent, { type: 'agenda.occurrence.action', target: { patientId: 'patient-ana', date: '2026-10-03', start: '15:00', action } })
+      }
+      for (const date of ['três de outubro', 'trinta e um de fevereiro de 2026', 'três de outubro de 26', 'três de outubro de 2026 ou quatro de outubro de 2026', '1/10/2026', '01/1/2026', '2026-10-03']) {
+        assert.equal(parseCentralCommand({ text: `${verb} sessão de Ana Clara ${qualifier} ${date} às quinze horas`, context }).status, 'clarification')
+      }
+    }
+  }
+  const literal = { patients: [{ id: 'literal-spoken', name: 'Ana em repouso' }] }
+  assert.deepEqual(parseCentralCommand({ text: 'Iniciar sessão de Ana em repouso em três de outubro de dois mil e vinte e seis às quinze horas', context: literal }).intent,
+    { type: 'agenda.occurrence.action', target: { patientId: 'literal-spoken', date: '2026-10-03', start: '15:00', action: 'start' } })
+})
+
 test('ocorrência não absorve alternativas, negações ou segunda ação como nome de paciente', () => {
   const commands = [
     ['Ana Clara hoje às 15:00 ou', 'Iniciar sessão de Ana Clara hoje às 15:00 ou amanhã às 16:00'],
