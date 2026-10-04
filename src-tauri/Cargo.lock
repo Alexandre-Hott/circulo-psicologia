@@ -634,7 +634,7 @@ dependencies = [
 
 [[package]]
 name = "circulo"
-version = "0.2.58"
+version = "0.2.59"
 dependencies = [
  "argon2",
  "chacha20poly1305",

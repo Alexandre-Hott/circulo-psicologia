@@ -1,5 +1,15 @@
 # Melhoria contínua de voz
 
+## Entrega local0.2.59 — limpeza da proposta após erro de voz
+
+Pacote `Círculo_0.2.59_x64-setup.exe`, **135.879.789 bytes**, SHA-256 `3ee3f5dd104ad277dbe0900b387b4dac571f10e96fc9089dd3de1f34b8a0ce09`. Build NSIS offline/locked exit0, release Rust55,51s; aviso anterior OpenSSL/PDB LNK4099. Override temporário updater removido após término, configuração oficial intacta. Manifest `%TEMP%\\circulo-0259-audit-20261004.json`: PE0.2.59/x64/NotSigned. Consistência de versão/tamanho/hash/docs aprovada. Conteúdo interno não extraído; não instalado/aberto, perfil/instalado52 não alterados. Sem `.sig`, Authenticode, Release ou oferta automática no GitHub. Regressão86/86 em3,8min; sem microfone físico ou nova transcrição real nesta rodada. Meta ativa.
+
+## Incremento0.2.59 — falha de transcrição não deixa proposta antiga aplicável
+
+Reproduzido no componente: após proposta de cadastro, áudio vazio/erro de permissão/novo transcript no modo manual substituíam a mensagem, mas não descartavam a intenção enviada ao host. Red0/3, green3/3 em20,3s. Agora `onDraft(null)` acompanha esses três caminhos, somente após a verificação de geração. Sucesso com interpretação automática continua passando pela mesma proposta/confirmar; áudio antigo não limpa uma proposta nova. Texto digitado permanece disponível para preparar novamente.
+
+Revisão independente estática sem achado acionável; registrou que testes isolados não provam retorno de `pendingIntent` do host nem corridas da confirmação automática. Acrescentados dois testes de integração para vazio/erro nativo, remoção do botão de revisão, confirmação antiga recusada, retry abrindo o paciente correto e nenhuma escrita. Regressão final interface/painel/transição de bloqueio/autosave86/86 em3,8min, exit0; inclui os dois testes novos e confirmação por segundo áudio dos corpora anteriores. JS257/257 após versão; lint sem erro/cinco avisos anteriores, guard/diff aprovados. Mídia/RPC/armazenamento sintéticos, componentes reais; não valida erro físico do reconhecedor. Nenhuma alteração funcional Rust/captura/reconhecedor/perfil; suíte Rust não reexecutada nesta rodada. Sem microfone físico, nova transcrição real ou jornada instalada validada nesta rodada. Meta ativa.
+
 ## Validação nativa complementar ao0.2.58 — sem mudança de produção
 
 Reconhecedor local/Rust opt-in executou3WAVs fictícios para quinta-feira, terça-feira e confirmar: exit0, textos corretos preservados no corpusweekday. Replay2/2 em26,7s com primeiro áudio apenas proposta, segundo aplicação ao dia correto e zero escrita. Regressão21/21 em1,4min; unidade257/257, guard/diff/lint aprovados (cinco avisos anteriores). Cenário core17 repetido exit0, com quinze intents avaliadas e duas dependentes de interface não avaliadas pelo parser central, conforme contrato do harness. [Detalhes e limites](voz-audio-sintetico-20261003.md).

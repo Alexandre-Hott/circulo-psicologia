@@ -12,6 +12,7 @@ async function openApp(page, { emptyLibrary = false, archivedPatient = false, sp
   await page.addInitScript(({ emptyLibrary, archivedPatient, specialCatalog, nativeCatalog }) => {
     window.writes = []
     window.voiceTranscript = ''
+    window.voiceFailure = null
     window.analyticsRequests = []
     window.voiceNativeCalls = []
     const patients = [{ id: 'ana', name: 'Ana Clara', age: 8, revision: 1, preferredModality: 'Presencial', archivedAt: null }]
@@ -52,7 +53,10 @@ async function openApp(page, { emptyLibrary = false, archivedPatient = false, sp
       if (command === 'related_party_list') return []
       if (command === 'behavior_list') return window.voiceBehaviorCatalog ?? behaviors
       if (command === 'indicator_catalog') return nativeCatalog ? [{ id: 'reg', name: 'Regulação emocional', definition: 'Uso de recursos para lidar com emoções intensas.', version: 1, labels: ['Ainda não observado', 'Com muito apoio', 'Com algum apoio', 'Com autonomia'] }] : specialCatalog ? [{ id: 'group', name: 'Participação em grupo como apoio', version: 1, labels: ['Com apoio em grupo', 'Sem apoio'] }] : []
-      if (command === 'voice_transcribe') return window.deferVoice ? await new Promise(resolve => { window.resolveVoice = resolve }) : window.voiceTranscript
+      if (command === 'voice_transcribe') {
+        if (window.voiceFailure) throw new Error(window.voiceFailure)
+        return window.deferVoice ? await new Promise(resolve => { window.resolveVoice = resolve }) : window.voiceTranscript
+      }
       if (command === 'agenda_occurrences') return (window.voiceOccurrences || [occurrence]).filter(item => item.date >= args.from && item.date <= args.to)
       if (command === 'session_draft_start') return draft
       if (command === 'session_timeline') return window.deferTimeline ? await new Promise(resolve => { window.resolveTimeline = resolve }) : window.voiceTimeline || []
@@ -446,6 +450,62 @@ test('voz abre edição pelo nome e preserva os campos até salvar explicitament
   await expect.poll(() => page.evaluate(() => window.writes)).toEqual([
     { command: 'patient_update', args: { id: 'ana', revision: 1, input: { name: 'Ana Clara', age: 9, lifeCycle: 'Criança', selfRequester: null, preferredModality: 'Presencial' } } },
   ])
+})
+
+for (const [scenario, failure, message] of [
+  ['transcrição vazia', null, 'Não recebi uma transcrição. Você pode digitar o comando.'],
+  ['falha nativa', 'Falha nativa de transcrição simulada', 'Falha nativa de transcrição simulada'],
+]) test(`${scenario} descarta edição pendente e permite preparar novamente sem gravar`, async ({ page }) => {
+  await openApp(page)
+  const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
+  const preview = page.locator('.voice-command-preview')
+  const review = page.getByRole('button', { name: 'Revisar no formulário', exact: true })
+  const discard = page.getByRole('button', { name: 'Descartar rascunho', exact: true })
+  const editor = page.getByRole('form', { name: 'Editar cadastro', exact: true })
+  await propose(page, 'Editar paciente Ana Clara')
+  await expect(preview).toContainText('Abrir edição do cadastro de Ana Clara')
+  await expect(review).toBeVisible()
+  await expect(discard).toBeVisible()
+  await expect(editor).toHaveCount(0)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+
+  await page.evaluate(failure => {
+    window.voiceTranscript = ''
+    window.voiceFailure = failure
+  }, failure)
+  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await page.clock.runFor(1000)
+  await expect(page.locator('.voice-command-error')).toBeVisible()
+  await expect(page.locator('.voice-command-error')).toContainText(message)
+  expect(await page.evaluate(() => window.voiceNativeCalls.filter(call => call.command === 'voice_transcribe').length)).toBe(1)
+  await expect(preview).toHaveCount(0)
+  await expect(review).toHaveCount(0)
+  await expect(discard).toHaveCount(0)
+  await expect(editor).toHaveCount(0)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+
+  await propose(page, 'confirmar')
+  await expect(editor).toHaveCount(0)
+  await expect(preview).toHaveCount(0)
+  await expect(review).toHaveCount(0)
+  await expect(discard).toHaveCount(0)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+
+  await page.evaluate(() => { window.voiceFailure = null })
+  await propose(page, 'Editar paciente Ana Clara')
+  await expect(preview).toContainText('Abrir edição do cadastro de Ana Clara')
+  await expect(review).toBeVisible()
+  await expect(editor).toHaveCount(0)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await propose(page, 'confirmar')
+  await expect(editor).toBeVisible()
+  await expect(editor).toHaveAttribute('data-voice-record', 'ana')
+  await expect(editor.getByLabel('Nome', { exact: true })).toHaveValue('Ana Clara')
+  await expect(editor.getByLabel('Idade em anos (opcional)')).toHaveValue('8')
+  await expect(preview).toHaveCount(0)
+  await expect(review).toHaveCount(0)
+  await expect(discard).toHaveCount(0)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
 })
 
 test('voz transcrita prepara cadastro e segundo áudio confirma sem voltar ao início', async ({ page }) => {

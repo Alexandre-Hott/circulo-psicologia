@@ -71,18 +71,23 @@ export function VoiceCommandCenter({
       const transcript = await onTranscribe(patientNames)
       if (transcriptGeneration.current !== generation) return
       if (typeof transcript !== 'string' || !transcript.trim()) {
+        onDraft?.(null)
         setResult({ status: 'clarification', message: 'Não recebi uma transcrição. Você pode digitar o comando.' })
         return
       }
       if (autoInterpret) interpret(transcript.trim())
       else {
+        onDraft?.(null)
         setCommand(transcript.trim())
         setResult({ status: 'transcript', message: 'Confira ou corrija o texto reconhecido. Depois clique em “Preparar rascunho”. Nada foi interpretado ou salvo.' })
       }
     } catch (reason) {
       if (transcriptGeneration.current === generation) {
         if (reason?.name === 'AbortError') { setResult(null); onDraft?.(null) }
-        else setResult({ status: 'clarification', message: reason?.message || 'Não foi possível transcrever agora. Digite o comando para continuar.' })
+        else {
+          onDraft?.(null)
+          setResult({ status: 'clarification', message: reason?.message || 'Não foi possível transcrever agora. Digite o comando para continuar.' })
+        }
       }
     } finally {
       patientNames.fill('')

@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Correção0.2.59 — proposta antiga após áudio vazio/erro
+
+Falha reproduzida0/3 no painel: intenção antiga permanecia no host enquanto a mensagem de transcrição/erro substituía a proposta. Corrigido descarte nos caminhos de vazio/erro e sucesso sem interpretação automática, preservando guarda de geração. Green3/3 em20,3s; integração nativa simulada confirma remoção da prévia/botões, zero escrita, “confirmar” antigo sem efeito e retry abrindo Ana correta. Regressão final86/86 em3,8min, incluindo confirmações por segundo áudio, bloqueio e autosave; JS257/257. Instalador59 gerado/auditado, não instalado ou publicado. Captura física e persistência instalada seguem não comprovadas. [Detalhes](melhoria-continua-voz.md).
+
 ## Evidência de transcrição dos dias — complemento0.2.58
 
 Corpusweekday com três saídas reais do backend Rust/SAPI: quinta-feira, terça-feira, confirmar. Replay2/2 em26,7s preserva seleção antes de confirmar e não grava; regressão de replays/dias21/21 em1,4min, unidade257/257. Core17 repetido no reconhecedor/parser, exit0; duas ações de interface não são aprovadas pelo parser central. Nenhuma mudança de produção/instalador nesta rodada. Continuidade do áudio físico e persistência instalada seguem sem prova. [Detalhes](voz-audio-sintetico-20261003.md).

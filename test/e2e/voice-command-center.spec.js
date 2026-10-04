@@ -101,3 +101,18 @@ test('a late transcription cannot overwrite text typed during capture', async ({
   await expect(command).toHaveValue('Cadastrar paciente Bia de Teste com 8 anos')
   await expect(page.getByLabel('Intent emitted')).toBeEmpty()
 })
+
+for (const mode of ['empty', 'permission', 'transcript']) test(`nova transcrição ${mode} descarta intenção anterior antes de mostrar outro resultado`, async ({ page }) => {
+  await page.goto(`/test/e2e/fixtures/voice-command-center.html?${mode === 'permission' ? 'voiceFail=permission' : mode === 'empty' ? 'voiceTranscript=deferred' : ''}`)
+  await page.getByLabel('Seu comando').fill('Cadastrar paciente Bia de Teste com 8 anos')
+  await page.getByRole('button', { name: 'Preparar rascunho' }).click()
+  await expect(page.getByLabel('Intent emitted')).toContainText('patient.create')
+  await page.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  if (mode === 'empty') {
+    await expect.poll(() => page.evaluate(() => typeof window.__resolveVoiceTranscript)).toBe('function')
+    await page.evaluate(() => window.__resolveVoiceTranscript(''))
+  }
+  await expect(page.getByRole('button', { name: 'Ouvir e transcrever' })).toBeEnabled()
+  await expect(mode === 'transcript' ? page.locator('.voice-command-preview') : page.locator('.voice-command-error')).toBeVisible()
+  await expect(page.getByLabel('Intent emitted')).toBeEmpty()
+})
