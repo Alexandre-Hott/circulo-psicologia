@@ -109,3 +109,12 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+.browser-mode-note {
+  padding: 6px 16px;
+  border-bottom: 1px solid #e5eae6;
+  background: #f7faf7;
+  color: #52645e;
+  text-align: center;
+  font: 500 12px/1.4 system-ui, sans-serif;
+}

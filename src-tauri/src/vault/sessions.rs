@@ -155,6 +155,24 @@ pub fn draft_start(c: &Connection, s: &str, d: &str) -> Result<SessionDraft, Str
     if exists.is_some() {
         return Err("Esta ocorrência já foi realizada.".into());
     }
+    let draft_ids = {
+        let mut query = c.prepare("SELECT id FROM session_drafts WHERE series_id=?1 AND original_date=?2 LIMIT 2")
+            .map_err(|_| "Não foi possível consultar o rascunho existente.".to_string())?;
+        let rows = query.query_map(params![s, d], |row| row.get::<_, String>(0))
+            .map_err(|_| "Não foi possível consultar o rascunho existente.".to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|_| "Não foi possível consultar o rascunho existente.".to_string())?
+    };
+    if draft_ids.len() > 1 {
+        return Err("Há mais de um rascunho para esta ocorrência. Retome o rascunho desejado em Sessões.".into());
+    }
+    if let Some(existing_id) = draft_ids.first() {
+        let existing = draft_get(c, existing_id)?;
+        if existing.patient_id != occ.patient_id {
+            return Err("O rascunho existente não corresponde ao paciente desta ocorrência.".into());
+        }
+        return Ok(existing);
+    }
     let id = db::random_id();
     c.execute(
         "INSERT INTO session_drafts(id,patient_id,series_id,original_date,observation,behavior_ids,indicators) VALUES(?1,?2,?3,?4,'','[]','[]')",
@@ -325,6 +343,37 @@ mod rescheduled_occurrence_tests {
         .unwrap();
         c.execute_batch("ALTER TABLE sessions ADD COLUMN author_name TEXT; ALTER TABLE sessions ADD COLUMN author_registration TEXT; ALTER TABLE sessions ADD COLUMN recorded_at TEXT; ALTER TABLE sessions ADD COLUMN procedures TEXT; ALTER TABLE sessions ADD COLUMN outcome_decision TEXT; ALTER TABLE sessions ADD COLUMN referral_closure TEXT; ALTER TABLE session_drafts ADD COLUMN procedures TEXT NOT NULL DEFAULT ''; ALTER TABLE session_drafts ADD COLUMN outcome_decision TEXT NOT NULL DEFAULT ''; ALTER TABLE session_drafts ADD COLUMN referral_closure TEXT; CREATE TABLE professional_identity(id INTEGER PRIMARY KEY,display_name TEXT,registration TEXT); INSERT INTO professional_identity VALUES(1,'Synthetic Author','TEST-001');").unwrap();
         c
+    }
+
+    #[test]
+    fn retry_start_preserves_existing_draft_and_content() {
+        let c = synthetic_db();
+        let first = draft_start(&c, "series-a", "2026-01-01").unwrap();
+        draft_save(&c, &first.id, SessionDraftInput {
+            observation: "synthetic preserved observation".into(), procedures: "synthetic procedure".into(),
+            outcome_decision: "synthetic outcome".into(), referral_closure: Some("synthetic referral".into()),
+            behavior_ids: vec![], indicators: vec![],
+        }).unwrap();
+        let retry = draft_start(&c, "series-a", "2026-01-01").unwrap();
+        assert_eq!(retry.id, first.id);
+        assert_eq!(retry.observation, "synthetic preserved observation");
+        assert_eq!(retry.procedures, "synthetic procedure");
+        assert_eq!(retry.referral_closure.as_deref(), Some("synthetic referral"));
+        assert_eq!(draft_list(&c, "patient-a").unwrap().len(), 1);
+        finalize(&c, &retry.id).unwrap();
+        assert!(draft_start(&c, "series-a", "2026-01-01").is_err());
+    }
+
+    #[test]
+    fn retry_start_refuses_existing_ambiguous_or_incompatible_drafts_without_cleanup() {
+        let c = synthetic_db();
+        let first = draft_start(&c, "series-a", "2026-01-01").unwrap();
+        c.execute("UPDATE session_drafts SET patient_id='other' WHERE id=?1", [&first.id]).unwrap();
+        assert!(draft_start(&c, "series-a", "2026-01-01").err().unwrap().contains("paciente"));
+        c.execute("UPDATE session_drafts SET patient_id='patient-a' WHERE id=?1", [&first.id]).unwrap();
+        c.execute("INSERT INTO session_drafts SELECT 'duplicate',patient_id,series_id,original_date,observation,behavior_ids,indicators,procedures,outcome_decision,referral_closure FROM session_drafts WHERE id=?1", [&first.id]).unwrap();
+        assert!(draft_start(&c, "series-a", "2026-01-01").err().unwrap().contains("mais de um"));
+        assert_eq!(draft_list(&c, "patient-a").unwrap().len(), 2);
     }
 
     #[test]

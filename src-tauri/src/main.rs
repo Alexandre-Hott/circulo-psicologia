@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod native_voice;
 mod vault;
 #[cfg(windows)]
 mod single_instance;
@@ -7,7 +8,7 @@ mod single_instance;
 #[cfg(feature = "native-smoke-test")]
 mod native_smoke_test;
 
-use tauri::Manager;
+use tauri::{webview::{PermissionKind, PermissionResponse, WebviewWindowBuilder}, Manager};
 use vault::{
     AnalyticsOverview,
     AgendaEvent, AgendaOccurrence, AgendaSeries, AgendaSeriesInput, AutoBackupStatus,
@@ -15,8 +16,33 @@ use vault::{
     PatientInput, RelatedParty, RelatedPartyInput, ProfessionalIdentity, RecoveryInventory, RescheduleInput, SessionAddendum, SessionDraft, SessionDraftInput, Vault,
     VaultStatus,
 };
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
+#[tauri::command]
+async fn voice_transcribe(
+    app: tauri::AppHandle,
+    samples: Vec<f32>,
+    sample_rate: u32,
+    patient_names: Vec<String>,
+) -> Result<String, String> {
+    let samples = Zeroizing::new(samples);
+    let patient_names = Zeroizing::new(patient_names);
+    let resources = if cfg!(debug_assertions) {
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/voice")
+    } else {
+        app.path()
+            .resource_dir()
+            .map_err(|error| {
+                format!("Não foi possível localizar recursos do aplicativo: {error}")
+            })?
+            .join("voice")
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        native_voice::transcribe(&resources, &samples, sample_rate, &patient_names)
+    })
+    .await
+    .map_err(|error| format!("Falha ao iniciar reconhecimento de voz local: {error}"))?
+}
 
 #[tauri::command]
 fn vault_status(vault: tauri::State<'_, Vault>) -> Result<VaultStatus, String> {
@@ -411,6 +437,27 @@ fn main() {
         .setup(|app| {
             let dir = app.path().app_local_data_dir()?;
             app.manage(Vault::new(dir));
+            let main_window = app
+                .config()
+                .app
+                .windows
+                .iter()
+                .find(|window| window.label == "main")
+                .ok_or_else(|| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        "A janela principal do Círculo não foi configurada",
+                    )
+                })?;
+            WebviewWindowBuilder::from_config(app, main_window)?
+                .on_permission_request(|_, permission| match permission {
+                    // A captura só começa após a pessoa apertar “Ditar comando”.
+                    // Default mantém o prompt do WebView2 em vez de conceder
+                    // acesso silencioso ao microfone.
+                    PermissionKind::Microphone => PermissionResponse::Default,
+                    _ => PermissionResponse::Deny,
+                })
+                .build()?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -461,7 +508,8 @@ fn main() {
             backup_restore,
             indicator_catalog,
             recovery_inventory,
-            analytics_overview
+            analytics_overview,
+            voice_transcribe
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar Círculo")

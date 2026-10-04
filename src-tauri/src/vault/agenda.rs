@@ -509,59 +509,76 @@ mod recurrence_and_conflict_tests {
         c
     }
 
+    fn future_ending_cutoff() -> NaiveDate {
+        let today = chrono::Local::now().with_timezone(&Sao_Paulo).date_naive();
+        // Keep the cutoff safely future and every weekly identity on Thursday.
+        first_weekday_on_or_after(today + Duration::days(14), 4)
+    }
+
     #[test]
     fn ending_series_preserves_past_and_rejects_future_records() {
         let c = synthetic_db();
-        let series = create_series(&c, series_input(4, "Semanal", "2026-01-01", "14:00", "14:50")).unwrap();
-        c.execute("INSERT INTO agenda_events VALUES('past',?1,'reschedule','2026-01-01','2026-09-25','15:00','15:50','synthetic')", [&series.id]).unwrap();
-        for (table, original) in [("sessions", "2026-10-08"), ("session_drafts", "2026-10-15"), ("agenda_events", "2026-10-22")] {
+        let cutoff = future_ending_cutoff();
+        let day = |offset| (cutoff + Duration::days(offset)).to_string();
+        let start = day(-273);
+        let past_moved = day(-20);
+        let series = create_series(&c, series_input(4, "Semanal", &start, "14:00", "14:50")).unwrap();
+        c.execute("INSERT INTO agenda_events VALUES('past',?1,'reschedule',?2,?3,'15:00','15:50','synthetic')", params![series.id, start, past_moved]).unwrap();
+        for (table, original) in [("sessions", day(7)), ("session_drafts", day(14)), ("agenda_events", day(21))] {
             let sql = if table == "agenda_events" { "INSERT INTO agenda_events VALUES('future',?1,'cancel',?2,NULL,NULL,NULL,'synthetic')".to_string() } else { format!("INSERT INTO {table} VALUES(?1,?2)") };
             c.execute(&sql, params![series.id, original]).unwrap();
-            let err = end_series(&c, &series.id, "2026-10-01").err().unwrap();
+            let err = end_series(&c, &series.id, &day(0)).err().unwrap();
             assert!(err.contains("Não é possível encerrar"), "{err}");
             assert_eq!(list_series(&c).unwrap()[0].end_date, None);
             c.execute(&format!("DELETE FROM {table} WHERE original_date=?1"), [original]).unwrap();
         }
-        let ended = end_series(&c, &series.id, "2026-10-01").unwrap();
-        assert_eq!(ended.end_date.as_deref(), Some("2026-09-30"));
-        assert!(occurrence_by_identity(&c, &series.id, "2026-09-24").unwrap().is_some());
-        assert!(occurrence_by_identity(&c, &series.id, "2026-10-01").is_err());
+        let ended = end_series(&c, &series.id, &day(0)).unwrap();
+        assert_eq!(ended.end_date, Some(day(-1)));
+        assert!(occurrence_by_identity(&c, &series.id, &day(-7)).unwrap().is_some());
+        assert!(occurrence_by_identity(&c, &series.id, &day(0)).is_err());
         assert_eq!(history(&c).unwrap().len(), 1);
-        assert_eq!(occurrence_by_identity(&c, &series.id, "2026-01-01").unwrap().unwrap().date, "2026-09-25");
+        assert_eq!(occurrence_by_identity(&c, &series.id, &start).unwrap().unwrap().date, past_moved);
     }
 
     #[test]
     fn ending_before_start_keeps_series_and_removes_all_occurrences() {
         let c = synthetic_db();
-        let series = create_series(&c, series_input(4, "Semanal", "2026-11-05", "14:00", "14:50")).unwrap();
-        let ended = end_series(&c, &series.id, "2026-10-01").unwrap();
-        assert_eq!(ended.end_date.as_deref(), Some("2026-09-30"));
+        let cutoff = future_ending_cutoff();
+        let day = |offset| (cutoff + Duration::days(offset)).to_string();
+        let series = create_series(&c, series_input(4, "Semanal", &day(35), "14:00", "14:50")).unwrap();
+        let ended = end_series(&c, &series.id, &day(0)).unwrap();
+        assert_eq!(ended.end_date, Some(day(-1)));
         assert_eq!(list_series(&c).unwrap().len(), 1);
-        assert!(occurrences(&c, "2026-11-01", "2026-11-30").unwrap().is_empty());
-        assert!(occurrence_by_identity(&c, &series.id, "2026-11-05").is_err());
+        assert!(occurrences(&c, &day(31), &day(60)).unwrap().is_empty());
+        assert!(occurrence_by_identity(&c, &series.id, &day(35)).is_err());
     }
 
     #[test]
     fn moved_past_identity_after_cutoff_blocks_end_but_cancelled_one_does_not() {
         let c = synthetic_db();
-        let series = create_series(&c, series_input(4, "Semanal", "2026-01-01", "14:00", "14:50")).unwrap();
-        c.execute("INSERT INTO agenda_events VALUES('moved',?1,'reschedule','2026-01-01','2026-10-08','15:00','15:50','synthetic')", [&series.id]).unwrap();
-        let err = end_series(&c, &series.id, "2026-10-01").err().unwrap();
-        assert!(err.contains("remarcada para 2026-10-08"), "{err}");
+        let cutoff = future_ending_cutoff();
+        let day = |offset| (cutoff + Duration::days(offset)).to_string();
+        let start = day(-273);
+        let series = create_series(&c, series_input(4, "Semanal", &start, "14:00", "14:50")).unwrap();
+        c.execute("INSERT INTO agenda_events VALUES('moved',?1,'reschedule',?2,?3,'15:00','15:50','synthetic')", params![series.id, start, day(7)]).unwrap();
+        let err = end_series(&c, &series.id, &day(0)).err().unwrap();
+        assert!(err.contains(&format!("remarcada para {}", day(7))), "{err}");
         assert_eq!(list_series(&c).unwrap()[0].end_date, None);
-        c.execute("INSERT INTO agenda_events VALUES('cancelled',?1,'cancel','2026-01-01',NULL,NULL,NULL,'synthetic')", [&series.id]).unwrap();
-        assert_eq!(end_series(&c, &series.id, "2026-10-01").unwrap().end_date.as_deref(), Some("2026-09-30"));
+        c.execute("INSERT INTO agenda_events VALUES('cancelled',?1,'cancel',?2,NULL,NULL,NULL,'synthetic')", params![series.id, start]).unwrap();
+        assert_eq!(end_series(&c, &series.id, &day(0)).unwrap().end_date, Some(day(-1)));
         assert_eq!(history(&c).unwrap().len(), 2);
     }
 
     #[test]
     fn existing_future_end_can_be_brought_forward() {
         let c = synthetic_db();
-        let mut input = series_input(4, "Semanal", "2026-01-01", "14:00", "14:50");
-        input.end_date = Some("2026-12-31".into());
+        let cutoff = future_ending_cutoff();
+        let day = |offset| (cutoff + Duration::days(offset)).to_string();
+        let mut input = series_input(4, "Semanal", &day(-273), "14:00", "14:50");
+        input.end_date = Some(day(91));
         let series = create_series(&c, input).unwrap();
-        assert_eq!(end_series(&c, &series.id, "2026-10-01").unwrap().end_date.as_deref(), Some("2026-09-30"));
-        assert!(occurrence_by_identity(&c, &series.id, "2026-10-01").is_err());
+        assert_eq!(end_series(&c, &series.id, &day(0)).unwrap().end_date, Some(day(-1)));
+        assert!(occurrence_by_identity(&c, &series.id, &day(0)).is_err());
     }
 
     fn series_input(
