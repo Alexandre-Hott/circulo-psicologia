@@ -1,0 +1,5 @@
+[
+  { "Index": 0, "IntendedCommand": "Abrir Novo compromisso.", "Transcript": "Abrir novo compromisso." },
+  { "Index": 1, "IntendedCommand": "Recolher Detalhes e ações.", "Transcript": "Recolher detalhes e ações." },
+  { "Index": 2, "IntendedCommand": "Confirmar comando.", "Transcript": "Confirmar comando." }
+]

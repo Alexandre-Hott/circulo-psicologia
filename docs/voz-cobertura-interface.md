@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Consolidação de reconhecimento e regressão0.2.61 —04/10/2026
+
+Três WAVs SAPI transcritos corretamente no backend Rust real: Abrir novo compromisso/Recolher detalhes e ações/Confirmar comando. Parser central não aprova comandos dependentes da UI (0Passed/0Failed/3NotEvaluated). Fixture exata e replay na interface, com prévia/segundo áudio/zero escritas. Regresso final113/113 em8,6min, exit0, incluindo Agenda corrigida; reforço de preservação solicitado na revisão repetido1/1 em18,5s após a rodada integral. JS259/259; Rust86passaram/0falhas/1ignorado, opt-in de áudio executado separado. Substitui somente o estado histórico de regressão111com erro de seletor; não é prova de microfone físico, cadeia de captura instalada ou persistência clínica por voz. Pacote61 anterior, instalado59, sem novo build/publicação/alteração de perfil. [Evidências](voz-audio-sintetico-20261003.md).
+
 ## Incremento0.2.61 — abrir/recolher gavetas sem alternância involuntária
 
 Pedidos naturais Abrir/Abra, Fechar/Feche e Recolher/Recolha, com “a gaveta” opcional, usam apenas drawers visíveis e rótulos exatos. Summary de details ou botão aria-expanded/aria-controls; botões comuns não viram gavetas. Prévia seguida de confirmação; destino, identidade e revisão revalidados. Fechamento confirmado do contexto/evolução cancela somente a navegação pendente correspondente, não edições ou persistência. Agenda mantém campos e aceita mudança manual de estado entre proposta e confirmação. Regresso111:110passaram/1seletor ambíguo; após corrigir somente o seletor, gavetas3/3, incluindo áudio simulado, sem nova rodada integral. JS258/258. [Entrega, testes e limites](melhoria-continua-voz.md). Pacote61 gerado/auditado, instalado59; sem nova validação física de voz.

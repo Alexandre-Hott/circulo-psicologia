@@ -1,6 +1,6 @@
 ﻿param(
     [string]$VoiceDirectory,
-    [ValidateSet('core', 'behavior-save', 'occurrence-date', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party')][string]$Scenario = 'core'
+    [ValidateSet('core', 'behavior-save', 'occurrence-date', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer')][string]$Scenario = 'core'
 )
 
 # Keep the UTF-8 BOM: Windows PowerShell 5.1 otherwise reads Portuguese text as ANSI.
@@ -101,6 +101,9 @@ try {
             'Marcar Contato administrativo.',
             'Confirmar comando.'
         )
+    }
+    if ($Scenario -eq 'interface-drawer') {
+        $commands = @('Abrir Novo compromisso.', 'Recolher Detalhes e ações.', 'Confirmar comando.')
     }
     $results = foreach ($index in 0..($commands.Count - 1)) {
         $wav = Join-Path $testDirectory "synthetic-command-$index.wav"

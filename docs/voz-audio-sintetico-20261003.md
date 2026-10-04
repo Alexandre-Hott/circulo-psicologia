@@ -1,5 +1,11 @@
 # Áudio sintético offline — 03/10/2026
 
+## Gavetas — complemento ao pacote0.2.61,04/10/2026
+
+Novo cenário `interface-drawer`:3WAVs SAPI Microsoft Maria Desktop Português Brasil, rate-2. Recursos locais da instalação59; teste opt-in do backend Rust real atual, sem rede, exit0. Transcrições preservadas sem reparar palavras em `test/fixtures/native-voice-drawer-20261004.json`: “Abrir novo compromisso.”, “Recolher detalhes e ações.”, “Confirmar comando.”. CLI produziu as mesmas frases em2,07s/2,04s/2,04s; áudios159290/173396/135590bytes. O evaluator central retorna0Passed/0Failed/3NotEvaluated intencionalmente: não é aprovação de interface/confirmar. Unidade259/259 verifica esse contrato e recusa corpus incompleto/transcrição vazia.
+
+Replay novo usa os textos reais sem alteração: abrir Novo compromisso propõe sem abrir; segundo áudio confirma; recolher Detalhes e ações propõe mantendo detalhes visíveis; segundo áudio confirma fechamento, preservando formulário e Horário inicial15:00, quatro chamadas de transcrição e zero gravações. Mídia/captura/IPC simulados. Regresso113/113 em8,6min, terminal exit0. Revisão independente pediu checkpoints de preservação imediatamente após abrir e enquanto recolher aguarda confirmar; adicionados, replay reforçado1/1 em18,5s, exit0. Suíte Rust release offline/locked86passaram/0falhas/1ignorado em11,90s; opt-in de WAV executado pelo harness separado. Não prova microfone físico nem uma cadeia nativa ininterrupta. Não houve mudança de produção, versão/instalador61 ou perfil instalado59 nesta rodada; não gerar pacote idêntico por testes adicionais. BOMUTF8 do harness preservado.
+
 ## Vínculos e papel administrativo —0.2.60
 
 Cenário `interface-party`,3WAVs SAPI Microsoft Maria Brasil, rate-2, recursos instalados59 e backend Rust real sem rede. Saídas nativas preservadas em `native-voice-party-20261004.json`: Abrir vínculos de Ana Clara; Marcar **contrato** administrativo; Confirmar comando. CLI3inferências2,06s/2,02s/2,04s, áudio173934/192718/135590bytes. Avaliador central1Passed/0Failed/2NotEvaluated: confere paciente/destino links, mas não aprova o checkbox nem confirmar. Harnessexit0 não prova o papel selecionável.

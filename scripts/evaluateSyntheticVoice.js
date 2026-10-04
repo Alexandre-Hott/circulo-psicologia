@@ -39,8 +39,8 @@ function matches(actual, desired, key = '') {
 }
 
 export function evaluateSyntheticVoice(cases, { scenario = 'core' } = {}) {
-  if (!['core', 'behavior-save', 'occurrence-date', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party'].includes(scenario)) throw new Error('Cenário de áudio desconhecido.')
-  const expectations = scenario === 'core' ? expected : ['behavior-save', 'interface-fields', 'interface-weekday'].includes(scenario) ? [null, null, null]
+  if (!['core', 'behavior-save', 'occurrence-date', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer'].includes(scenario)) throw new Error('Cenário de áudio desconhecido.')
+  const expectations = scenario === 'core' ? expected : ['behavior-save', 'interface-fields', 'interface-weekday', 'interface-drawer'].includes(scenario) ? [null, null, null]
     : scenario === 'interface-party' ? [{ type: 'patient.workspace.open', target: { patientId: 'ana', space: 'links' } }, null, null]
     : scenario === 'analytics-range' ? ['ana', ''].map(patientId => ({ type: 'analytics.view', target: { patientId, from: '2026-09-01', to: '2026-09-30', view: 'custom' } }))
     : ['start', 'remarcar', 'cancelar'].map(action => ({ type: 'agenda.occurrence.action', target: { patientId: 'ana', date: '2026-10-03', start: '15:00', action } }))

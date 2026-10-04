@@ -3,6 +3,16 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { evaluateSyntheticVoice } from '../scripts/evaluateSyntheticVoice.js'
 
+test('gavetas exigem replay de interface: evaluator central não anuncia comandos aplicados', () => {
+  const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-drawer-20261004.json', import.meta.url), 'utf8'))
+  const result = evaluateSyntheticVoice(cases, { scenario: 'interface-drawer' })
+  assert.equal(result.Passed, 0)
+  assert.equal(result.Failed, 0)
+  assert.equal(result.NotEvaluated, 3)
+  assert.throws(() => evaluateSyntheticVoice(cases.slice(0, 2), { scenario: 'interface-drawer' }))
+  assert.throws(() => evaluateSyntheticVoice([{ Index: 0, Transcript: '' }, ...cases.slice(1)], { scenario: 'interface-drawer' }))
+})
+
 const phrases = [
   'Marcar sessão semanal para Ana Clara toda quinta às quinze horas.',
   'Cadastrar paciente Bia Fictícia com nove anos.',

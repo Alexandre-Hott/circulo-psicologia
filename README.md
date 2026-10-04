@@ -1,5 +1,7 @@
 # Círculo — MVP de acompanhamento psicológico
 
+> **Validação complementar de voz 04/10/2026 (pacote0.2.61):** gavetas reconhecidas em3WAVs sintéticos no backend Rust real; regressão113/113, replay reforçado1/1, JS259/259 e Rust86aprovados/1ignorado. [Evidências e limites](docs/voz-audio-sintetico-20261003.md). Sem nova versão/instalação, captura física ou persistência instalada comprovada.
+
 > **Assistente de voz 0.2.61 (04/10/2026):** abrir/recolher gavetas com pedidos naturais, confirmação e estado idempotente. [Instalador Windows x64](src-tauri/target/release/bundle/nsis/Círculo_0.2.61_x64-setup.exe), 135.882.040 bytes, SHA-256 `e948147d7279c7d5a7e89e5446cbe00400d8bc15353c80f0c7e324a5a37c131a`. [Testes e limites](docs/melhoria-continua-voz.md). Pacote local gerado/auditado, não instalado/publicado como Release; instalado permanece0.2.59. Sem assinatura updater/Authenticode ou nova prova de microfone físico. Link local, não download publicado no GitHub.
 
 > **Assistente de voz 0.2.60 (04/10/2026):** reconhecimento do papel Contato administrativo nos vínculos, sem alterar nomes ou textos ditados. [Instalador Windows x64](src-tauri/target/release/bundle/nsis/Círculo_0.2.60_x64-setup.exe), 135.891.421 bytes, SHA-256 `781781cd0ae6f910c3941763a14543895e091557605aac83aa394d707b5cf246`. [Testes e limites](docs/melhoria-continua-voz.md). Pacote local gerado/auditado, não instalado nem publicado como Release; instalado permanece0.2.59. Sem assinatura updater/Authenticode ou prova de microfone físico. Link local, não download publicado no GitHub.
