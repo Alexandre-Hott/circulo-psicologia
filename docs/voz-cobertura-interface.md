@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Encerramento de série pelo paciente —0.2.64
+
+“Encerrar série de Ana Clara” ou “Antecipar término de Ana Clara” prepara abertura do formulário; múltiplas séries exigem dia/horário exatos, sem ditar ID. Homônimos e mesmo dia/horário recusados. Data de corte e confirmação final permanecem no fluxo existente. Metadados/record/epoch revalidados; prefixo observado “Anticipar” aceito somente nessa ação. JS330/330, revisão focal aprovada; regressão138/139 com timeout na quarta montagem de um cenário combinado. Separados os testes sem mudar produção/timeout/asserções; repetição final18/18 em43,2s com shell completo e gateway/Agenda, não nova regressão integral. Rust86aprovados/1ignorado. Reconhecimento Rust real de3WAVs sintéticos e replay com mídia/IPC simulados não equivalem a teste de microfone físico ou persistência instalada. [Pacote, resultados e limites](melhoria-continua-voz.md). Instalado61 mantido.
+
 ## Minutos completos no agendamento —0.2.63
 
 Pedidos naturais recorrentes e avulsos agora preservam15:45 e21:30, usando a normalização existente de horários, sem consumo parcial da hora. A correção inclui o parser central e o atalho interno da Agenda. Formatos antigos explícitos restaurados por revisão; horários ambíguos, conteúdo extra, alternativas e duração chegando à meia-noite recusados. JS329/329,145unidades dos parsers; nove probes finais independentes aprovados. Regresso FINAL59/59 em3,7min, exit0, aprovou formulário/payload e dois áudios simulados, não captura física. Limpeza date/time já funcionava e ganhou provas sem alterar produção, incluindoendDate:null e obrigatórios isolados. [Pacote, resultados e pendências](melhoria-continua-voz.md). Sem novo reconhecimentoRust/microfone físico/banco nativo ou instalação63; instalado61 mantido.

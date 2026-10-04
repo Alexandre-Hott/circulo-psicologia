@@ -1,6 +1,6 @@
 ﻿param(
     [string]$VoiceDirectory,
-    [ValidateSet('core', 'behavior-save', 'behavior-remove', 'occurrence-date', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer')][string]$Scenario = 'core'
+    [ValidateSet('core', 'behavior-save', 'behavior-remove', 'occurrence-date', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer', 'interface-series')][string]$Scenario = 'core'
 )
 
 # Keep the UTF-8 BOM: Windows PowerShell 5.1 otherwise reads Portuguese text as ANSI.
@@ -108,6 +108,13 @@ try {
     if ($Scenario -eq 'interface-drawer') {
         $commands = @('Abrir Novo compromisso.', 'Recolher Detalhes e ações.', 'Confirmar comando.')
     }
+    if ($Scenario -eq 'interface-series') {
+        $commands = @(
+            'Encerrar série de Ana Clara na segunda às quinze horas.',
+            'Antecipar término de Ana Clara na segunda às quinze horas.',
+            'Confirmar comando.'
+        )
+    }
     $results = foreach ($index in 0..($commands.Count - 1)) {
         $wav = Join-Path $testDirectory "synthetic-command-$index.wav"
         $stream = New-Object -ComObject SAPI.SpFileStream
@@ -135,6 +142,7 @@ try {
             Transcript = (Get-Content -LiteralPath $transcriptPath -Raw -Encoding UTF8).Trim()
             InferenceSeconds = [math]::Round($clock.Elapsed.TotalSeconds, 2)
             AudioBytes = (Get-Item -LiteralPath $wav).Length
+            ExitCode = $process.ExitCode
         }
     }
     $env:CIRCULO_SYNTHETIC_WAV_DIRECTORY = $testDirectory
@@ -144,7 +152,12 @@ try {
     try {
         $nativeStdout = Join-Path $testDirectory 'native-stdout.txt'
         $nativeStderr = Join-Path $testDirectory 'native-stderr.txt'
-        $nativeProcess = Start-Process -FilePath 'cargo' -ArgumentList @('test', '--release', '--offline', '--locked', 'native_voice::tests::transcribes_synthetic_wav_through_the_same_local_backend_as_the_app', '--', '--ignored', '--nocapture') -WorkingDirectory (Join-Path $repoRoot 'src-tauri') -WindowStyle Hidden -RedirectStandardOutput $nativeStdout -RedirectStandardError $nativeStderr -Wait -PassThru
+        $nativeClock = [Diagnostics.Stopwatch]::StartNew()
+        $nativeProcess = Start-Process -FilePath 'cargo' -ArgumentList @('test', '--release', '--offline', '--locked', 'native_voice::tests::transcribes_synthetic_wav_through_the_same_local_backend_as_the_app', '--', '--ignored', '--nocapture') -WorkingDirectory (Join-Path $repoRoot 'src-tauri') -WindowStyle Hidden -RedirectStandardOutput $nativeStdout -RedirectStandardError $nativeStderr -PassThru
+        # Wait for cargo itself, avoiding PowerShell 5.1's descendant-job wait.
+        [void]$nativeProcess.Handle # Retain the handle so ExitCode remains available.
+        $nativeProcess.WaitForExit()
+        $nativeClock.Stop()
         if ($nativeProcess.ExitCode -ne 0) { throw "Integração Rust com áudio sintético falhou (código $($nativeProcess.ExitCode)). $(Get-Content -LiteralPath $nativeStderr -Raw -Encoding UTF8)" }
         $nativeOutput = @(Get-Content -LiteralPath $nativeStdout -Encoding UTF8)
         $marker = 'CIRCULO_SYNTHETIC_RESULT_JSON:'
@@ -171,7 +184,7 @@ try {
         Remove-Item Env:CIRCULO_TEST_VOICE_RESOURCES -ErrorAction SilentlyContinue
         Remove-Item Env:CIRCULO_SYNTHETIC_WAV_COUNT -ErrorAction SilentlyContinue
     }
-    [pscustomobject]@{ Scenario = $Scenario; Voice = $voice.Voice.GetDescription(); NetworkUsed = $false; Cases = @($results); NativeCases = $nativeCases; Semantic = $semantic } | ConvertTo-Json -Depth 10 -Compress
+    [pscustomobject]@{ Scenario = $Scenario; Voice = $voice.Voice.GetDescription(); NetworkUsed = $false; Cases = @($results); NativeCases = $nativeCases; NativeHarnessSeconds = [math]::Round($nativeClock.Elapsed.TotalSeconds, 2); NativeExitCode = $nativeProcess.ExitCode; SemanticExitCode = $semanticProcess.ExitCode; Semantic = $semantic } | ConvertTo-Json -Depth 10 -Compress
     if ($semantic.Failed -gt 0) { throw "$($semantic.Failed) comandos nativos não preservaram a ação e os campos esperados. Transcrição não vazia não significa funcionamento." }
 }
 finally {

@@ -3,6 +3,34 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { evaluateSyntheticVoice } from '../scripts/evaluateSyntheticVoice.js'
 
+test('série nativa exige replay de interface: zero aprovações e três não avaliados', () => {
+  const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-series-20261004.json', import.meta.url), 'utf8'))
+  const result = evaluateSyntheticVoice(cases, { scenario: 'interface-series' })
+  assert.equal(result.Passed, 0)
+  assert.equal(result.Failed, 0)
+  assert.equal(result.NotEvaluated, 3)
+  assert.deepEqual(result.Results.map(item => item.Status), ['not-evaluated', 'not-evaluated', 'not-evaluated'])
+  for (const [index, item] of result.Results.entries()) {
+    assert.equal(item.Transcript, cases[index].Transcript)
+    assert.match(item.Reason, /não avaliado pelo parser central/)
+    assert.equal(Object.hasOwn(item, 'ActualIntent'), false)
+  }
+  assert.throws(() => evaluateSyntheticVoice(cases.slice(1), { scenario: 'interface-series' }))
+  assert.throws(() => evaluateSyntheticVoice([...cases, cases[0]], { scenario: 'interface-series' }))
+  for (const invalid of [
+    { Index: 0, Transcript: '' }, { Index: 0, Transcript: '   ' },
+    { Index: 0, Transcript: null }, { Index: 1, Transcript: 'Confirmar comando.' },
+    { Index: -1, Transcript: 'Confirmar comando.' }, { Index: 3, Transcript: 'Confirmar comando.' },
+    { Index: 0.5, Transcript: 'Confirmar comando.' },
+  ]) {
+    assert.throws(() => evaluateSyntheticVoice([invalid, ...cases.slice(1)], { scenario: 'interface-series' }))
+  }
+  const reordered = evaluateSyntheticVoice([...cases].reverse(), { scenario: 'interface-series' })
+  assert.equal(reordered.NotEvaluated, 3)
+  assert.equal(reordered.Passed, 0)
+  assert.equal(reordered.Failed, 0)
+})
+
 test('gavetas exigem replay de interface: evaluator central não anuncia comandos aplicados', () => {
   const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-drawer-20261004.json', import.meta.url), 'utf8'))
   const result = evaluateSyntheticVoice(cases, { scenario: 'interface-drawer' })

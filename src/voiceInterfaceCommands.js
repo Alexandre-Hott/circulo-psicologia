@@ -57,6 +57,19 @@ function inventory(root) {
     })
 }
 
+function seriesLabelMatches(query, item) {
+  const element = item.element
+  const kind = element.getAttribute('data-voice-series-kind')
+  if (!element.matches('button') || !['end', 'advance'].includes(kind) || element.getAttribute('data-voice-series-ambiguous') === 'true') return false
+  const match = /^(encerrar serie|antecipar termino|anticipar termino) de (.+?)(?: na (.+?) as (.+))?$/u.exec(fold(query))
+  if (!match || (match[1] === 'encerrar serie' ? 'end' : 'advance') !== kind) return false
+  if (match[2] !== fold(element.getAttribute('data-voice-series-patient'))) return false
+  if (!match[3]) return true
+  const weekday = normalizeVoiceFieldValue('weekday', match[3])
+  const time = normalizeVoiceFieldValue('time', match[4])
+  return weekday !== null && time !== null && weekday === element.getAttribute('data-voice-series-weekday') && time === element.getAttribute('data-voice-series-time')
+}
+
 function matches(query, entries) {
   const normalized = fold(query)
   // One short save request covers both modes of the existing library form.
@@ -66,18 +79,19 @@ function matches(query, entries) {
   // Exact Portuguese recognition variant, only for this visible party role.
   // Never rewrite a name, relation, text field or another checkbox label.
   const administrativeRoleAlias = normalized === 'contrato administrativo'
+  const seriesQuery = /^(?:encerrar serie|antecipar termino|anticipar termino) de /u.test(normalized)
   // Explicit legacy aliases compete with all matching controls, never picking
   // the first retry when two operations share an old short command.
   const exact = entries.filter(item => fold(item.name) === normalized || (administrativeRoleAlias && item.element.type === 'checkbox' && fold(item.name) === 'contato administrativo' && item.element.closest('form[data-voice-record^="party:"]')) || (behaviorSave && item.element.matches('button') && ['criar comportamento reutilizavel', 'salvar versao do comportamento'].includes(fold(item.name))) || fold(item.element.getAttribute('data-voice-alias') || '') === normalized || fold(`${item.name} de ${item.context}`) === normalized || fold(`${item.name} em ${item.context}`) === normalized)
-  if (exact.length) return exact
+  if (!seriesQuery && exact.length) return exact
   const aliases = entries.filter(item => fold(item.name.replace(/\s*·\s*v\d+\s*$/i, '').replace(/\s*\(opcional\)/i, '').replace(/\s*\(at[eé]\s+\d+\s+caracteres\)/iu, '').replace(/\s+em anos\b/i, '')) === normalized)
-  if (aliases.length) return aliases
-  // Patient cards have short buttons; their context makes "Editar de Ana Clara" unique.
-  return entries.filter(item => item.context && [fold(`${item.name} de ${item.context}`), fold(`${item.name} em ${item.context}`)].some(label => label.startsWith(normalized) && normalized.startsWith(fold(item.name) + ' ')))
+  if (!seriesQuery) return aliases.length ? aliases : entries.filter(item => item.context && [fold(`${item.name} de ${item.context}`), fold(`${item.name} em ${item.context}`)].some(label => label.startsWith(normalized) && normalized.startsWith(fold(item.name) + ' ')))
+  const series = entries.filter(item => seriesLabelMatches(query, item))
+  return [...new Set([...exact, ...aliases, ...series])]
 }
 
 function fingerprint(item, drawer = false) {
-  return { id: item.element.id || null, tag: item.element.tagName, inputType: item.element.type || null, valueType: item.element.getAttribute('data-voice-value-type') || null, name: drawer ? textContent(item.element) : item.name, context: item.context, action: item.element.getAttribute('data-voice-action') || null, record: item.element.closest('[data-voice-record]')?.getAttribute('data-voice-record') || null, epoch: item.element.closest('[data-voice-epoch]')?.getAttribute('data-voice-epoch') || null }
+  return { id: item.element.id || null, tag: item.element.tagName, inputType: item.element.type || null, valueType: item.element.getAttribute('data-voice-value-type') || null, name: drawer ? textContent(item.element) : item.name, context: item.context, action: item.element.getAttribute('data-voice-action') || null, record: item.element.closest('[data-voice-record]')?.getAttribute('data-voice-record') || null, epoch: item.element.closest('[data-voice-epoch]')?.getAttribute('data-voice-epoch') || null, series: item.element.hasAttribute('data-voice-series-kind') ? [item.element.getAttribute('data-voice-series-kind'), item.element.getAttribute('data-voice-series-patient'), item.element.getAttribute('data-voice-series-weekday'), item.element.getAttribute('data-voice-series-time'), item.element.getAttribute('data-voice-series-ambiguous')].join('|') : null }
 }
 
 function isDrawer(element) {
@@ -97,6 +111,7 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   if (!root || !normalized) return null
   if (/^(?:nao|nunca)\b/.test(normalized)) return refusal('Pedido negado. Nenhuma ação preparada.')
   let operation, query, value, optionLabel
+  let directSeries = false
   const fieldPayload = /^(?:preencher|preencha|preenche|definir|defina|selecionar|selecione|seleciona)\s+(.+)$/iu.exec(raw)?.[1]
   // An article can be part of the actual label ("O próprio paciente...").
   // Resolve both forms against visible controls instead of stripping it blindly.
@@ -112,6 +127,7 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   else if (click) { operation = 'click'; query = click[1] }
   else if (drawer) { operation = /^abr/iu.test(drawer[1]) ? 'open' : 'close'; query = drawer[2] }
   else if (/^(?:salvar|salve)(?: o)? comportamento$/.test(normalized)) { operation = 'click'; query = 'Salvar comportamento' }
+  else if (/^(?:encerrar s[eé]rie|antecipar t[eé]rmino|anticipar t[eé]rmino) de .+$/iu.test(raw)) { operation = 'click'; query = raw; directSeries = true }
   else if (/^(?:confirmar|confirma|confirmar acao|confirmar ação)$/.test(normalized)) { operation = 'click'; query = 'Confirmar ação' }
   else if (/^(?:salvar paciente|salvar alteracoes|salvar rascunho|finalizar sessao|cancelar rascunho|novo cadastro|novo compromisso|criar comportamento reutilizavel|criar compromisso|criar serie|atualizar lista|bloquear|voltar|confirmar cancelamento|confirmar remarcacao individual|confirmar encerramento)$/.test(normalized)) { operation = 'click'; query = raw }
   else return null
@@ -136,6 +152,8 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
     return refusal(`Não encontrei “${query}” disponível nesta tela. Abra a área correspondente e diga o texto do botão ou campo.`)
   }
   const item = found[0]
+  if (directSeries && !item.element.hasAttribute('data-voice-series-kind')) return refusal(`Não encontrei “${query}” em um controle de série disponível.`)
+  if (/^anticipar termino de /u.test(fold(query)) && !seriesLabelMatches(query, item)) return refusal(`Não encontrei “${query}” em um controle de série disponível.`)
   if (operation === 'uncheck' && item.element.type === 'radio') return refusal('Escolha outra opção deste grupo para alterar a seleção.')
   if (operation === 'fill') {
     if (item.element.tagName === 'SELECT') {
@@ -164,7 +182,7 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
     status: 'draft',
     intent: { type: 'interface.control', operation, target: { ...fingerprint(item, ['open', 'close'].includes(operation)), ...(['open', 'close'].includes(operation) ? { drawerId: item.element.matches('summary') ? item.element.parentElement.id : item.element.getAttribute('aria-controls') } : {}) }, ...(operation === 'fill' ? { value } : {}), ...(optionLabel !== undefined ? { optionLabel } : {}) },
     preview: clearField ? `Limpar ${item.name}.` : operation === 'fill' ? `${item.name}: ${item.element.tagName === 'SELECT' ? [...item.element.options].find(option => option.value === value)?.textContent : value}`
-      : `${operation === 'open' ? 'Abrir' : operation === 'close' ? 'Recolher' : operation === 'click' ? 'Acionar' : operation === 'check' ? 'Marcar' : 'Desmarcar'} ${['open', 'close'].includes(operation) ? textContent(item.element) : item.name}${item.context ? ` · ${item.context}` : ''}.`,
+      : `${operation === 'open' ? 'Abrir' : operation === 'close' ? 'Recolher' : operation === 'click' ? 'Acionar' : operation === 'check' ? 'Marcar' : 'Desmarcar'} ${['open', 'close'].includes(operation) ? textContent(item.element) : item.name}${item.element.hasAttribute('data-voice-series-kind') ? ` · ${['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'][Number(item.element.getAttribute('data-voice-series-weekday'))]} às ${item.element.getAttribute('data-voice-series-time')}` : ''}${item.context ? ` · ${item.context}` : ''}.`,
     notes: [],
   }
 }
@@ -174,7 +192,7 @@ export function applyVoiceInterfaceCommand(intent, root = globalThis.document) {
   const found = inventory(root).filter(item => {
     const current = fingerprint(item, ['open', 'close'].includes(intent.operation)), target = intent.target
     if (['open', 'close'].includes(intent.operation) && (!isDrawer(item.element) || target.drawerId !== (item.element.matches('summary') ? item.element.parentElement.id : item.element.getAttribute('aria-controls')))) return false
-    return current.id === target.id && current.tag === target.tag && current.inputType === target.inputType && current.valueType === target.valueType && current.name === target.name && current.context === target.context && current.action === target.action && current.record === target.record && current.epoch === target.epoch
+    return current.id === target.id && current.tag === target.tag && current.inputType === target.inputType && current.valueType === target.valueType && current.name === target.name && current.context === target.context && current.action === target.action && current.record === target.record && current.epoch === target.epoch && current.series === target.series
   })
   if (found.length !== 1) throw new Error('A tela mudou. Prepare o comando novamente antes de aplicar.')
   const element = found[0].element

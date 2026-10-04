@@ -1,5 +1,13 @@
 # Áudio sintético offline — 03/10/2026
 
+## Encerramento/antecipação de série —0.2.64
+
+Cenário interface-series:3WAVs SAPI Microsoft Maria Português Brasil; recursos instalados61 e backend Rust local sem alteração funcional/rede. Rust preservado em `native-voice-series-20261004.json`: “Encerrar série de Ana Clara na segunda às 15 horas.”; “Anticipar termino de Ana Clara na segunda às 15 horas.”; “Confirmar comando.”. A segunda saída CLI contém “Ana, clara”, mas a saída Rust usada na fixture não contém essa vírgula; não se alterou o corpus para padronizar nomes.
+
+CLI2,04s/2,03s/2,03s, áudios275928/295052/135590bytes; opt-in Rust5,91s na repetição final. Tentativa inicial: teste Rust passou, mas wrapper ficou esperando descendentes e foi encerradoexit1. Wrapper Cargo corrigido para esperar o próprio processo via WaitForExit; BOM mantido. Repetição final CLI/Rust/evaluator/scriptexit0. Avaliador central0Passed/0Failed/3NotEvaluated intencionalmente, com corpus completo obrigatório; não aprova comandos dependentes de controles da interface.
+
+Interpretação de “Anticipar” implementada: apenas uma variante de prefixo de ação em séries, sem reparar nomes/notas/textos clínicos ou editar transcrição. Replay final no shell completo usa os índices1e2inalterados: primeiro áudio prepara, segundo abre o formulário, exatamente duas chamadasvoice_transcribe com amostras não vazias e paciente correto, nenhuma escrita. Mídia/IPC simulados; não executa Rust nesse replay. Regressão138/139 com timeout de montagem; cenários separados e repetição focal final18/18 em43,2s, exit0, incluindo os três casos completos do assistente. Rust integral86aprovados/1ignorado em8,53s, opt-in separado. Nenhum microfone físico, interface nativa ininterrupta, gravação no perfil ou instalação64 comprovado nesta rodada. Perfil do cofre não acessado.
+
 ## Desmarcar comportamento —0.2.62
 
 Cenário behavior-remove,3WAVs SAPI Microsoft Maria Desktop Português Brasil,rate-2. Recursos instalados61 e backend Rust real via opt-in, sem rede/áudio ambiente, exit0. Saídas nativas inalteradas em `native-voice-remove-20261004.json`: “Retirar comportamento pede ajuda da seção de Ana Clara.”; “Remover comportamento pede ajuda da seção de Ana Clara.”; “Confirmar comando.”. CLI produziu as mesmas frases em2,05s/2,04s/2,04s, áudios297434/297436/135590bytes. O normalize já existente de seção/sessão aceitou a grafia; não se corrigiu o corpus nem adicionou reparo de palavras.
