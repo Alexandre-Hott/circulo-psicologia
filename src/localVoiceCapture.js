@@ -43,7 +43,7 @@ export async function captureCommandAudio({ signal, maxDurationMs = LOCAL_VOICE_
     startedAt = Date.now()
     const sampleLimit = Math.floor(context.sampleRate * durationLimitMs / 1000)
     const capture = new Promise((resolve, reject) => {
-      const finish = async (error = null) => {
+      const finish = async (error = null, endedBy = 'silence') => {
         if (stopped) return
         stopped = true
         const sampleRate = context.sampleRate
@@ -55,7 +55,7 @@ export async function captureCommandAudio({ signal, maxDurationMs = LOCAL_VOICE_
         chunks.length = 0
         if (error) { merged.fill(0); reject(error); return }
         if (!speechStartedAt) { merged.fill(0); reject(new Error('Nenhuma fala detectada. Tente novamente ou digite o comando.')); return }
-        resolve({ samples: merged, sampleRate })
+        resolve({ samples: merged, sampleRate, endedBy, maxDurationMs: durationLimitMs })
       }
       processor.onaudioprocess = event => {
         const input = event.inputBuffer.getChannelData(0)
@@ -71,10 +71,10 @@ export async function captureCommandAudio({ signal, maxDurationMs = LOCAL_VOICE_
         if (speechStartedAt && lastSpeechAt && now - lastSpeechAt > 1_100) { frame.fill(0); void finish(); return }
         if (frame.length) chunks.push(frame)
         event.outputBuffer.getChannelData(0).fill(0)
-        if (frameCount >= sampleLimit) void finish()
+        if (frameCount >= sampleLimit) void finish(null, 'max-duration')
       }
       timer = setInterval(() => {
-        if (Date.now() - startedAt >= durationLimitMs) void finish()
+        if (Date.now() - startedAt >= durationLimitMs) void finish(null, 'max-duration')
       }, 200)
       if (signal) {
         abortHandler = () => void finish(new DOMException('Captura cancelada.', 'AbortError'))

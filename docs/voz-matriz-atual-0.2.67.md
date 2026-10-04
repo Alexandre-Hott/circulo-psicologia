@@ -1,5 +1,9 @@
 # Matriz atual de voz — 0.2.67
 
+## Atualização de referência 0.2.73
+
+A [validação 0.2.73](validacao-voz-0.2.73.md) acrescenta aviso de corte e revisão manual quando o ditado atinge 12 segundos; pausa normal e confirmação permanecem. JS783/783, Rust135 aprovados/1 ignorado, UI selecionada33/33. Decoder do teste opt-in corrigido, sem nova inferência ou homologação do microfone físico. Pacote local não instalado/publicado nem assinado. Não amplia a matriz de ações nem prova cobertura universal; preparo após corte é manual. Referências abaixo são históricas.
+
 ## Atualização de referência 0.2.72
 
 A [validação 0.2.72](validacao-voz-0.2.72.md) corrige transporte UTF-8 do prompt e caminhos do CLI sem ampliar a matriz de comandos. JS773/773, Rust102 aprovados/1 ignorado, UI selecionada16/16. Uma rodada nativa de cinco WAVs em pasta Unicode executou corretamente, com avaliação semântica2 aprovados/2 falhos/1 não avaliado. Não é cobertura universal ou prova de microfone físico. Pacote local não instalado/publicado nem assinado. As referências abaixo são históricas.

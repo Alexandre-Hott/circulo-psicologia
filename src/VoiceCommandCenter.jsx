@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { formatCentralCommandPreview, parseCentralCommand } from './centralCommandRouter.js'
 import { VOICE_COMMAND_MAX_LENGTH } from './voiceCommandLimits.js'
+import { LOCAL_VOICE_MAX_MS } from './localVoiceCapture.js'
 import './VoiceCommandCenter.css'
 
 /**
  * Compact Home command composer. onTranscribe is supplied by the native host and
- * must resolve to a transcript string; this component does not capture audio.
+ * resolves to a legacy string or { transcript, endedBy, maxDurationMs }.
+ * This component does not capture audio.
  * onDraft receives a typed intent for preview only. The caller owns all applying
  * and persistence decisions.
  */
@@ -28,6 +30,7 @@ export function VoiceCommandCenter({
   const [command, setCommand] = useState('')
   const [result, setResult] = useState(null)
   const [transcribing, setTranscribing] = useState(false)
+  const [captureNotice, setCaptureNotice] = useState('')
   const transcriptGeneration = useRef(0)
   useEffect(() => () => { transcriptGeneration.current += 1 }, [])
   useEffect(() => {
@@ -48,11 +51,12 @@ export function VoiceCommandCenter({
     if (onApply && result?.status === 'draft' && /^(?:confirmar|confirma|aplicar|aplica|confirmar comando)$/.test(word)) {
       setCommand(value)
       setResult(null)
+      setCaptureNotice('')
       void onApply()
       return
     }
     if (onCancel && /^(?:descartar comando|cancelar comando)$/.test(word)) {
-      setResult(null); setCommand(''); onCancel(); return
+      setResult(null); setCommand(''); setCaptureNotice(''); onCancel(); return
     }
     const next = parseCommand ? parseCommand(request) : parseCentralCommand(request)
     setCommand(value)
@@ -65,18 +69,28 @@ export function VoiceCommandCenter({
     if (!onTranscribe || transcribing) return
     const generation = ++transcriptGeneration.current
     setTranscribing(true)
+    setCaptureNotice('')
     const patientNames = patients
       .filter(patient => patient && patient.archivedAt == null && typeof patient.name === 'string')
       .map(patient => patient.name)
     try {
-      const transcript = await onTranscribe(patientNames)
+      const response = await onTranscribe(patientNames)
       if (transcriptGeneration.current !== generation) return
-      if (typeof transcript !== 'string' || !transcript.trim()) {
+      const structured = response !== null && typeof response === 'object' && !Array.isArray(response)
+      const transcript = structured ? response.transcript : response
+      const validMetadata = !structured || (['silence', 'max-duration'].includes(response.endedBy)
+        && Number.isFinite(response.maxDurationMs) && response.maxDurationMs > 0 && response.maxDurationMs <= LOCAL_VOICE_MAX_MS)
+      if (!validMetadata || typeof transcript !== 'string' || !transcript.trim()) {
         onDraft?.(null)
         setResult({ status: 'clarification', message: 'Não recebi uma transcrição. Você pode digitar o comando.' })
         return
       }
-      if (autoInterpret) interpret(transcript.trim())
+      if (structured && response.endedBy === 'max-duration') {
+        onDraft?.(null)
+        setCommand(transcript)
+        setResult({ status: 'transcript', message: 'Confira ou corrija o texto reconhecido. Depois clique em “Preparar rascunho”. Nada foi interpretado ou salvo.' })
+        setCaptureNotice(`A captura atingiu ${(response.maxDurationMs / 1000).toLocaleString('pt-BR')} segundos e pode estar incompleta. Confira ou complete o texto e clique em Preparar rascunho.`)
+      } else if (autoInterpret) interpret(transcript.trim())
       else {
         onDraft?.(null)
         setCommand(transcript.trim())
@@ -112,6 +126,7 @@ export function VoiceCommandCenter({
       <span aria-hidden="true">✦</span>
     </div>
     <p className="voice-command-description">Fale o pedido. Confira a proposta e diga “confirmar”.</p>
+    {onTranscribe && <small>Fale um trecho de até {LOCAL_VOICE_MAX_MS / 1000} segundos.</small>}
     <label htmlFor="voice-command-text">Seu comando</label>
     <textarea
       id="voice-command-text"
@@ -139,8 +154,9 @@ export function VoiceCommandCenter({
       {transcribing ? 'Ouvindo e transcrevendo aqui…' : '🎙 Ouvir e transcrever'}
       </button>}
     </div>
+    {captureNotice && <p className="voice-command-preview" role="status" aria-live="polite">{captureNotice}</p>}
     {result?.status === 'clarification' && <p className="voice-command-error" role="status">{result.message}</p>}
-    {result?.status === 'transcript' && <p className="voice-command-preview" role="status" aria-live="polite">{result.message}</p>}
+    {result?.status === 'transcript' && !captureNotice && <p className="voice-command-preview" role="status" aria-live="polite">{result.message}</p>}
     {result?.status === 'draft' && <div className="voice-command-preview" role="status" aria-live="polite">
       <strong>Confira a proposta</strong>
       <p>{formatCentralCommandPreview(result)}</p>

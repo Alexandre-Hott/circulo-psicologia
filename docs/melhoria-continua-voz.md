@@ -2,6 +2,10 @@
 
 ## Estado atual — 04/10/2026
 
+A 0.2.73 avisa quando a captura chegou ao limite de 12 segundos: mantém texto editável, descarta proposta antiga e exige preparo manual antes da confirmação. Pausa normal conserva o fluxo anterior. [Entrega e evidência](validacao-voz-0.2.73.md): JS783/783, Rust135 aprovados/1 ignorado, UI final selecionada33/33 em1,0min. Rodadas anteriores26/27 e seis replays falhos foram registradas separadamente; fixtures de fala curta agora terminam por silêncio, sem alterar corpus. Decoder do opt-in foi corrigido para ler chunks reais; não houve nova ASR nesta rodada. Instalador local auditado, não instalado/publicado nem assinado; instalado61 e perfil preservados. Próximo foco: reduzir erros de reconhecimento com comparação controlada e entrada corretamente decodificada, sem reparar texto clínico. Microfone físico não homologado. Meta ativa.
+
+O estado da 0.2.72 abaixo é histórico.
+
 A 0.2.72 transporta o prompt UTF-8 por response file e usa caminhos relativos ASCII no CLI. [Entrega e evidência](validacao-voz-0.2.72.md): JS773/773, Rust102 aprovados/1 ignorado, UI selecionada16/16; rodada nativa única de cinco WAVs em pasta Unicode sem erro de execução/codificação, mas avaliação semântica2 aprovados/2 falhos/1 não avaliado. Não há melhora comprovada de precisão. Preflight e collector diagnósticos tiveram falhas registradas, sem repetir ASR; corpus recuperado literalmente. Instalador local auditado, não instalado/publicado nem assinado; instalado61 e perfil preservados. Próximas pendências: decoder legado do harness e erros de reconhecimento, mantendo texto literal e confirmação. Microfone físico não homologado. Meta ativa.
 
 O estado da 0.2.71 abaixo é histórico.

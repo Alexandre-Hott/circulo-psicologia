@@ -12,6 +12,10 @@ use zeroize::Zeroizing;
 #[path = "native_voice_response_tests.rs"]
 mod response_file_tests;
 
+#[cfg(test)]
+#[path = "native_voice_wav_tests.rs"]
+mod wav_file_tests;
+
 const MAX_SECONDS: f64 = 12.0;
 const MIN_INPUT_RATE: u32 = 8_000;
 const MAX_INPUT_RATE: u32 = 192_000;
@@ -97,6 +101,63 @@ fn build_whisper_command(executable: &Path, engine_dir: &Path) -> Command {
         command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
     command
+}
+
+#[cfg(test)]
+fn decode_synthetic_wav(bytes: &[u8]) -> Result<(u32, Vec<f32>), String> {
+    let invalid = || "WAV sintético inválido, ambíguo ou fora dos limites de captura.".to_owned();
+    if bytes.len() < 12 || &bytes[..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return Err(invalid());
+    }
+    let declared = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
+    if declared.checked_add(8) != Some(bytes.len()) {
+        return Err(invalid());
+    }
+    let mut offset = 12usize;
+    let mut sample_rate = None;
+    let mut pcm = None;
+    while offset < bytes.len() {
+        if bytes.len() - offset < 8 {
+            return Err(invalid());
+        }
+        let id = &bytes[offset..offset + 4];
+        let length = u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().unwrap()) as usize;
+        let start = offset + 8;
+        let end = start.checked_add(length).filter(|end| *end <= bytes.len()).ok_or_else(invalid)?;
+        let padded_end = end.checked_add(length % 2).filter(|end| *end <= bytes.len()).ok_or_else(invalid)?;
+        let payload = &bytes[start..end];
+        if id == b"fmt " {
+            if sample_rate.is_some() || !matches!(length, 16 | 18) {
+                return Err(invalid());
+            }
+            let word = |index| u16::from_le_bytes([payload[index], payload[index + 1]]);
+            let rate = u32::from_le_bytes(payload[4..8].try_into().unwrap());
+            let byte_rate = u32::from_le_bytes(payload[8..12].try_into().unwrap());
+            if word(0) != 1 || word(2) != 1 || word(12) != 2 || word(14) != 16
+                || !(MIN_INPUT_RATE..=MAX_INPUT_RATE).contains(&rate)
+                || rate.checked_mul(2) != Some(byte_rate)
+                || (length == 18 && word(16) != 0)
+            {
+                return Err(invalid());
+            }
+            sample_rate = Some(rate);
+        } else if id == b"data" {
+            if pcm.is_some() || length == 0 || length % 2 != 0 {
+                return Err(invalid());
+            }
+            pcm = Some(payload);
+        }
+        offset = padded_end;
+    }
+    let sample_rate = sample_rate.ok_or_else(invalid)?;
+    let pcm = pcm.ok_or_else(invalid)?;
+    if (pcm.len() / 2) as f64 / f64::from(sample_rate) > MAX_SECONDS {
+        return Err(invalid());
+    }
+    let samples = pcm.chunks_exact(2)
+        .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]) as f32 / i16::MAX as f32)
+        .collect();
+    Ok((sample_rate, samples))
 }
 
 fn hard_link_voice_resources(resources: &Path, destination: &Path) -> Result<(), String> {
@@ -530,16 +591,8 @@ mod tests {
         for index in 0..count {
             let wav_path = wav_directory.join(format!("synthetic-command-{index}.wav"));
             let bytes = fs::read(&wav_path).expect("ler áudio WAV sintético");
-            assert!(bytes.len() >= 44, "WAV sintético truncado");
-            assert_eq!(&bytes[0..4], b"RIFF");
-            assert_eq!(&bytes[8..12], b"WAVE");
-            assert_eq!(u16::from_le_bytes(bytes[22..24].try_into().unwrap()), 1);
-            assert_eq!(u16::from_le_bytes(bytes[34..36].try_into().unwrap()), 16);
-            let sample_rate = u32::from_le_bytes(bytes[24..28].try_into().unwrap());
-            let samples = bytes[44..]
-                .chunks_exact(2)
-                .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]) as f32 / i16::MAX as f32)
-                .collect::<Vec<_>>();
+            let (sample_rate, samples) = decode_synthetic_wav(&bytes)
+                .expect("WAV sintético mono PCM16 válido dentro dos limites de captura");
             let transcript = transcribe(
                 &resources,
                 &samples,

@@ -158,7 +158,7 @@ export default function DesktopVault() {
       serializedSamples = Array.from(captured.samples)
       const transcript = await invoke('voice_transcribe', { samples: serializedSamples, sampleRate: captured.sampleRate, patientNames })
       if (controller.signal.aborted) throw new DOMException('Captura cancelada.', 'AbortError')
-      return transcript
+      return { transcript, endedBy: captured.endedBy, maxDurationMs: captured.maxDurationMs }
     } finally {
       captured?.samples.fill(0)
       serializedSamples?.fill(0)

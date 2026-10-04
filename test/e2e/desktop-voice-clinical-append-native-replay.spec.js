@@ -27,7 +27,7 @@ async function openApp(page) {
       { id: 'synthetic-draft', patientId: 'ana', seriesId: 'synthetic-series', originalDate: '2026-10-04', observation: base, procedures: base, outcomeDecision: base, referralClosure: base, behaviorIds: [], indicators: [] },
       { id: 'synthetic-draft-bia', patientId: 'bia', seriesId: 'synthetic-series-bia', originalDate: '2026-10-04', observation: 'Observação fictícia concorrente.', procedures: 'Procedimentos fictícios concorrentes.', outcomeDecision: 'Resultado fictício concorrente.', referralClosure: 'Encaminhamento fictício concorrente.', behaviorIds: [], indicators: [] },
     ]
-    const fixture = window.nativeAppend = { state: { patients, drafts }, calls: [], writes: [], unexpected: [], catalogReady: false, transcript: '', mediaRequests: 0 }
+    const fixture = window.nativeAppend = { state: { patients, drafts }, calls: [], writes: [], unexpected: [], catalogReady: false, transcript: '', mediaRequests: 0, trackStops: 0, contextCloses: 0, sourceDisconnects: 0, processorDisconnects: 0, captureRefs: [] }
     const reads = new Set()
     const catalog = (command, result) => {
       reads.add(command)
@@ -35,26 +35,30 @@ async function openApp(page) {
       return clone(result)
     }
 
-    // Same synthetic PCM helper used by the indicator native value replay.
+    // Short synthetic speech followed by trailing silence finishes naturally.
+    // Continuous .1 frames would hit the 12-second cap and intentionally require
+    // manual review under the cutoff contract, not native auto-interpretation.
     // Current capture uses AudioContext, not MediaRecorder; both surfaces are
     // stubbed here and no captured WAV or physical device is used.
     class SyntheticAudioContext {
       constructor() { this.sampleRate = 8_000; this.state = 'running'; this.destination = {} }
-      createMediaStreamSource() { return { connect() {}, disconnect() {} } }
+      createMediaStreamSource() { return { connect() {}, disconnect() { fixture.sourceDisconnects++ } } }
       createScriptProcessor() {
-        const processor = { onaudioprocess: null, disconnect() {} }
+        const processor = { onaudioprocess: null, disconnect() { fixture.processorDisconnects++ } }
         processor.connect = () => queueMicrotask(() => {
+          let frames = 0
           const emit = () => {
             if (!processor.onaudioprocess) return
-            processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(0.1) }, outputBuffer: { getChannelData: () => new Float32Array(4096) } })
-            if (processor.onaudioprocess) setTimeout(emit, 0)
+            const amplitude = frames++ < 2 ? 0.1 : 0
+            processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(amplitude) }, outputBuffer: { getChannelData: () => new Float32Array(4096) } })
+            if (processor.onaudioprocess) setTimeout(emit, 200)
           }
           emit()
         })
         return processor
       }
       resume() { return Promise.resolve() }
-      close() { this.state = 'closed'; return Promise.resolve() }
+      close() { this.state = 'closed'; fixture.contextCloses++; return Promise.resolve() }
     }
     class SyntheticMediaRecorder {
       static isTypeSupported() { return true }
@@ -70,7 +74,7 @@ async function openApp(page) {
     Object.defineProperty(window, 'MediaRecorder', { configurable: true, value: SyntheticMediaRecorder })
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => {
       fixture.mediaRequests++
-      return { getTracks: () => [{ stop() {} }] }
+      return { getTracks: () => [{ stop() { fixture.trackStops++ } }] }
     } } })
     window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
       fixture.calls.push(clone({ command, args }))
@@ -81,7 +85,7 @@ async function openApp(page) {
       if (command === 'behavior_list' || command === 'indicator_catalog') return catalog(command, [])
       if (command === 'session_draft_list') return clone(drafts.filter(item => item.patientId === args.patientId))
       if (['agenda_occurrences', 'agenda_list_series', 'agenda_history', 'session_timeline', 'session_addendum_list', 'case_context_list'].includes(command)) return []
-      if (command === 'voice_transcribe') return fixture.transcript
+      if (command === 'voice_transcribe') { fixture.captureRefs.push(args); return fixture.transcript }
       fixture.unexpected.push(command)
       if (/(?:create|update|save|start|cancel|finalize|archive|restore)/.test(command)) fixture.writes.push(clone({ command, args }))
       throw new Error(`IPC sem fixture: ${command}`)
@@ -123,9 +127,10 @@ async function replayAudio(page, index) {
   await page.evaluate(text => { window.nativeAppend.transcript = text }, recording.Transcript)
   const listen = assistant(page).getByRole('button', { name: 'Ouvir e transcrever' })
   await listen.click()
-  await page.clock.runFor(1000)
+  await page.clock.runFor(1600)
   await expect(listen).toBeEnabled()
   await expect(assistant(page).getByLabel('Seu comando')).toHaveValue(recording.Transcript)
+  await expect(assistant(page).getByText(/A captura atingiu .*segundos e pode estar incompleta/u)).toHaveCount(0)
 }
 
 async function expectValues(page, values) {
@@ -147,9 +152,15 @@ async function expectCaptures(page, count) {
   const captures = await page.evaluate(() => window.nativeAppend.calls.filter(call => call.command === 'voice_transcribe'))
   expect(captures).toHaveLength(count)
   expect(await page.evaluate(() => window.nativeAppend.mediaRequests)).toBe(count)
+  expect(await page.evaluate(() => {
+    const fixture = window.nativeAppend
+    return [fixture.trackStops, fixture.contextCloses, fixture.sourceDisconnects, fixture.processorDisconnects]
+  })).toEqual([count, count, count, count])
+  expect(await page.evaluate(() => window.nativeAppend.captureRefs.every(args => args.samples.every(sample => sample === 0) && args.patientNames.every(name => name === '')))).toBe(true)
   for (const { args } of captures) {
     expect(args.sampleRate).toBe(8000)
     expect(args.samples.length).toBeGreaterThan(0)
+    expect(args.samples.length / args.sampleRate).toBeLessThan(12)
     expect(args.samples.some(sample => sample !== 0)).toBe(true)
     expect(args.patientNames).toEqual(['Ana Clara', 'Bia Fictícia'])
   }
