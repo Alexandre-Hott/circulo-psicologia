@@ -4,6 +4,34 @@
 )
 
 # UTF-8 BOM is required for Portuguese literals in Windows PowerShell 5.1.
+function Get-WhisperResponseArguments([string]$Prompt, [string]$InputName, [string]$OutputName) {
+    # Keep the production72 argument order and ASCII paths relative to engine cwd.
+    foreach ($relativeName in @($InputName, $OutputName)) {
+        if ($relativeName -cnotmatch '\A\.\./[A-Za-z0-9][A-Za-z0-9._-]*\z') {
+            throw 'Diagnostic input/output must be ASCII ../filename paths without additional traversal.'
+        }
+    }
+    return @('-m', 'ggml-base.bin', '-f', $InputName, '-l', 'pt', '--prompt', $Prompt,
+        '-ng', '-nt', '-otxt', '-of', $OutputName)
+}
+
+function Write-WhisperResponseArguments([string]$Path, [string[]]$Arguments) {
+    # Validate the whole vector before creating anything; never quote or repair it.
+    foreach ($argument in $Arguments) {
+        if ($null -eq $argument -or $argument -match '[\r\n\x00]') {
+            throw 'Response arguments cannot contain CR, LF or NUL.'
+        }
+    }
+    $strictUtf8 = New-Object Text.UTF8Encoding($false, $true)
+    $bytes = $strictUtf8.GetBytes(($Arguments -join "`n") + "`n")
+    $stream = [IO.File]::Open($Path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    try {
+        $stream.Write($bytes, 0, $bytes.Length)
+    } finally {
+        $stream.Dispose()
+    }
+}
+
 function Read-WhisperRawTranscript([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         return [pscustomobject]@{ Transcript = $null; Utf8Valid = $false; RawSHA256 = $null; ReadError = 'missing-transcript' }
@@ -53,6 +81,11 @@ if ($patientName.Length -gt 80 -or $patientName -match '[\x00-\x1f\x7f]' -or
 $promptA = $productionPrompt + ' ' + $patientName + '.'
 $vocabulary = 'Acrescentar observação da sessão. Acrescentar procedimentos da sessão. Acrescentar resultado da sessão. Acrescentar encaminhamento da sessão.'
 $variants = @(@{ Name = 'A'; Prompt = $promptA }, @{ Name = 'B'; Prompt = $promptA + ' ' + $vocabulary })
+foreach ($variant in $variants) {
+    if ([Text.Encoding]::UTF8.GetByteCount($variant.Prompt) -gt 1000 -or $variant.Prompt -match '[\r\n\x00]') {
+        throw 'Diagnostic prompt exceeds production bounds or contains an invalid response argument.'
+    }
+}
 $audio = @(foreach ($index in 0..4) {
     $wav = Join-Path $inputRoot "synthetic-command-$index.wav"
     if (-not (Test-Path -LiteralPath $wav -PathType Leaf)) { throw "Missing retained WAV: $wav" }
@@ -82,8 +115,7 @@ $audio = @(foreach ($index in 0..4) {
 $outputRoot = Join-Path ([IO.Path]::GetTempPath()) ('circulo-whisper-prompt-ab-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $outputRoot | Out-Null
 Write-Output "CIRCULO_PROMPT_AB_ARTIFACT_DIRECTORY:$outputRoot"
-# Match the existing native/synthetic harness resource staging. Direct model
-# paths containing accents can fail in this CLI before decoding any audio.
+# Match production resource staging with a wide OS cwd and ASCII relative args.
 $engineRoot = Join-Path $outputRoot 'voice'
 New-Item -ItemType Directory -Path $engineRoot | Out-Null
 Get-ChildItem -LiteralPath $voiceRoot -File | ForEach-Object {
@@ -91,6 +123,13 @@ Get-ChildItem -LiteralPath $voiceRoot -File | ForEach-Object {
 }
 $whisper = Join-Path $engineRoot 'whisper-cli.exe'
 $model = Join-Path $engineRoot 'ggml-base.bin'
+foreach ($item in $audio) {
+    $stagedInput = Join-Path $outputRoot "input-$($item.Index).wav"
+    Copy-Item -LiteralPath $item.Path -Destination $stagedInput
+    if ((Get-FileHash -LiteralPath $stagedInput -Algorithm SHA256).Hash -ne $item.SHA256) {
+        throw 'Retained WAV copy differs; no inference started.'
+    }
+}
 $utf8 = New-Object Text.UTF8Encoding($false)
 $manifest = [pscustomobject]@{
     InputDirectory = $inputRoot; VoiceDirectory = $voiceRoot; EngineDirectory = $engineRoot; NetworkUsed = $false; NewAudioGenerated = $false
@@ -101,11 +140,14 @@ $manifest = [pscustomobject]@{
 [IO.File]::WriteAllText((Join-Path $outputRoot 'manifest.json'), ($manifest | ConvertTo-Json -Depth 8), $utf8)
 $results = @(foreach ($item in $audio) {
     foreach ($variant in $variants) {
-        $outputBase = Join-Path $outputRoot "transcription-$($variant.Name)-$($item.Index)"
+        $responseName = "args-$($variant.Name)-$($item.Index).txt"
+        $responsePath = Join-Path $engineRoot $responseName
+        $outputName = "transcription-$($variant.Name)-$($item.Index)"
+        Write-WhisperResponseArguments $responsePath (Get-WhisperResponseArguments $variant.Prompt "../input-$($item.Index).wav" "../$outputName")
+        $outputBase = Join-Path $outputRoot $outputName
         $stdout = "$outputBase.stdout.txt"; $stderr = "$outputBase.stderr.txt"
-        $arguments = '-m "{0}" -f "{1}" -l pt -ng -nt --prompt "{2}" -otxt -of "{3}"' -f $model, $item.Path, $variant.Prompt, $outputBase
         $clock = [Diagnostics.Stopwatch]::StartNew()
-        $process = Start-Process -FilePath $whisper -ArgumentList $arguments -WorkingDirectory $engineRoot -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+        $process = Start-Process -FilePath $whisper -ArgumentList ("@" + $responseName) -WorkingDirectory $engineRoot -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
         [void]$process.Handle
         $timedOut = -not $process.WaitForExit(60000)
         if ($timedOut) { $process.Kill() }
@@ -139,4 +181,4 @@ $summary = [pscustomobject]@{ ArtifactDirectory = $outputRoot; InferenceCount = 
 $summaryPath = Join-Path $outputRoot 'summary.json'
 [IO.File]::WriteAllText($summaryPath, ($summary | ConvertTo-Json -Depth 12), $utf8)
 Write-Output "CIRCULO_PROMPT_AB_SUMMARY:$summaryPath"
-if (@($results | Where-Object { $_.TimedOut -or $_.ExitCode -ne 0 -or -not $_.Utf8Valid }).Count -gt 0 -or @($evaluations | Where-Object { $_.ExitCode -ne 0 }).Count -gt 0) { exit 1 }
+if (@($results | Where-Object { $_.TimedOut -or $_.ExitCode -ne 0 -or -not $_.Utf8Valid -or $null -ne $_.ReadError }).Count -gt 0 -or @($evaluations | Where-Object { $_.ExitCode -ne 0 }).Count -gt 0) { exit 1 }

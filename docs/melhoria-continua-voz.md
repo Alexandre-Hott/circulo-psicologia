@@ -2,6 +2,8 @@
 
 ## Estado atual — 04/10/2026
 
+Investigação posterior à entrega73: [comparação de vocabulário](voz-comparacao-vocabulario-20261004.md), uma rodada de dez inferências sintéticas, execução/UTF-8 válidos. A atual teve2 aprovados/2 falhos/1 não avaliado; B teve1 aprovado/3 falhos/1 não avaliado e foi rejeitado. Diagnóstico JS12/12 e conjunto794/794, sem nova versão/instalador. Próximo incremento aprovado, ainda em implementação: ditar conteúdo diretamente em um dos quatro campos de sessão, com destino explícito, revisão e confirmação. Meta ativa; não há melhora de precisão comprovada.
+
 A 0.2.73 avisa quando a captura chegou ao limite de 12 segundos: mantém texto editável, descarta proposta antiga e exige preparo manual antes da confirmação. Pausa normal conserva o fluxo anterior. [Entrega e evidência](validacao-voz-0.2.73.md): JS783/783, Rust135 aprovados/1 ignorado, UI final selecionada33/33 em1,0min. Rodadas anteriores26/27 e seis replays falhos foram registradas separadamente; fixtures de fala curta agora terminam por silêncio, sem alterar corpus. Decoder do opt-in foi corrigido para ler chunks reais; não houve nova ASR nesta rodada. Instalador local auditado, não instalado/publicado nem assinado; instalado61 e perfil preservados. Próximo foco: reduzir erros de reconhecimento com comparação controlada e entrada corretamente decodificada, sem reparar texto clínico. Microfone físico não homologado. Meta ativa.
 
 O estado da 0.2.72 abaixo é histórico.
