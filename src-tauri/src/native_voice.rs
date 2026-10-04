@@ -8,6 +8,10 @@ use std::{
 };
 use zeroize::Zeroizing;
 
+#[cfg(test)]
+#[path = "native_voice_response_tests.rs"]
+mod response_file_tests;
+
 const MAX_SECONDS: f64 = 12.0;
 const MIN_INPUT_RATE: u32 = 8_000;
 const MAX_INPUT_RATE: u32 = 192_000;
@@ -32,38 +36,16 @@ pub fn transcribe(
     let engine_dir = temp.path().join("engine");
     hard_link_voice_resources(resources, &engine_dir)?;
     let executable = engine_dir.join("whisper-cli.exe");
-    let model = engine_dir.join("ggml-base.bin");
     let wav_path = temp.path().join("input.wav");
-    let output_base = temp.path().join("transcription");
     let text_path = temp.path().join("transcription.txt");
     write_wav(&wav_path, &pcm, sample_rate)?;
 
     let prompt = Zeroizing::new(build_initial_prompt(patient_names));
-    let mut command = Command::new(executable);
-    command
-        .arg("-m")
-        .arg(model)
-        .arg("-f")
-        .arg(&wav_path)
-        .arg("-l")
-        .arg("pt")
-        .arg("--prompt")
-        .arg(&*prompt)
-        .arg("-ng")
-        .arg("-nt")
-        .arg("-otxt")
-        .arg("-of")
-        .arg(output_base)
-        .current_dir(&engine_dir)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    }
+    write_response_arguments(
+        &engine_dir.join("args.txt"),
+        &whisper_response_arguments(&prompt),
+    )?;
+    let mut command = build_whisper_command(&executable, &engine_dir);
 
     let status = run_with_timeout(&mut command, INFERENCE_TIMEOUT)?;
     if !status.success() {
@@ -76,6 +58,45 @@ pub fn transcribe(
             .map_err(|error| format!("O reconhecimento local não produziu texto: {error}"))?,
     );
     parse_generated_transcript(&transcript)
+}
+
+fn whisper_response_arguments(prompt: &str) -> Vec<&str> {
+    vec![
+        "-m", "ggml-base.bin", "-f", "../input.wav", "-l", "pt", "--prompt", prompt,
+        "-ng", "-nt", "-otxt", "-of", "../transcription",
+    ]
+}
+
+fn write_response_arguments(path: &Path, args: &[&str]) -> Result<(), String> {
+    // Validate every argument before opening a file; never repair or escape payloads.
+    if args.iter().any(|arg| arg.bytes().any(|byte| matches!(byte, b'\r' | b'\n' | 0))) {
+        return Err("Argumento inválido para o reconhecimento local: CR, LF ou NUL não são permitidos.".into());
+    }
+    let mut contents = Zeroizing::new(args.join("\n"));
+    contents.push('\n');
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|error| format!("Não foi possível criar os argumentos temporários de voz: {error}"))?;
+    file.write_all(contents.as_bytes())
+        .map_err(|error| format!("Não foi possível gravar os argumentos temporários de voz: {error}"))
+}
+
+fn build_whisper_command(executable: &Path, engine_dir: &Path) -> Command {
+    let mut command = Command::new(executable);
+    command
+        .arg("@args.txt")
+        .current_dir(engine_dir)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    command
 }
 
 fn hard_link_voice_resources(resources: &Path, destination: &Path) -> Result<(), String> {

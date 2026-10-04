@@ -1,5 +1,9 @@
 # Matriz atual de voz — 0.2.67
 
+## Atualização de referência 0.2.72
+
+A [validação 0.2.72](validacao-voz-0.2.72.md) corrige transporte UTF-8 do prompt e caminhos do CLI sem ampliar a matriz de comandos. JS773/773, Rust102 aprovados/1 ignorado, UI selecionada16/16. Uma rodada nativa de cinco WAVs em pasta Unicode executou corretamente, com avaliação semântica2 aprovados/2 falhos/1 não avaliado. Não é cobertura universal ou prova de microfone físico. Pacote local não instalado/publicado nem assinado. As referências abaixo são históricas.
+
 ## Atualização de referência — 0.2.71
 
 A [validação 0.2.71](validacao-voz-0.2.71.md) amplia multiline aos campos de biblioteca, contexto, indicador, adendo e motivo administrativo, com invalidação por ciclo do editor. JS773/773, Rust86 aprovados/1 ignorado; regressão147/148 e focal28/28 em rodadas distintas, após ajustar uma expectativa histórica de recusa. Pacote local não instalado/publicado nem assinado; microfone físico não comprovado. As lacunas desses textareas no parágrafo da 0.2.70 abaixo descrevem aquela versão, não o estado atual. A matriz de oito áreas continua sendo auditoria histórica, não declaração de cobertura universal.

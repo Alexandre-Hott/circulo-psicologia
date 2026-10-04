@@ -2,6 +2,10 @@
 
 ## Estado atual — 04/10/2026
 
+A 0.2.72 transporta o prompt UTF-8 por response file e usa caminhos relativos ASCII no CLI. [Entrega e evidência](validacao-voz-0.2.72.md): JS773/773, Rust102 aprovados/1 ignorado, UI selecionada16/16; rodada nativa única de cinco WAVs em pasta Unicode sem erro de execução/codificação, mas avaliação semântica2 aprovados/2 falhos/1 não avaliado. Não há melhora comprovada de precisão. Preflight e collector diagnósticos tiveram falhas registradas, sem repetir ASR; corpus recuperado literalmente. Instalador local auditado, não instalado/publicado nem assinado; instalado61 e perfil preservados. Próximas pendências: decoder legado do harness e erros de reconhecimento, mantendo texto literal e confirmação. Microfone físico não homologado. Meta ativa.
+
+O estado da 0.2.71 abaixo é histórico.
+
 A 0.2.71 amplia multiline aos seis padrões adicionais de textarea e invalida propostas antigas após trocar ou reabrir editores. [Entrega e evidência](validacao-voz-0.2.71.md): JS773/773, Rust86 aprovados/1 ignorado, regressão147/148 e focal28/28 em execuções distintas; o único teste antigo foi alinhado ao novo contrato da descrição. Instalador local auditado, não instalado/publicado nem assinado; instalado61 e perfil preservados. Multiline destes campos já não é lacuna atual. Probe sem ASR aponta conversão do argv para CP1252; transporte por response file é candidato futuro, não implementação do pacote71. Microfone físico segue sem comprovação. Meta ativa.
 
 O estado da 0.2.70 abaixo é histórico.
