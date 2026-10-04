@@ -18,6 +18,8 @@ async function openApp(page, { emptyLibrary = false, archivedPatient = false, sp
     window.voiceFailure = null
     window.analyticsRequests = []
     window.voiceNativeCalls = []
+    const media = window.voiceMedia = { mediaRequests: 0, trackStops: 0, contextCloses: 0,
+      sourceDisconnects: 0, processorDisconnects: 0, captures: [], captureRefs: [] }
     const patients = [{ id: 'ana', name: 'Ana Clara', age: 8, revision: 1, preferredModality: 'Presencial', archivedAt: null }]
     const behaviors = [{ id: 'help', title: 'Pede ajuda', description: '', version: 1 }]
     if (specialCatalog) {
@@ -28,26 +30,33 @@ async function openApp(page, { emptyLibrary = false, archivedPatient = false, sp
     if (archivedPatient) patients.push({ id: 'archived', name: 'Bia Arquivada', age: 30, revision: 1, preferredModality: 'Online', archivedAt: '2026-09-01' })
     const occurrence = { id: 'occ', seriesId: 'series', patientId: 'ana', date: '2026-10-03', originalDate: '2026-10-03', start: '15:00', end: '15:50', frequency: 'Avulsa', modality: 'Presencial', status: 'scheduled' }
     let draft = { id: 'draft', patientId: 'ana', originalDate: '2026-10-03', observation: '', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicators: [] }
+    // Two speech frames followed by trailing silence, matching the 76 replay
+    // fixtures. Continuous signal correctly reaches the 12-second cutoff.
     class SyntheticAudioContext {
       constructor() { this.sampleRate = 8_000; this.state = 'running'; this.destination = {} }
-      createMediaStreamSource() { return { connect() {}, disconnect() {} } }
+      createMediaStreamSource() { return { connect() {}, disconnect() { media.sourceDisconnects++ } } }
       createScriptProcessor() {
-        const processor = { onaudioprocess: null, disconnect() {} }
+        const processor = { onaudioprocess: null, disconnect() { media.processorDisconnects++ } }
         processor.connect = () => queueMicrotask(() => {
+          let frames = 0
           const emit = () => {
             if (!processor.onaudioprocess) return
-            processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(0.1) }, outputBuffer: { getChannelData: () => new Float32Array(4096) } })
-            if (processor.onaudioprocess) setTimeout(emit, 0)
+            const amplitude = frames++ < 2 ? 0.1 : 0
+            processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(amplitude) }, outputBuffer: { getChannelData: () => new Float32Array(4096) } })
+            if (processor.onaudioprocess) setTimeout(emit, 200)
           }
           emit()
         })
         return processor
       }
       resume() { return Promise.resolve() }
-      close() { this.state = 'closed'; return Promise.resolve() }
+      close() { this.state = 'closed'; media.contextCloses++; return Promise.resolve() }
     }
     Object.defineProperty(window, 'AudioContext', { configurable: true, value: SyntheticAudioContext })
-    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } })
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => {
+      media.mediaRequests++
+      return { getTracks: () => [{ stop() { media.trackStops++ } }] }
+    } } })
     window.__TAURI_INTERNALS__ = { invoke: async (command, args) => {
       window.voiceNativeCalls.push({ command, args })
       if (command === 'vault_status') return { initialized: true, unlocked: true, profileState: 'ready' }
@@ -57,6 +66,8 @@ async function openApp(page, { emptyLibrary = false, archivedPatient = false, sp
       if (command === 'behavior_list') return window.voiceBehaviorCatalog ?? behaviors
       if (command === 'indicator_catalog') return nativeCatalog ? [{ id: 'reg', name: 'Regulação emocional', definition: 'Uso de recursos para lidar com emoções intensas.', version: 1, labels: ['Ainda não observado', 'Com muito apoio', 'Com algum apoio', 'Com autonomia'] }] : specialCatalog ? [{ id: 'group', name: 'Participação em grupo como apoio', version: 1, labels: ['Com apoio em grupo', 'Sem apoio'] }] : []
       if (command === 'voice_transcribe') {
+        media.captures.push(structuredClone(args))
+        media.captureRefs.push(args)
         if (window.voiceFailure) throw new Error(window.voiceFailure)
         return window.deferVoice ? await new Promise(resolve => { window.resolveVoice = resolve }) : window.voiceTranscript
       }
@@ -89,6 +100,34 @@ async function propose(page, text) {
   const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
   await assistant.getByLabel('Seu comando').fill(text)
   await assistant.getByRole('button', { name: 'Preparar rascunho' }).click()
+}
+
+async function expectAudioCleanup(page) {
+  const media = await page.evaluate(() => {
+    const media = window.voiceMedia
+    return { captures: media.captures,
+      counters: [media.mediaRequests, media.trackStops, media.contextCloses, media.sourceDisconnects, media.processorDisconnects],
+      erased: media.captureRefs.length === media.captures.length && media.captureRefs.every(args =>
+        args.samples.every(sample => sample === 0) && args.patientNames.every(name => name === '')) }
+  })
+  expect(media.captures.length).toBeGreaterThan(0)
+  expect(media.counters).toEqual(Array(5).fill(media.captures.length))
+  expect(media.erased).toBe(true)
+  for (const args of media.captures) {
+    expect(args.sampleRate).toBe(8000)
+    expect(args.samples.length).toBeGreaterThan(0)
+    expect(args.samples.some(sample => sample !== 0)).toBe(true)
+    expect(args.samples.length / args.sampleRate).toBeLessThan(12)
+  }
+  await expect(page.getByRole('region', { name: 'Comando do Círculo' })
+    .getByText(/A captura atingiu .*segundos e pode estar incompleta/u)).toHaveCount(0)
+}
+
+async function finishAudio(page) {
+  await page.clock.runFor(1600)
+  await expect(page.getByRole('region', { name: 'Comando do Círculo' })
+    .getByRole('button', { name: 'Ouvir comando', exact: true })).toBeEnabled()
+  await expectAudioCleanup(page)
 }
 async function command(page, text) {
   await propose(page, text)
@@ -140,9 +179,9 @@ test('gaveta da Agenda exige áudio de confirmação para abrir e recolher', asy
   async function audio(text) {
     // Synthetic transcript/media/IPC: not physical-microphone evidence.
     await page.evaluate(value => { window.voiceTranscript = value }, text)
-    await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
-    await page.clock.runFor(1000)
-    await expect(assistant.getByRole('button', { name: 'Ouvir e transcrever' })).toBeEnabled()
+    await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+    await finishAudio(page)
+    await expect(assistant.getByRole('button', { name: 'Ouvir comando' })).toBeEnabled()
   }
   await audio('Abrir Novo compromisso')
   await expect(page.locator('.voice-command-preview')).toContainText('Abrir Novo compromisso')
@@ -168,9 +207,9 @@ test('gavetas: replay das transcrições Rust abre formulário e recolhe detalhe
   async function audio(index) {
     // Real, unedited Rust transcripts; media/IPC are simulated, not a physical microphone.
     await page.evaluate(value => { window.voiceTranscript = value }, nativeDrawerCorpus.find(item => item.Index === index).Transcript)
-    await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
-    await page.clock.runFor(1000)
-    await expect(assistant.getByRole('button', { name: 'Ouvir e transcrever' })).toBeEnabled()
+    await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+    await finishAudio(page)
+    await expect(assistant.getByRole('button', { name: 'Ouvir comando' })).toBeEnabled()
   }
   await audio(0)
   await expect(page.locator('.voice-command-preview')).toContainText('Abrir Novo compromisso')
@@ -303,9 +342,9 @@ test('remoção natural: mídia e transcrições fixas simuladas exigem segundo 
   async function audio(text) {
     // Fixed synthetic transcripts, media and IPC; this is not native recognition or microphone evidence.
     await page.evaluate(value => { window.voiceTranscript = value }, text)
-    await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
-    await page.clock.runFor(1000)
-    await expect(assistant.getByRole('button', { name: 'Ouvir e transcrever' })).toBeEnabled()
+    await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+    await finishAudio(page)
+    await expect(assistant.getByRole('button', { name: 'Ouvir comando' })).toBeEnabled()
   }
   await audio('Retire comportamento Pede ajuda para o adulto da sessão de Ana Clara')
   await expect(page.locator('.voice-command-preview')).toContainText('Pede ajuda para o adulto')
@@ -332,9 +371,9 @@ for (const index of [0, 1]) test(`remoção nativa: replay ${index} desmarca som
   async function audio(caseIndex) {
     // Unedited SAPI/Rust transcripts; capture and IPC simulated, not physical microphone.
     await page.evaluate(value => { window.voiceTranscript = value }, nativeRemoveCorpus.find(item => item.Index === caseIndex).Transcript)
-    await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
-    await page.clock.runFor(1000)
-    await expect(assistant.getByRole('button', { name: 'Ouvir e transcrever' })).toBeEnabled()
+    await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+    await finishAudio(page)
+    await expect(assistant.getByRole('button', { name: 'Ouvir comando' })).toBeEnabled()
   }
   await audio(index)
   await expect(page.locator('.voice-command-preview')).toContainText('Desmarcar “Pede ajuda”')
@@ -696,11 +735,13 @@ test('voz abre modelo de comportamento e cancela ou salva versão sem registrar 
   await openApp(page)
   const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
   await page.evaluate(() => { window.voiceTranscript = 'Editar comportamento Pede ajuda.' })
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(page.locator('.voice-command-preview')).toContainText('Abrir edição do comportamento Pede ajuda')
   expect(await page.evaluate(() => window.writes)).toEqual([])
   await page.evaluate(() => { window.voiceTranscript = 'confirmar' })
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   const form = page.getByRole('form', { name: 'Comportamento reutilizável' })
   await expect(form).toHaveAttribute('data-voice-record', 'behavior:help')
   await expect(form).toHaveAttribute('data-voice-epoch', '1')
@@ -734,12 +775,14 @@ test('voz abre edição pelo nome e preserva os campos até salvar explicitament
   await openApp(page)
   const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
   await page.evaluate(() => { window.voiceTranscript = 'Editar paciente. Ana Clara.' })
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(page.locator('.voice-command-preview')).toContainText('Abrir edição do cadastro de Ana Clara')
   await expect(page.getByRole('form', { name: 'Editar cadastro' })).toHaveCount(0)
   expect(await page.evaluate(() => window.writes)).toEqual([])
   await page.evaluate(() => { window.voiceTranscript = 'confirmar' })
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   const form = page.getByRole('form', { name: 'Editar cadastro' })
   await expect(form).toHaveAttribute('data-voice-record', 'ana')
   await expect(form.getByLabel('Nome', { exact: true })).toHaveValue('Ana Clara')
@@ -774,8 +817,8 @@ for (const [scenario, failure, message] of [
     window.voiceTranscript = ''
     window.voiceFailure = failure
   }, failure)
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
-  await page.clock.runFor(1000)
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(page.locator('.voice-command-error')).toBeVisible()
   await expect(page.locator('.voice-command-error')).toContainText(message)
   expect(await page.evaluate(() => window.voiceNativeCalls.filter(call => call.command === 'voice_transcribe').length)).toBe(1)
@@ -814,10 +857,12 @@ test('voz transcrita prepara cadastro e segundo áudio confirma sem voltar ao in
   await command(page, 'Abrir Pacientes')
   const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
   await page.evaluate(() => { window.voiceTranscript = 'Cadastrar paciente Bia Fictícia com 9 anos' })
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(page.locator('.voice-command-preview')).toContainText('Bia Fictícia')
   await page.evaluate(() => { window.voiceTranscript = 'confirmar' })
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(page.getByRole('form', { name: 'Novo cadastro' }).getByLabel('Nome', { exact: true })).toHaveValue('Bia Fictícia')
   await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(0)
 })
@@ -827,9 +872,11 @@ test('descartar durante a gravação de confirmação invalida a resposta tardia
   await propose(page, 'Cadastrar paciente Bia Fictícia com 9 anos')
   await page.evaluate(() => { window.deferVoice = true })
   await page.keyboard.press('Control+Shift+Space')
+  await page.clock.runFor(1600)
   await expect.poll(() => page.evaluate(() => typeof window.resolveVoice)).toBe('function')
   await page.getByRole('button', { name: 'Descartar rascunho' }).click()
   await page.evaluate(() => window.resolveVoice('confirmar'))
+  await finishAudio(page)
   await expect(page.getByRole('form', { name: 'Novo cadastro' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Revisar no formulário' })).toHaveCount(0)
   await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(0)
@@ -859,9 +906,11 @@ test('trocar de área enquanto o backend transcreve descarta o áudio antigo', a
   await openApp(page)
   await page.evaluate(() => { window.deferVoice = true })
   await page.keyboard.press('Control+Shift+Space')
+  await page.clock.runFor(1600)
   await expect.poll(() => page.evaluate(() => typeof window.resolveVoice)).toBe('function')
   await page.getByRole('navigation', { name: 'Espaços do Círculo' }).getByRole('button', { name: 'Pacientes', exact: true }).click()
   await page.evaluate(() => window.resolveVoice('Cadastrar paciente Bia Fictícia com 9 anos'))
+  await finishAudio(page)
   await expect(page.getByRole('button', { name: 'Revisar no formulário' })).toHaveCount(0)
   await expect(page.locator('.voice-command-preview')).toHaveCount(0)
   await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(0)
@@ -1098,11 +1147,13 @@ for (const editing of [false, true]) test(`transcrição nativa de salvar compor
   await command(page, editing ? 'Editar comportamento Pede ajuda com descrição Descrição fictícia nova.' : 'Criar comportamento Solicita pausa')
   const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
   await page.evaluate(text => { window.voiceTranscript = text }, nativeSaveCorpus.find(item => item.Index === (editing ? 1 : 0)).Transcript)
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(page.locator('.voice-command-preview')).toContainText(editing ? 'Salvar versão do comportamento' : 'Criar comportamento reutilizável')
   expect(await page.evaluate(() => window.writes)).toEqual([])
   await page.evaluate(text => { window.voiceTranscript = text }, nativeSaveCorpus.find(item => item.Index === 2).Transcript)
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(1)
   expect(await page.evaluate(() => window.writes)).toEqual([editing
     ? { command: 'behavior_update', args: { id: 'help', version: 1, title: 'Pede ajuda', description: 'Descrição fictícia nova.' } }
@@ -1129,12 +1180,14 @@ for (const index of [0, 1, 2]) test(`campos: transcrição nativa ${index} prepa
   const before = await field.inputValue()
   const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
   await page.evaluate(text => { window.voiceTranscript = text }, nativeFieldsCorpus.find(item => item.Index === index).Transcript)
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(page.locator('.voice-command-preview')).toBeVisible()
   await expect(field).toHaveValue(before)
   expect(await page.evaluate(() => window.writes)).toEqual([])
   await page.evaluate(text => { window.voiceTranscript = text }, nativeSaveCorpus.find(item => item.Index === 2).Transcript)
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(field).toHaveValue(expected)
   await expect(page.locator('.voice-command-preview')).toHaveCount(0)
   expect(await page.evaluate(() => window.writes)).toEqual([])
@@ -1162,7 +1215,8 @@ test('transcrição nativa observada abre biblioteca após confirmação sem gra
   await openApp(page)
   await page.evaluate(text => { window.voiceTranscript = text }, nativeVoiceCorpus.find(item => item.Index === 12).Transcript)
   const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(page.locator('.voice-command-preview')).toContainText('Abrir biblioteca de comportamentos reutilizáveis')
   await expect(page.locator('#session-behaviors')).toHaveCount(0)
   await propose(page, 'confirmar')
@@ -1177,7 +1231,8 @@ test('transcrição nativa com data falada abre o adendo exato só após confirm
     window.voiceTimeline = [{ id: 'spoken-date', patientId: 'ana', sessionDate: '2026-10-03', start: '15:00', end: '15:50', modality: 'Presencial', behaviors: [], indicators: [] }]
   }, nativeVoiceCorpus.find(item => item.Index === 15).Transcript)
   const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(page.locator('.voice-command-preview')).toContainText('Ana Clara em 03/10/2026 às 15:00')
   await expect(page.locator('#addendum-spoken-date')).toHaveCount(0)
   await propose(page, 'confirmar')
@@ -1191,11 +1246,13 @@ test('transcrições nativas de botão e confirmação usam a tela visível sem 
   await command(page, 'Abrir Pacientes')
   const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
   await page.evaluate(text => { window.voiceTranscript = text }, nativeVoiceCorpus.find(item => item.Index === 5).Transcript)
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(page.locator('.voice-command-preview')).toContainText('Novo cadastro')
   await expect(page.getByRole('form', { name: 'Novo cadastro' })).toHaveCount(0)
   await page.evaluate(text => { window.voiceTranscript = text }, nativeVoiceCorpus.find(item => item.Index === 6).Transcript)
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(page.getByRole('form', { name: 'Novo cadastro' })).toBeVisible()
   await expect(page.locator('.voice-command-preview')).toHaveCount(0)
   expect(await page.evaluate(() => window.writes)).toEqual([])
@@ -1205,14 +1262,16 @@ for (const [index, action] of ['start', 'remarcar', 'cancelar'].entries()) test(
   await openApp(page)
   const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
   await page.evaluate(text => { window.voiceTranscript = text }, nativeOccurrenceCorpus.find(item => item.Index === index).Transcript)
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(page.locator('.voice-command-preview')).toContainText('Ana Clara em 03/10/2026 às 15:00')
   expect(await page.evaluate(() => window.writes)).toEqual([])
   expect(await page.evaluate(() => window.voiceNativeCalls.filter(item => item.command === 'session_draft_start'))).toEqual([])
   await expect(page.getByRole('form', { name: 'Alterar ocorrência individual' })).toHaveCount(0)
   await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toHaveCount(0)
   await page.evaluate(text => { window.voiceTranscript = text }, nativeSaveCorpus.find(item => item.Index === 2).Transcript)
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   if (action === 'start') {
     await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toBeVisible()
     expect(await page.evaluate(() => window.voiceNativeCalls.filter(item => item.command === 'session_draft_start').map(item => item.args))).toEqual([{ seriesId: 'series', originalDate: '2026-10-03' }])
@@ -1292,15 +1351,15 @@ for (const [index, label, value] of [[0, 'Quinta', '4'], [1, 'Terça', '2']]) te
   const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
   // Replay native SAPI transcripts through synthetic media; this does not verify a physical microphone.
   await page.evaluate(text => { window.voiceTranscript = text }, nativeWeekdayCorpus.find(item => item.Index === index).Transcript)
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
-  await page.clock.runFor(1000)
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(page.locator('.voice-command-preview')).toContainText(`Dia da semana: ${label}`)
   await expect(weekday).toHaveValue('6')
   expect(await page.evaluate(() => window.writes)).toEqual([])
   expect(await page.evaluate(() => window.voiceNativeCalls.filter(item => item.command === 'voice_transcribe').length)).toBe(1)
   await page.evaluate(text => { window.voiceTranscript = text }, nativeWeekdayCorpus.find(item => item.Index === 2).Transcript)
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
-  await page.clock.runFor(1000)
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(weekday).toHaveValue(value)
   await expect(page.locator('.voice-command-preview')).toHaveCount(0)
   expect(await page.evaluate(() => window.writes)).toEqual([])
@@ -1318,16 +1377,16 @@ test('vínculos: replay nativo abre Ana Clara e marca contato administrativo som
   const legalGuardian = form.getByRole('checkbox', { name: 'Responsável legal', exact: true })
   // Replay native SAPI transcripts through synthetic media; this does not verify a physical microphone.
   await page.evaluate(text => { window.voiceTranscript = text }, nativePartyCorpus.find(item => item.Index === 0).Transcript)
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
-  await page.clock.runFor(1000)
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(page.locator('.voice-command-preview')).toContainText('Ana Clara')
   await expect(parties).toHaveCount(0)
   expect(await page.evaluate(() => window.writes)).toEqual([])
   expect(await page.evaluate(() => window.voiceNativeCalls.filter(item => item.command === 'voice_transcribe').length)).toBe(1)
 
   await page.evaluate(text => { window.voiceTranscript = text }, nativePartyCorpus.find(item => item.Index === 2).Transcript)
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
-  await page.clock.runFor(1000)
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(parties).toBeVisible()
   await expect(parties.getByRole('heading', { name: 'Vínculos de Ana Clara', exact: true })).toBeVisible()
   await expect(form).toBeVisible()
@@ -1341,8 +1400,8 @@ test('vínculos: replay nativo abre Ana Clara e marca contato administrativo som
   expect(await page.evaluate(() => window.voiceNativeCalls.filter(item => item.command === 'voice_transcribe').length)).toBe(2)
 
   await page.evaluate(text => { window.voiceTranscript = text }, nativePartyCorpus.find(item => item.Index === 1).Transcript)
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
-  await page.clock.runFor(1000)
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(page.locator('.voice-command-preview')).toContainText('Contato administrativo')
   await expect(administrativeContact).not.toBeChecked()
   await expect(requester).not.toBeChecked()
@@ -1351,8 +1410,8 @@ test('vínculos: replay nativo abre Ana Clara e marca contato administrativo som
   expect(await page.evaluate(() => window.voiceNativeCalls.filter(item => item.command === 'voice_transcribe').length)).toBe(3)
 
   await page.evaluate(text => { window.voiceTranscript = text }, nativePartyCorpus.find(item => item.Index === 2).Transcript)
-  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
-  await page.clock.runFor(1000)
+  await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
+  await finishAudio(page)
   await expect(administrativeContact).toBeChecked()
   await expect(requester).not.toBeChecked()
   await expect(legalGuardian).not.toBeChecked()

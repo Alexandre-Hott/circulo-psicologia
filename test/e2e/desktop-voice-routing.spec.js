@@ -68,7 +68,7 @@ const openHome = async (page, withSession = false, withMicrophone = false) => {
 test('Home captura áudio, chama o backend local, mostra texto editável e limpa buffers sem salvar', async ({ page }) => {
   await openHome(page, false, true)
   const command = page.getByRole('region', { name: 'Comando do Círculo' })
-  await command.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await command.getByRole('button', { name: 'Ouvir comando' }).click()
   const input = command.getByRole('textbox', { name: 'Seu comando' })
   await expect(input).toHaveValue('Cadastrar paciente Bia de Teste com 8 anos')
   await expect(command.getByText('A captura atingiu 12 segundos e pode estar incompleta. Confira ou complete o texto e clique em Preparar rascunho.', { exact: true })).toBeVisible()

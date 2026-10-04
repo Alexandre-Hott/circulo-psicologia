@@ -125,7 +125,7 @@ async function replayAudio(page, index) {
   expect(recording.Transcript).toEqual(expect.any(String))
   // Do not use IntendedCommand or repair the actual header/payload in the test.
   await page.evaluate(text => { window.nativeAppend.transcript = text }, recording.Transcript)
-  const listen = assistant(page).getByRole('button', { name: 'Ouvir e transcrever' })
+  const listen = assistant(page).getByRole('button', { name: 'Ouvir comando' })
   await listen.click()
   await page.clock.runFor(1600)
   await expect(listen).toBeEnabled()

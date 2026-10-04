@@ -45,7 +45,7 @@ export function Harness() {
         fixture.preparations.push({ selection: copy(selection), body })
         const target = { patientId: selection.patientId, patientName: selection.patientName, sessionDraftId: selection.sessionDraftId, sessionDate: '2026-10-04' }
         const { patch, combined } = prepareClinicalTextAppend(target, selection.field, body, fixture.live)
-        return { status: 'draft', intent: { type: 'session.draft.update', target, patch }, preview: combined, notes: [] }
+        return { status: 'draft', intent: { type: 'session.draft.update', target, patch, dictationSelection: copy(selection) }, preview: combined, notes: [] }
       }}
       parseCommand={request => {
         fixture.parserCalls.push(copy(request))

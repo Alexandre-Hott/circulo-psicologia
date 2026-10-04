@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { formatCentralCommandPreview, parseCentralCommand } from './centralCommandRouter.js'
 import { VOICE_COMMAND_MAX_LENGTH } from './voiceCommandLimits.js'
 import { LOCAL_VOICE_MAX_MS } from './localVoiceCapture.js'
 import { clinicalDictationFields } from './clinicalFieldDictation.js'
+import { parseDictationControl } from './voiceDictationControls.js'
 import './VoiceCommandCenter.css'
 
 /**
@@ -35,18 +36,37 @@ export function VoiceCommandCenter({
   const [result, setResult] = useState(null)
   const [transcribing, setTranscribing] = useState(false)
   const [captureNotice, setCaptureNotice] = useState('')
+  const [commandNotice, setCommandNotice] = useState('')
   const [dictatingField, setDictatingField] = useState(false)
   const [dictationSelection, setDictationSelection] = useState(null)
   const [dictationBody, setDictationBody] = useState('')
   const dictationGeneration = useRef(0)
   const dictationProposalPending = useRef(false)
   const transcriptGeneration = useRef(0)
-  useEffect(() => () => { transcriptGeneration.current += 1; dictationGeneration.current += 1 }, [])
+  const captureOwner = useRef(null)
+  const currentState = useRef(null)
+  useLayoutEffect(() => {
+    currentState.current = { dictatingField, dictationSelection, dictationBody, validateDictationTarget,
+      draftKey: JSON.stringify([activeSessionDraft?.id ?? null, activeSessionDraft?.patientId ?? null]) }
+  })
+  const invalidateCaptureContext = () => {
+    transcriptGeneration.current++
+    dictationGeneration.current++
+    captureOwner.current = null
+    setTranscribing(false)
+  }
+  useEffect(() => () => {
+    transcriptGeneration.current++
+    dictationGeneration.current++
+    captureOwner.current = null
+  }, [])
   useEffect(() => {
     if (pendingIntent === null) {
-      transcriptGeneration.current += 1
+      const owner = captureOwner.current
+      if (!owner || (owner.purpose === 'command' && !owner.mode)) transcriptGeneration.current += 1
       setResult(current => current?.status === 'draft' ? null : current)
       if (dictationProposalPending.current) {
+        invalidateCaptureContext()
         dictationProposalPending.current = false
         setDictationSelection(null)
       }
@@ -56,9 +76,11 @@ export function VoiceCommandCenter({
   useEffect(() => {
     if (!dictationSelection || !validateDictationTarget) return
     const check = () => {
-      try { validateDictationTarget(dictationSelection) }
+      // A queued observer from an older selection must not invalidate a new one.
+      if (currentState.current.dictationSelection !== dictationSelection) return
+      try { currentState.current.validateDictationTarget(dictationSelection) }
       catch {
-        dictationGeneration.current++
+        invalidateCaptureContext()
         dictationProposalPending.current = false
         setDictationSelection(null)
         setResult({ status: 'clarification', message: 'O campo mudou. Selecione novamente o destino; seu trecho continua editável.' })
@@ -79,6 +101,19 @@ export function VoiceCommandCenter({
     dictationProposalPending.current = false
     setResult(null)
     onDraft?.(null)
+  }
+  const changeDictationMode = active => {
+    invalidateCaptureContext()
+    clearDictationProposal()
+    setDictationSelection(null)
+    setCaptureNotice('')
+    setCommandNotice('')
+    setDictatingField(active)
+  }
+  const discardFieldDictation = () => {
+    dictationGeneration.current++
+    clearDictationProposal()
+    setDictationSelection(null)
   }
   const selectDictationField = field => {
     dictationGeneration.current++
@@ -110,6 +145,8 @@ export function VoiceCommandCenter({
     try {
       const proposed = prepareDictation(dictationSelection, dictationBody)
       if (proposed?.status !== 'draft') throw new Error(proposed?.message || 'Confira o trecho antes de preparar o acréscimo.')
+      if (proposed.intent?.type !== 'session.draft.update' || proposed.intent.patch?.operation !== 'append'
+        || !proposed.intent.dictationSelection) throw new Error('Prepare um acréscimo local com destino válido.')
       if (!checkDictationSelection(dictationSelection)) return
       dictationProposalPending.current = true
       setResult(proposed)
@@ -117,45 +154,53 @@ export function VoiceCommandCenter({
     } catch (reason) { setResult({ status: 'clarification', message: reason.message }) }
   }
   const confirmFieldDictation = async () => {
-    if (result?.status !== 'draft' || !checkDictationSelection(dictationSelection)) return
+    const selection = result?.intent?.dictationSelection
+    const patch = result?.intent?.patch
+    if (!dictatingField || !dictationProposalPending.current || result?.status !== 'draft'
+      || result.intent?.type !== 'session.draft.update' || patch?.operation !== 'append'
+      || !selection || !dictationSelection
+      || ['field', 'patientId', 'sessionDraftId', 'epoch', 'revision', 'lifecycle', 'baseValue'].some(key => selection[key] !== dictationSelection[key])
+      || patch.field !== selection.field || patch.value !== dictationBody
+      || patch.baseValue !== selection.baseValue || patch.baseEpoch !== selection.epoch || patch.baseRevision !== selection.revision
+      || result.intent.target?.patientId !== selection.patientId || result.intent.target?.sessionDraftId !== selection.sessionDraftId) {
+      setCommandNotice('Prepare um acréscimo local válido antes de confirmar.')
+      return
+    }
+    if (!checkDictationSelection(dictationSelection) || !checkDictationSelection(selection)) return
     const intent = result.intent
     clearDictationProposal()
     setDictationSelection(null)
     try { await onApply?.(intent) }
     catch (reason) { setResult({ status: 'clarification', message: reason.message || 'Selecione novamente o campo antes de aplicar o trecho.' }) }
   }
-  const transcribeField = async () => {
-    if (!onTranscribe || transcribing || !checkDictationSelection(dictationSelection)) return
-    const selection = dictationSelection
-    const generation = ++dictationGeneration.current
-    clearDictationProposal()
-    setTranscribing(true)
-    setCaptureNotice('')
-    const patientNames = patients.filter(patient => patient && patient.archivedAt == null && typeof patient.name === 'string').map(patient => patient.name)
-    try {
-      const response = await onTranscribe(patientNames)
-      if (dictationGeneration.current !== generation) return
-      const structured = response !== null && typeof response === 'object' && !Array.isArray(response)
-      const transcript = structured ? response.transcript : response
-      const validMetadata = !structured || (['silence', 'max-duration'].includes(response.endedBy)
-        && Number.isFinite(response.maxDurationMs) && response.maxDurationMs > 0 && response.maxDurationMs <= LOCAL_VOICE_MAX_MS)
-      if (!validMetadata || typeof transcript !== 'string' || !transcript.trim()) throw new Error('Não recebi um trecho. Você pode escrevê-lo para continuar.')
-      if (!checkDictationSelection(selection)) return
-      setDictationBody(transcript)
-      if (structured && response.endedBy === 'max-duration') {
-        setCaptureNotice(`A captura atingiu ${(response.maxDurationMs / 1000).toLocaleString('pt-BR')} segundos e pode estar incompleta. Confira ou complete o texto e clique em Preparar trecho.`)
-      }
-      setResult({ status: 'transcript', message: 'Confira o trecho e clique em Preparar trecho. Nada foi aplicado ou salvo.' })
-    } catch (reason) {
-      if (dictationGeneration.current === generation) {
-        clearDictationProposal()
-        setResult(reason?.name === 'AbortError' ? null : { status: 'clarification', message: reason.message || 'Não foi possível transcrever. Seu trecho continua editável.' })
-      }
-    } finally { patientNames.fill(''); setTranscribing(false) }
-  }
+  const transcribeField = () => capture('chunk')
 
   const interpret = value => {
     transcriptGeneration.current += 1
+    setCommand(value)
+    setCommandNotice('')
+    const local = parseDictationControl(value, { dictatingField })
+    // Consume before BOTH generic confirmation paths, including host parsing.
+    if (local !== null || dictatingField) {
+      if (local?.kind !== 'local-action') {
+        setCommandNotice(local?.reason === 'inactive-mode' ? 'Entre em Ditar neste campo para usar esse controle.'
+          : 'Diga um controle do ditado e o rótulo completo do campo. Seu trecho e sua proposta foram preservados.')
+        return
+      }
+      if (!getDictationTarget || !validateDictationTarget || !prepareDictation) {
+        setCommandNotice('Abra um rascunho disponível para usar o ditado.')
+        return
+      }
+      switch (local.action) {
+        case 'enter': changeDictationMode(true); break
+        case 'select': selectDictationField(local.field); break
+        case 'prepare': prepareFieldDictation(); break
+        case 'confirm': void confirmFieldDictation(); break
+        case 'discard': discardFieldDictation(); break
+        case 'exit': changeDictationMode(false); break
+      }
+      return
+    }
     const request = {
       text: value,
       context: { patients, behaviors, indicators, activeSessionDraft },
@@ -179,52 +224,114 @@ export function VoiceCommandCenter({
     if (next.status === 'confirmation') { setResult(null); void onApply?.(next.intent) }
   }
 
-  const transcribe = async () => {
-    if (!onTranscribe || transcribing) return
-    const generation = ++transcriptGeneration.current
+  const captureContextValid = owner => {
+    const current = currentState.current
+    if (current.dictatingField !== owner.mode || current.draftKey !== owner.draftKey) return false
+    if (owner.selection) {
+      try { current.validateDictationTarget(owner.selection) }
+      catch { return false }
+    }
+    return true
+  }
+  useEffect(() => {
+    const check = () => {
+      const owner = captureOwner.current
+      if (owner && !captureContextValid(owner)) invalidateCaptureContext()
+    }
+    check()
+    const observer = new MutationObserver(check)
+    observer.observe(document.body, { subtree: true, childList: true, attributes: true })
+    document.addEventListener('input', check)
+    document.addEventListener('change', check)
+    return () => {
+      observer.disconnect()
+      document.removeEventListener('input', check)
+      document.removeEventListener('change', check)
+    }
+  })
+
+  const capture = async purpose => {
+    if (!onTranscribe || captureOwner.current) return
+    if (purpose === 'chunk' && (!dictatingField || !checkDictationSelection(dictationSelection))) return
+    let selection = dictationSelection
+    if (!selection && getDictationTarget) {
+      try { selection = getDictationTarget('observation') }
+      catch { /* Commands outside a session do not require a clinical target. */ }
+    }
+    const owner = { purpose, mode: dictatingField, selection, draftKey: currentState.current.draftKey,
+      commandGeneration: ++transcriptGeneration.current,
+      bodyGeneration: dictationGeneration.current }
+    // Synchronous admission: React's busy state cannot exclude same-task calls.
+    captureOwner.current = owner
+    if (purpose === 'chunk') {
+      owner.bodyGeneration = ++dictationGeneration.current
+      clearDictationProposal()
+    }
     setTranscribing(true)
     setCaptureNotice('')
+    setCommandNotice('')
+    const valid = () => captureOwner.current === owner && captureContextValid(owner)
+      && (purpose === 'chunk' || transcriptGeneration.current === owner.commandGeneration)
+      && dictationGeneration.current === owner.bodyGeneration
     const patientNames = patients
       .filter(patient => patient && patient.archivedAt == null && typeof patient.name === 'string')
       .map(patient => patient.name)
     try {
       const response = await onTranscribe(patientNames)
-      if (transcriptGeneration.current !== generation) return
+      if (!valid()) return
       const structured = response !== null && typeof response === 'object' && !Array.isArray(response)
       const transcript = structured ? response.transcript : response
       const validMetadata = !structured || (['silence', 'max-duration'].includes(response.endedBy)
         && Number.isFinite(response.maxDurationMs) && response.maxDurationMs > 0 && response.maxDurationMs <= LOCAL_VOICE_MAX_MS)
       if (!validMetadata || typeof transcript !== 'string' || !transcript.trim()) {
-        onDraft?.(null)
-        setResult({ status: 'clarification', message: 'Não recebi uma transcrição. Você pode digitar o comando.' })
-        return
+        throw new Error(purpose === 'chunk' ? 'Não recebi um trecho. Você pode escrevê-lo para continuar.'
+          : 'Não recebi uma transcrição. Você pode digitar o comando.')
       }
-      if (structured && response.endedBy === 'max-duration') {
-        onDraft?.(null)
+      const cutoff = structured && response.endedBy === 'max-duration'
+      if (purpose === 'chunk') {
+        if (!checkDictationSelection(owner.selection)) return
+        setDictationBody(transcript)
+        setResult({ status: 'transcript', message: 'Confira o trecho e prepare explicitamente o acréscimo. Nada foi aplicado ou salvo.' })
+        if (cutoff) setCaptureNotice(`A captura atingiu ${(response.maxDurationMs / 1000).toLocaleString('pt-BR')} segundos e pode estar incompleta. Confira ou complete o texto e use Preparar trecho.`)
+      } else if (cutoff) {
+        if (!dictatingField) { onDraft?.(null); setResult({ status: 'transcript', message: 'Confira o comando e prepare explicitamente. Nada foi interpretado ou salvo.' }) }
         setCommand(transcript)
-        setResult({ status: 'transcript', message: 'Confira ou corrija o texto reconhecido. Depois clique em “Preparar rascunho”. Nada foi interpretado ou salvo.' })
         setCaptureNotice(`A captura atingiu ${(response.maxDurationMs / 1000).toLocaleString('pt-BR')} segundos e pode estar incompleta. Confira ou complete o texto e clique em Preparar rascunho.`)
       } else if (autoInterpret) interpret(transcript.trim())
       else {
-        onDraft?.(null)
         setCommand(transcript.trim())
-        setResult({ status: 'transcript', message: 'Confira ou corrija o texto reconhecido. Depois clique em “Preparar rascunho”. Nada foi interpretado ou salvo.' })
-      }
-    } catch (reason) {
-      if (transcriptGeneration.current === generation) {
-        if (reason?.name === 'AbortError') { setResult(null); onDraft?.(null) }
+        const message = 'Confira ou corrija o comando reconhecido. Depois use Preparar rascunho. Nada foi interpretado ou salvo.'
+        if (dictatingField) setCommandNotice(message)
         else {
           onDraft?.(null)
-          setResult({ status: 'clarification', message: reason?.message || 'Não foi possível transcrever agora. Digite o comando para continuar.' })
+          setResult({ status: 'transcript', message })
+        }
+      }
+    } catch (reason) {
+      if (valid()) {
+        if (purpose === 'command' && dictatingField) {
+          if (reason?.name !== 'AbortError') setCommandNotice(reason?.message || 'Não foi possível transcrever. Sua proposta foi preservada.')
+        } else {
+          onDraft?.(null)
+          setResult(reason?.name === 'AbortError' ? null : { status: 'clarification', message: reason?.message || 'Não foi possível transcrever agora.' })
         }
       }
     } finally {
       patientNames.fill('')
-      setTranscribing(false)
+      if (captureOwner.current === owner) {
+        captureOwner.current = null
+        setTranscribing(false)
+      }
     }
   }
+  const transcribe = () => capture('command')
   useEffect(() => {
     const shortcut = event => {
+      if (event.ctrlKey && event.altKey && !event.shiftKey && event.code === 'KeyM' && !event.repeat && onTranscribe) {
+        event.preventDefault()
+        void transcribe()
+        return
+      }
       if (event.ctrlKey && event.shiftKey && event.code === 'Space' && !event.repeat && onTranscribe) {
         event.preventDefault()
         if (dictatingField) void transcribeField()
@@ -243,13 +350,8 @@ export function VoiceCommandCenter({
     <p className="voice-command-description">{dictatingField ? 'Dite apenas o trecho. Confira e confirme o acréscimo; depois salve o rascunho.' : 'Fale o pedido. Confira a proposta e diga “confirmar”.'}</p>
     {onTranscribe && <small>Fale um trecho de até {LOCAL_VOICE_MAX_MS / 1000} segundos.</small>}
     {getDictationTarget && validateDictationTarget && prepareDictation && <div className="voice-command-actions">
-      <button type="button" className="voice-command-secondary" disabled={transcribing} onClick={() => {
-        transcriptGeneration.current++; dictationGeneration.current++
-        clearDictationProposal(); setDictationSelection(null); setCaptureNotice(''); setDictatingField(true)
-      }}>Ditar neste campo</button>
-      {dictatingField && <button type="button" className="voice-command-secondary" disabled={transcribing} onClick={() => {
-        dictationGeneration.current++; clearDictationProposal(); setDictationSelection(null); setCaptureNotice(''); setDictatingField(false)
-      }}>Usar comandos</button>}
+      <button type="button" className="voice-command-secondary" disabled={transcribing} onClick={() => changeDictationMode(true)}>Ditar neste campo</button>
+      {dictatingField && <button type="button" className="voice-command-secondary" disabled={transcribing} onClick={() => changeDictationMode(false)}>Usar comandos</button>}
     </div>}
     {dictatingField ? <>
       <label htmlFor="voice-dictation-field">Campo do rascunho</label>
@@ -264,17 +366,15 @@ export function VoiceCommandCenter({
       }} />
       <div className="voice-command-actions">
         <button type="button" disabled={transcribing || !dictationSelection} onClick={prepareFieldDictation}>Preparar trecho</button>
-        {onTranscribe && <button type="button" className="voice-command-secondary" disabled={transcribing || !dictationSelection} onClick={transcribeField}>
-          {transcribing ? 'Ouvindo e transcrevendo aqui…' : '🎙 Ouvir e transcrever'}
+        {onTranscribe && <button type="button" className="voice-command-secondary" aria-label="Ouvir trecho" title="Ctrl + Shift + Espaço" aria-keyshortcuts="Control+Shift+Space" disabled={transcribing || !dictationSelection} onClick={transcribeField}>
+          {transcribing ? 'Ouvindo e transcrevendo aqui…' : '🎙 Ouvir trecho'}
         </button>}
-        {result?.status === 'draft' && <>
+        {result?.status === 'draft' && result.intent?.dictationSelection && <>
           <button type="button" disabled={transcribing || !dictationSelection} onClick={() => void confirmFieldDictation()}>Confirmar acréscimo</button>
-          <button type="button" className="voice-command-secondary" onClick={() => {
-            clearDictationProposal(); setDictationSelection(null)
-          }}>Descartar trecho</button>
+          <button type="button" className="voice-command-secondary" onClick={discardFieldDictation}>Descartar trecho</button>
         </>}
       </div>
-    </> : <>
+    </> : null}
     <label htmlFor="voice-command-text">Seu comando</label>
     <textarea
       id="voice-command-text"
@@ -285,8 +385,9 @@ export function VoiceCommandCenter({
         transcriptGeneration.current += 1
         const value = event.target.value
         setCommand(value)
+        setCommandNotice('')
         const word = value.toLowerCase().trim()
-        if (!word || !['confirmar', 'confirmar comando', 'aplicar', 'cancelar comando', 'descartar comando'].some(phrase => phrase.startsWith(word))) {
+        if (!dictatingField && (!word || !['confirmar', 'confirmar comando', 'aplicar', 'cancelar comando', 'descartar comando'].some(phrase => phrase.startsWith(word)))) {
           setResult(null)
           onDraft?.(null)
         }
@@ -297,13 +398,13 @@ export function VoiceCommandCenter({
       }}
     />
     <div className="voice-command-actions">
-      <button type="button" onClick={() => interpret(command)}>Preparar rascunho</button>
-      {onTranscribe && <button type="button" className="voice-command-secondary" onClick={transcribe} disabled={transcribing} title="Ctrl + Shift + Espaço" aria-keyshortcuts="Control+Shift+Space">
-      {transcribing ? 'Ouvindo e transcrevendo aqui…' : '🎙 Ouvir e transcrever'}
+      <button type="button" disabled={dictatingField && transcribing} onClick={() => interpret(command)}>Preparar rascunho</button>
+      {onTranscribe && <button type="button" className="voice-command-secondary" aria-label="Ouvir comando" onClick={transcribe} disabled={transcribing} title="Ctrl + Alt + M" aria-keyshortcuts="Control+Alt+M">
+      {transcribing ? 'Ouvindo e transcrevendo aqui…' : '🎙 Ouvir comando'}
       </button>}
     </div>
-    </>}
     {captureNotice && <p className="voice-command-preview" role="status" aria-live="polite">{captureNotice}</p>}
+    {commandNotice && <p className="voice-command-error" role="status">{commandNotice}</p>}
     {result?.status === 'clarification' && <p className="voice-command-error" role="status">{result.message}</p>}
     {result?.status === 'transcript' && !captureNotice && <p className="voice-command-preview" role="status" aria-live="polite">{result.message}</p>}
     {result?.status === 'draft' && <div className="voice-command-preview" role="status" aria-live="polite">

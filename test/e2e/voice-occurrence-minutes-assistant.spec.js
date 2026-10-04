@@ -277,7 +277,7 @@ async function replayAudio(page, corpus, index) {
   expect(recording.Transcript.trim()).not.toBe('')
   // Pass the actual captured text unchanged, including "hoje" and "seção".
   await page.evaluate(text => { window.occurrenceMinutes.transcript = text }, recording.Transcript)
-  const listen = assistant(page).getByRole('button', { name: 'Ouvir e transcrever' })
+  const listen = assistant(page).getByRole('button', { name: 'Ouvir comando' })
   await listen.click()
   await page.clock.runFor(1600)
   await expect(listen).toBeEnabled()

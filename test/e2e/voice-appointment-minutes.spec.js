@@ -118,9 +118,9 @@ test('áudio simulado: segundo áudio confirma 15:45–16:35 e criação exige s
   async function audio(text) {
     // Fixed, simulated transcripts: no native harness/corpus or Rust recognition claim.
     await page.evaluate(value => { window.voiceTranscript = value }, text)
-    await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+    await assistant.getByRole('button', { name: 'Ouvir comando' }).click()
     await page.clock.runFor(1600)
-    await expect(assistant.getByRole('button', { name: 'Ouvir e transcrever' })).toBeEnabled()
+    await expect(assistant.getByRole('button', { name: 'Ouvir comando' })).toBeEnabled()
     await expect(assistant.getByLabel('Seu comando')).toHaveValue(text)
     await expect(assistant.getByText(/A captura atingiu .*segundos e pode estar incompleta/u)).toHaveCount(0)
   }

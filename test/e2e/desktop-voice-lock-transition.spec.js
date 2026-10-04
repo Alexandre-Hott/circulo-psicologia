@@ -49,7 +49,7 @@ async function openApp(page, initiallyLocked, update = false) {
 
 async function beginAudio(page) {
   await page.evaluate(() => { delete window.lockVoice.resolve })
-  await page.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await page.getByRole('button', { name: 'Ouvir comando' }).click()
   await page.clock.runFor(256)
   await expect.poll(() => page.evaluate(() => typeof window.lockVoice.resolve)).toBe('function')
 }
@@ -128,7 +128,7 @@ for (const accepted of [true, false]) test(`desbloqueio demorado ${accepted ? 'b
 for (const action of ['bloquear', 'trocar de área']) test(`${action} durante gravação interrompe microfone antes de chamar reconhecimento`, async ({ page }) => {
   await openApp(page, false)
   await page.evaluate(() => { window.lockVoice.pauseAudio = true })
-  await page.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await page.getByRole('button', { name: 'Ouvir comando' }).click()
   await expect.poll(() => page.evaluate(() => window.lockVoice.audioContexts)).toBe(1)
   if (action === 'bloquear') await page.getByRole('button', { name: 'Bloquear', exact: true }).click()
   else await page.getByRole('navigation', { name: 'Espaços do Círculo' }).getByRole('button', { name: 'Pacientes', exact: true }).click()

@@ -166,7 +166,7 @@ async function replayAudio(page, corpus, index) {
   expect(recording, `Captura nativa Index ${index}`).toBeDefined()
   expect(recording.Transcript).toEqual(expect.any(String))
   await page.evaluate(text => { window.appointmentDetails.transcript = text }, recording.Transcript)
-  const listen = assistant(page).getByRole('button', { name: 'Ouvir e transcrever' })
+  const listen = assistant(page).getByRole('button', { name: 'Ouvir comando' })
   await listen.click()
   await page.clock.runFor(1600)
   await expect(listen).toBeEnabled()

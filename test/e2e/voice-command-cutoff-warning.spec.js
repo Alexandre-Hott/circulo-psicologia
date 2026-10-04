@@ -9,7 +9,7 @@ const guidance = 'Fale um trecho de até 12 segundos'
 const center = page => page.locator('#cutoff-host').getByRole('region', { name: 'Comando do Círculo' })
 const input = page => center(page).getByLabel('Seu comando')
 const prepare = page => center(page).getByRole('button', { name: 'Preparar rascunho', exact: true })
-const listen = page => center(page).getByRole('button', { name: 'Ouvir e transcrever' })
+const listen = page => center(page).getByRole('button', { name: 'Ouvir comando' })
 const proposal = page => center(page).getByText('Confira a proposta', { exact: true })
 const state = page => page.evaluate(() => structuredClone(window.cutoffHarness))
 

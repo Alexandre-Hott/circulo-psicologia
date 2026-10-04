@@ -23,6 +23,7 @@ async function openApp(page, { duplicate = false } = {}) {
     const fixture = window.draftResume = {
       state: { patients, drafts, series: [], occurrences: [], history: [], sessions: [], addenda: [], contexts: [] },
       calls: [], writes: [], unexpected: [], catalogReady: false, transcript: '',
+      mediaRequests: 0, trackStops: 0, contextCloses: 0, sourceDisconnects: 0, processorDisconnects: 0, captureRefs: [],
     }
     const catalogReads = new Set()
     const catalog = (command, value) => {
@@ -30,29 +31,34 @@ async function openApp(page, { duplicate = false } = {}) {
       fixture.catalogReady = ['patient_list', 'behavior_list', 'indicator_catalog'].every(name => catalogReads.has(name))
       return clone(value)
     }
-    // Exact helper from the previous full-shell specs and the old voice
-    // interface spec. Native fixture transcripts are replayed through fake
-    // media/IPC; this neither executes Rust nor exercises a real microphone.
+    // Two speech frames followed by silence at 200 ms cadence, as in the 76
+    // replay fixtures. Continuous signal correctly reaches the 12-second cap.
+    // Preserved transcripts use fake media/IPC, never Rust or a microphone.
     class SyntheticAudioContext {
       constructor() { this.sampleRate = 8_000; this.state = 'running'; this.destination = {} }
-      createMediaStreamSource() { return { connect() {}, disconnect() {} } }
+      createMediaStreamSource() { return { connect() {}, disconnect() { fixture.sourceDisconnects++ } } }
       createScriptProcessor() {
-        const processor = { onaudioprocess: null, disconnect() {} }
+        const processor = { onaudioprocess: null, disconnect() { fixture.processorDisconnects++ } }
         processor.connect = () => queueMicrotask(() => {
+          let frames = 0
           const emit = () => {
             if (!processor.onaudioprocess) return
-            processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(0.1) }, outputBuffer: { getChannelData: () => new Float32Array(4096) } })
-            if (processor.onaudioprocess) setTimeout(emit, 0)
+            const amplitude = frames++ < 2 ? 0.1 : 0
+            processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(amplitude) }, outputBuffer: { getChannelData: () => new Float32Array(4096) } })
+            if (processor.onaudioprocess) setTimeout(emit, 200)
           }
           emit()
         })
         return processor
       }
       resume() { return Promise.resolve() }
-      close() { this.state = 'closed'; return Promise.resolve() }
+      close() { this.state = 'closed'; fixture.contextCloses++; return Promise.resolve() }
     }
     Object.defineProperty(window, 'AudioContext', { configurable: true, value: SyntheticAudioContext })
-    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } })
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => {
+      fixture.mediaRequests++
+      return { getTracks: () => [{ stop() { fixture.trackStops++ } }] }
+    } } })
     window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
       fixture.calls.push(clone({ command, args }))
       if (command === 'vault_status') return { initialized: true, unlocked: true, profileState: 'ready' }
@@ -67,7 +73,7 @@ async function openApp(page, { duplicate = false } = {}) {
       if (command === 'session_timeline') return clone(fixture.state.sessions)
       if (command === 'session_addendum_list') return clone(fixture.state.addenda)
       if (command === 'case_context_list') return clone(fixture.state.contexts)
-      if (command === 'voice_transcribe') return fixture.transcript
+      if (command === 'voice_transcribe') { fixture.captureRefs.push(args); return fixture.transcript }
       fixture.unexpected.push(command)
       if (/(?:create|update|save|start|cancel|finalize|archive|restore)/.test(command)) fixture.writes.push(clone({ command, args }))
       throw new Error(`IPC sem fixture: ${command}`)
@@ -143,10 +149,31 @@ async function replayAudio(page, corpus, index) {
   expect(recording, `Captura nativa Index ${index}`).toBeDefined()
   expect(recording.Transcript).toEqual(expect.any(String))
   await page.evaluate(text => { window.draftResume.transcript = text }, recording.Transcript)
-  const listen = assistant(page).getByRole('button', { name: 'Ouvir e transcrever' })
+  const listen = assistant(page).getByRole('button', { name: 'Ouvir comando' })
   await listen.click()
-  await page.clock.runFor(1000)
+  await page.clock.runFor(1600)
   await expect(listen).toBeEnabled()
+  await expect(assistant(page).getByText(/A captura atingiu .*segundos e pode estar incompleta/u)).toHaveCount(0)
+  await expectReplayCleanup(page)
+}
+
+async function expectReplayCleanup(page) {
+  const media = await page.evaluate(() => {
+    const fixture = window.draftResume
+    return { captures: fixture.calls.filter(call => call.command === 'voice_transcribe'),
+      counters: [fixture.mediaRequests, fixture.trackStops, fixture.contextCloses, fixture.sourceDisconnects, fixture.processorDisconnects],
+      erased: fixture.captureRefs.length === fixture.calls.filter(call => call.command === 'voice_transcribe').length
+        && fixture.captureRefs.every(args => args.samples.every(sample => sample === 0) && args.patientNames.every(name => name === '')) }
+  })
+  expect(media.captures.length).toBeGreaterThan(0)
+  expect(media.counters).toEqual(Array(5).fill(media.captures.length))
+  expect(media.erased).toBe(true)
+  for (const { args } of media.captures) {
+    expect(args.sampleRate).toBe(8000)
+    expect(args.samples.length).toBeGreaterThan(0)
+    expect(args.samples.some(sample => sample !== 0)).toBe(true)
+    expect(args.samples.length / args.sampleRate).toBeLessThan(12)
+  }
 }
 
 test.beforeEach(async ({ page, baseURL }) => {

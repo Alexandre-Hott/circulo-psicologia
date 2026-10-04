@@ -67,11 +67,11 @@ for (const text of ['não abrir Agenda', 'confirmar']) {
 for (const endedBy of ['silence', 'max-duration']) {
   test('captura ' + endedBy + ' mantém corpo editável e nunca prepara automaticamente', async ({ page }) => {
     await arm(page)
-    await center(page).getByRole('button', { name: 'Ouvir e transcrever' }).click()
+    await center(page).getByRole('button', { name: 'Ouvir trecho' }).click()
     await expect.poll(() => page.evaluate(() => typeof window.resolveFieldDictation)).toBe('function')
     const text = 'confirmar\nnão abrir Agenda'
     await page.evaluate(({ text, endedBy }) => window.resolveFieldDictation({ transcript: text, endedBy, maxDurationMs: 12000 }), { text, endedBy })
-    await expect(center(page).getByRole('button', { name: 'Ouvir e transcrever' })).toBeEnabled()
+    await expect(center(page).getByRole('button', { name: 'Ouvir trecho' })).toBeEnabled()
     await expect(body(page)).toHaveValue(text)
     const current = await snapshot(page)
     expect(current.parserCalls).toEqual([])

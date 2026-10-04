@@ -151,7 +151,7 @@ async function replayAudio(page, index) {
   const recording = nativeSeriesCorpus.find(item => item.Index === index)
   expect(recording).toBeDefined()
   await page.evaluate(text => { window.seriesEnding.transcript = text }, recording.Transcript)
-  const listen = page.getByRole('region', { name: 'Comando do Círculo' }).getByRole('button', { name: 'Ouvir e transcrever' })
+  const listen = page.getByRole('region', { name: 'Comando do Círculo' }).getByRole('button', { name: 'Ouvir comando' })
   await listen.click()
   await page.clock.runFor(1600)
   await expect(listen).toBeEnabled()

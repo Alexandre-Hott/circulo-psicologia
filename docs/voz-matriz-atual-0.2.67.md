@@ -1,5 +1,9 @@
 # Matriz atual de voz — 0.2.67
 
+## Entrega local 0.2.78
+
+O código atual separa Ouvir comando e Ouvir trecho. Os pedidos locais selecionam campo, preparam, confirmam ou descartam o acréscimo e saem do ditado; o corpo continua literal e o salvamento permanece separado. [Resultados da 0.2.78](validacao-voz-0.2.78.md): JS1766/1766 e Rust135 aprovados/1 ignorado; rodada final de interface209/209 em24,6min, sem retries. Pacote reconstruído e auditado, disponível para teste local, não instalado/publicado nem assinado. A dependência exclusiva de clique para esses controles descreve a versão anterior, não a implementação atual. A rodada separada de jornadas e recuperação terminou com20 aprovados/7 falhos entre27 casos em2,5min; confirmação após edição de senha, navegação diária e ponto final de textos estão em diagnóstico. Os209 casos não comprovam ASR, microfone físico ou cobertura universal. As referências abaixo são históricas.
+
 ## Atualização de referência 0.2.77
 
 A [validação 0.2.77](validacao-voz-0.2.77.md) acrescenta pedidos curtos de Alterar e Iniciar sessão no detalhe de uma ocorrência focada. Não escolhe um item da lista geral nem finaliza sessão. JS1417/1417, Rust135 aprovados/1 ignorado e UI117/117 numa única rodada selecionada, sem retries. Os casos novos usam comandos digitados; a regressão inclui mídia simulada. Sem nova ASR, prova de microfone físico ou cobertura universal das oito áreas. Pacote local auditado, não instalado/publicado nem assinado. A auditoria estática atual aponta controles internos do ditado ainda dependentes de clique e uma lacuna de teste da recuperação automática por voz; não comprova paridade integral. Referências abaixo são históricas.
