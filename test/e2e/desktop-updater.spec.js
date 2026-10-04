@@ -1,10 +1,17 @@
 import { test, expect } from '@playwright/test'
 
+const answerConfirmation = async (page, message, accept = true) => {
+  const dialog = page.getByRole('alertdialog', { name: 'Confirmar ação', exact: true })
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toContainText(message)
+  await dialog.getByRole('button', { name: accept ? 'Confirmar ação' : 'Voltar', exact: true }).click()
+  await expect(dialog).toBeHidden()
+}
+
 const mockDesktop = (page, update, unlocked = false) => page.addInitScript(({ update, unlocked }) => {
   const calls = []
   const callbacks = new Map()
   window.updaterProbe = () => calls
-  window.confirm = () => true
   window.__TAURI_INTERNALS__ = {
     transformCallback(callback) { const id = callbacks.size + 1; callbacks.set(id, callback); return id },
     unregisterCallback(id) { callbacks.delete(id) },
@@ -44,6 +51,12 @@ test('0.2.17 oferece 0.2.18 e só instala após clique e confirmação', async (
   await expect(page.getByText('Atualização disponível: Círculo 0.2.18')).toBeVisible()
   expect(await page.evaluate(() => window.updaterProbe().filter(call => call.command === 'plugin:updater|download_and_install').length)).toBe(0)
   await page.getByRole('button', { name: 'Baixar e instalar' }).click()
+  await expect(page.getByRole('alertdialog', { name: 'Confirmar ação', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => window.updaterProbe().filter(call => call.command === 'plugin:updater|download_and_install').length)).toBe(0)
+  await answerConfirmation(page, 'Instalar Círculo 0.2.18?', false)
+  expect(await page.evaluate(() => window.updaterProbe().filter(call => call.command === 'plugin:updater|download_and_install').length)).toBe(0)
+  await page.getByRole('button', { name: 'Baixar e instalar' }).click()
+  await answerConfirmation(page, 'Instalar Círculo 0.2.18?')
   await expect(page.getByRole('progressbar', { name: 'Progresso do download' })).toHaveAttribute('value', '50')
   await expect(page.getByText('Atualização 0.2.18 instalada.')).toBeVisible()
   expect(await page.evaluate(() => window.updaterProbe().filter(call => call.command === 'plugin:updater|download_and_install').length)).toBe(1)
@@ -59,19 +72,20 @@ test('bloqueia instalação com cadastro, vínculo e Agenda abertos, sem descart
   await page.getByRole('button', { name: 'Baixar e instalar' }).click()
   await expect(page.getByText('Feche os formulários antes de instalar')).toBeVisible()
   await expect(page.getByLabel('Nome', { exact: true })).toHaveValue('Rascunho sintético')
-  await page.evaluate(() => { window.confirm = () => false })
   await page.getByRole('button', { name: 'Descartar edições e fechar formulários' }).click()
+  await answerConfirmation(page, 'Fechar cadastro, vínculo e Agenda e descartar', false)
   await expect(page.getByLabel('Nome', { exact: true })).toHaveValue('Rascunho sintético')
-  await page.evaluate(() => { window.confirm = () => true })
-  await page.getByRole('button', { name: 'Tentar novamente' }).click()
+  await page.getByRole('button', { name: 'Tentar instalação novamente' }).click()
   expect(await page.evaluate(() => window.updaterProbe().filter(call => call.command === 'plugin:updater|download_and_install').length)).toBe(0)
   await page.getByRole('button', { name: 'Descartar edições e fechar formulários' }).click()
+  await answerConfirmation(page, 'Fechar cadastro, vínculo e Agenda e descartar')
   await page.getByRole('button', { name: 'Pessoas vinculadas' }).click()
   await page.getByLabel('Nome da pessoa ou instituição').fill('Vínculo fictício')
   await page.getByRole('button', { name: 'Baixar e instalar' }).click()
   await expect(page.getByText('Feche os formulários antes de instalar')).toBeVisible()
   await expect(page.getByLabel('Nome da pessoa ou instituição')).toHaveValue('Vínculo fictício')
   await page.getByRole('button', { name: 'Descartar edições e fechar formulários' }).click()
+  await answerConfirmation(page, 'Fechar cadastro, vínculo e Agenda e descartar')
   await page.getByRole('button', { name: 'Abrir Agenda' }).click()
   await page.getByRole('region', { name: 'Novo compromisso' }).getByRole('button', { name: 'Novo compromisso' }).click()
   await page.getByLabel('Horário inicial').fill('10:30')
@@ -86,10 +100,11 @@ test('fecha recurso após falha e verifica novo recurso no retry', async ({ page
   await page.goto('/')
   await expect(page.getByText('Atualização disponível: Círculo 0.2.18')).toBeVisible()
   await page.getByRole('button', { name: 'Baixar e instalar' }).click()
+  await answerConfirmation(page, 'Instalar Círculo 0.2.18?')
   await expect(page.getByText('Não foi possível instalar Círculo 0.2.18.')).toBeVisible()
   expect(await page.evaluate(() => window.updaterProbe().filter(call => call.command === 'plugin:resources|close').length)).toBeGreaterThanOrEqual(1)
   const checksBeforeRetry = await page.evaluate(() => window.updaterProbe().filter(call => call.command === 'plugin:updater|check').length)
-  await page.getByRole('button', { name: 'Verificar e tentar novamente' }).click()
+  await page.getByRole('button', { name: 'Verificar atualizações' }).click()
   await expect(page.getByText('Atualização disponível: Círculo 0.2.18')).toBeVisible()
   expect(await page.evaluate(() => window.updaterProbe().filter(call => call.command === 'plugin:updater|check').length)).toBe(checksBeforeRetry + 1)
 })
@@ -99,7 +114,7 @@ for (const editor of ['contexto', 'adendo', 'comportamento']) {
     await mockDesktop(page, true, true)
     await page.goto('/')
     await expect(page.getByText('Atualização disponível: Círculo 0.2.18')).toBeVisible()
-    await page.getByRole('button', { name: 'Abrir sessões sintéticas' }).click()
+    await page.getByRole('button', { name: 'Abrir sessões' }).click()
     if (editor !== 'comportamento') await page.getByLabel('Paciente para evolução e sessões').selectOption('p1')
     if (editor === 'contexto') {
       await page.getByText('Contexto do caso', { exact: true }).click()
@@ -124,7 +139,7 @@ test('retry tardio libera recurso após pagehide sem mostrar atualização', asy
   await mockDesktop(page, 'offline-then-delayed')
   await page.goto('/')
   await expect(page.getByText('Não foi possível verificar atualizações.')).toBeVisible()
-  await page.getByRole('button', { name: 'Tentar novamente' }).click()
+  await page.getByRole('button', { name: 'Verificar atualizações' }).click()
   await page.waitForFunction(() => typeof window.updaterResolveCheck === 'function')
   await page.evaluate(() => { window.dispatchEvent(new Event('pagehide')); window.updaterResolveCheck() })
   await expect.poll(() => page.evaluate(() => window.updaterProbe().filter(call => call.command === 'plugin:resources|close' && call.args.rid === 77).length)).toBe(1)
@@ -136,6 +151,6 @@ test('offline mantém o cofre acessível e oferece retry', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByText('Não foi possível verificar atualizações.')).toBeVisible()
   await expect(page.getByLabel('Senha do cofre')).toBeVisible()
-  await page.getByRole('button', { name: 'Tentar novamente' }).click()
+  await page.getByRole('button', { name: 'Verificar atualizações' }).click()
   await expect(page.getByText('Não foi possível verificar atualizações.')).toBeVisible()
 })

@@ -1,0 +1,87 @@
+[
+  {
+    "Index": 0,
+    "IntendedCommand": "Marcar sessão semanal para Ana Clara toda quinta às quinze horas.",
+    "Transcript": "Marcar se são semanal para Ana Clara toda quinta às quinze horas."
+  },
+  {
+    "Index": 1,
+    "IntendedCommand": "Cadastrar paciente Bia Fictícia com nove anos.",
+    "Transcript": "Cadastrar paciente Bia Ficticia com 9 anos."
+  },
+  {
+    "Index": 2,
+    "IntendedCommand": "Registrar comportamento Pede ajuda para Ana Clara na sessão.",
+    "Transcript": "Registrar comportamento pede ajuda para Ana Clara na seção."
+  },
+  {
+    "Index": 3,
+    "IntendedCommand": "Criar comportamento Espera a vez.",
+    "Transcript": "Criar comportamento espera a vez."
+  },
+  {
+    "Index": 4,
+    "IntendedCommand": "Abrir agenda.",
+    "Transcript": "Abrir agenda."
+  },
+  {
+    "Index": 5,
+    "IntendedCommand": "Clicar em Novo cadastro.",
+    "Transcript": "Clicar em Novo cadastro."
+  },
+  {
+    "Index": 6,
+    "IntendedCommand": "Confirmar comando.",
+    "Transcript": "Confirmar comando."
+  },
+  {
+    "Index": 7,
+    "IntendedCommand": "Abrir pacientes.",
+    "Transcript": "Abrir pacientes."
+  },
+  {
+    "Index": 8,
+    "IntendedCommand": "Abrir sessões de Ana Clara.",
+    "Transcript": "Abrir seções de Ana Clara."
+  },
+  {
+    "Index": 9,
+    "IntendedCommand": "Abrir análises deste mês.",
+    "Transcript": "Abrir análise deste mes."
+  },
+  {
+    "Index": 10,
+    "IntendedCommand": "Abrir ajustes.",
+    "Transcript": "Abrir ajustes."
+  },
+  {
+    "Index": 11,
+    "IntendedCommand": "Editar paciente Ana Clara.",
+    "Transcript": "Editar paciente. Ana Clara."
+  },
+  {
+    "Index": 12,
+    "IntendedCommand": "Abrir biblioteca de comportamentos reutilizáveis.",
+    "Transcript": "Abrir biblioteca de comportamentos, utilizáveis."
+  },
+  {
+    "Index": 13,
+    "IntendedCommand": "Abrir contexto do caso de Ana Clara.",
+    "Transcript": "Abrir contexto do caso de Ana Clara."
+  },
+  {
+    "Index": 14,
+    "IntendedCommand": "Editar comportamento Pede ajuda.",
+    "Transcript": "Editar comportamento pede ajuda."
+  },
+  {
+    "Index": 15,
+    "IntendedCommand": "Adicionar adendo à sessão de Ana Clara de três de outubro de dois mil e vinte e seis às quinze horas.",
+    "Transcript": "Adicionar adendo a sessão de Ana Clara de 3 de outubro de dois mil e vinte e seis às quinze horas."
+  },
+  {
+    "Index": 16,
+    "IntendedCommand": "Mostrar agenda de hoje.",
+    "Transcript": "Mostrar agenda de hoje."
+  }
+]

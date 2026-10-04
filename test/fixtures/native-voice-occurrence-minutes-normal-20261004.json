@@ -1,0 +1,7 @@
+[
+  { "Index": 0, "IntendedCommand": "Iniciar sessão de Ana Clara hoje às quinze horas e quarenta e cinco minutos.", "Transcript": "Iniciar sessão de Ana Clara hoje às 15 horas e 45 minutos." },
+  { "Index": 1, "IntendedCommand": "Remarcar sessão de Ana Clara hoje às quinze horas e quarenta e cinco minutos.", "Transcript": "Remarcar seção de Ana Clara hoje às 15 horas e 45 minutos." },
+  { "Index": 2, "IntendedCommand": "Cancelar sessão de Ana Clara hoje às quinze horas e quarenta e cinco minutos.", "Transcript": "Cancelar seção de Ana Clara hoje às 15 horas e 45 minutos." },
+  { "Index": 3, "IntendedCommand": "Abrir adendo da sessão de Ana Clara em três de outubro de 2026 às quinze horas e quarenta e cinco minutos.", "Transcript": "Abrir adendo da sessão de Ana Clara em 3 de outubro de dois mil e vinte e seis às quinze horas e quarenta e cinco minutos." },
+  { "Index": 4, "IntendedCommand": "Confirmar comando.", "Transcript": "Confirmar comando." }
+]

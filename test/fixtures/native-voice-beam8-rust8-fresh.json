@@ -1,0 +1,47 @@
+{
+  "Provenance": {
+    "ArtifactRoot": "C:/Users/alexandre/AppData/Local/Temp/circulo-trusted8-native-plan-29c3e881f3024d0fb482d9fbbd5f9885",
+    "NativeStdout": "C:/Users/alexandre/AppData/Local/Temp/circulo-trusted8-native-plan-29c3e881f3024d0fb482d9fbbd5f9885/results/native-stdout.txt",
+    "NativeStdoutSHA256": "497A7C22D7EC7118868871C91668844DFD404B52A3F14C91B63C9CB1C651B01B",
+    "NativeSessionHandle": 7035,
+    "NativeExitCode": 0,
+    "NativeElapsedMsReportedByMAIN": 40421,
+    "Marker": "CIRCULO_SYNTHETIC_RESULT_JSON:",
+    "Source": "Exact UTF-8 marker transcripts from actual Rust backend; no CLI A/B text or repair.",
+    "Replay": "Synthetic PCM/IPC UI replay only; no additional ASR or physical microphone."
+  },
+  "Cases": [
+    {
+      "Index": 0,
+      "Transcript": "Marcar sessão semanal para Ana Clara toda quinta às quinze horas."
+    },
+    {
+      "Index": 1,
+      "Transcript": "Cadastrar paciente. Bia Fictícia com 9 anos."
+    },
+    {
+      "Index": 2,
+      "Transcript": "Registrar comportamento pede ajuda para Ana Clara na sessão."
+    },
+    {
+      "Index": 3,
+      "Transcript": "Acrescentar observação da sessão de Ana Clara com pediu ajuda."
+    },
+    {
+      "Index": 4,
+      "Transcript": "Acrescentar procedimentos da sessão de Ana Clara com fez jogo de turnos."
+    },
+    {
+      "Index": 5,
+      "Transcript": "Acrescentar resultado da sessão de Ana Clara com manteve atenção."
+    },
+    {
+      "Index": 6,
+      "Transcript": "Acrescentar encaminhamento da sessão de Ana Clara com próxima sessão semanal."
+    },
+    {
+      "Index": 7,
+      "Transcript": "Confirmar comando."
+    }
+  ]
+}

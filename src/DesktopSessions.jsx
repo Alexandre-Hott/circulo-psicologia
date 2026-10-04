@@ -1,9 +1,16 @@
-import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
+import { entityOptionSuffix } from './voiceEntityLabels.js'
+import { clinicalTextFields, validateClinicalTextAppend } from './clinicalTextAppend.js'
+import { validateClinicalDictationSelection } from './clinicalFieldDictation.js'
+import { nextVoiceLifecycle } from './voiceInterfaceCommands.js'
 import { invoke } from '@tauri-apps/api/core'
 import { groupIndicatorHistory } from './desktopIndicatorEvolution.js'
 import './DesktopSessions.css'
 
-export default function DesktopSessions({ ref, patientId, onPatientChange, activeDraft, onDraftChange, onChanged, onSessionMessage, onStartRecord }) {
+let resumeVoiceInstance = 0
+let clinicalSnapshotEpoch = 0
+
+export default function DesktopSessions({ ref, patientId, onPatientChange, activeDraft, workspaceActive = true, voiceCommandDraft = null, onVoiceDraftApplied, onDraftChange, onChanged, onSessionMessage, onStartRecord, onConfirm = async message => window.confirm(message) }) {
   const [patients, setPatients] = useState([])
   const [templates, setTemplates] = useState([])
   const [indicatorCatalog, setIndicatorCatalog] = useState([])
@@ -13,9 +20,11 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   const [caseContexts, setCaseContexts] = useState([])
   const [caseDemand, setCaseDemand] = useState('')
   const [caseObjectives, setCaseObjectives] = useState('')
-  const [addendumSessionId, setAddendumSessionId] = useState('')
+  const [addendumSessionId, setAddendumSessionIdState] = useState('')
   const [addendumContent, setAddendumContent] = useState('')
   const [loadedPatientId, setLoadedPatientId] = useState('')
+  const [resumeInstance] = useState(() => ++resumeVoiceInstance)
+  const [resumeRevision, setResumeRevision] = useState(0)
   const [observation, setObservation] = useState(activeDraft?.observation || '')
   const [procedures, setProcedures] = useState(activeDraft?.procedures || '')
   const [outcomeDecision, setOutcomeDecision] = useState(activeDraft?.outcomeDecision || '')
@@ -24,17 +33,52 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   const [indicatorEntries, setIndicatorEntries] = useState(activeDraft?.indicators || [])
   const [templateTitle, setTemplateTitle] = useState('')
   const [templateDescription, setTemplateDescription] = useState('')
-  const [editingTemplate, setEditingTemplate] = useState(null)
+  const [editingTemplate, setEditingTemplateState] = useState(null)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusyState] = useState(false)
   const valuesRef = useRef({ observation, procedures, outcomeDecision, referralClosure, behaviorIds, indicatorEntries })
   const revisionRef = useRef(0)
+  const clinicalEpochRef = useRef(0)
+  const clinicalFormRef = useRef(null)
+  const workspaceRef = useRef(null)
+  const [editorCycles, setEditorCycles] = useState({ library: 0, context: 0, addendum: 0 })
+  const panelOpenRef = useRef({ library: false, context: false, addendum: false })
+  const libraryFormRef = useRef(null)
+  const contextFormRef = useRef(null)
+  const addendumFormRef = useRef(null)
+  const advanceEditorCycle = useCallback(kind => {
+    const cycle = nextVoiceLifecycle()
+    const form = { library: libraryFormRef, context: contextFormRef, addendum: addendumFormRef }[kind].current
+    form?.setAttribute('data-voice-lifecycle', `${resumeInstance}:${kind}:${cycle}`)
+    setEditorCycles(previous => ({ ...previous, [kind]: cycle }))
+  }, [resumeInstance])
+  const transitionPanel = useCallback((kind, open) => {
+    if (panelOpenRef.current[kind] === open) return
+    panelOpenRef.current[kind] = open
+    advanceEditorCycle(kind)
+  }, [advanceEditorCycle])
+  const setEditingTemplate = useCallback(value => {
+    advanceEditorCycle('library')
+    setEditingTemplateState(value)
+  }, [advanceEditorCycle])
+  const setAddendumSessionId = useCallback(value => {
+    advanceEditorCycle('addendum')
+    setAddendumSessionIdState(value)
+  }, [advanceEditorCycle])
   const dirtyRef = useRef(false)
   const savePromiseRef = useRef(null)
+  const saveRef = useRef(null)
   const autosaveTimerRef = useRef(null)
   const mountedRef = useRef(true)
   const draftIdentityRef = useRef({ id: activeDraft?.id, patientId: activeDraft?.patientId })
+  const appliedVoiceDraftRef = useRef('')
+  const sectionRequestEpochRef = useRef(0)
+  const addendumEditorRef = useRef({ id: addendumSessionId, content: addendumContent })
+  const voiceConfirmationPendingRef = useRef(false)
+  const voiceVersionRef = useRef(0)
+  const approvedVoiceVersionRef = useRef(0)
+  const [voiceConfirmationPending, setVoiceConfirmationPending] = useState(false)
   const busyRef = useRef(false)
   const idleWaiters = useRef(new Set())
   const setBusy = value => {
@@ -52,6 +96,17 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     return () => { mountedRef.current = false; clearTimeout(autosaveTimerRef.current) }
   }, [])
   useLayoutEffect(() => {
+    addendumEditorRef.current = { id: addendumSessionId, content: addendumContent }
+  }, [addendumSessionId, addendumContent])
+  useLayoutEffect(() => {
+    sectionRequestEpochRef.current++
+  }, [workspaceActive, patientId])
+  useLayoutEffect(() => {
+    workspaceRef.current?.setAttribute('data-voice-lifecycle', `${resumeInstance}:sessions:${nextVoiceLifecycle()}`)
+  }, [resumeInstance, workspaceActive, patientId, activeDraft?.id, loadedPatientId, resumeRevision])
+  useLayoutEffect(() => { setResumeRevision(value => value + 1) }, [workspaceActive, patientId, activeDraft?.id, activeDraft?.patientId])
+  useLayoutEffect(() => { clinicalEpochRef.current = ++clinicalSnapshotEpoch }, [workspaceActive, patientId, activeDraft?.id, activeDraft?.patientId, loadedPatientId, resumeRevision])
+  useLayoutEffect(() => {
     draftIdentityRef.current = { id: activeDraft?.id, patientId: activeDraft?.patientId }
     return () => { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null }
   }, [activeDraft?.id, activeDraft?.patientId])
@@ -65,7 +120,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       const [nextDrafts, nextTimeline, nextAddenda, nextContexts] = await Promise.all([
         invoke('session_draft_list', { patientId: selected }), invoke('session_timeline', { patientId: selected }), invoke('session_addendum_list', { patientId: selected }), invoke('case_context_list', { patientId: selected }),
       ])
-      setDrafts(nextDrafts); setTimeline(nextTimeline); setAddenda(nextAddenda); setCaseContexts(nextContexts); setLoadedPatientId(selected)
+      setDrafts(nextDrafts); setTimeline(nextTimeline); setAddenda(nextAddenda); setCaseContexts(nextContexts); setLoadedPatientId(selected); setResumeRevision(value => value + 1)
     }
   }
 
@@ -79,30 +134,201 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
 
   useEffect(() => {
     let active = true
+    setLoadedPatientId('')
     if (!patientId) return () => { active = false }
     Promise.all([invoke('session_draft_list', { patientId }), invoke('session_timeline', { patientId }), invoke('session_addendum_list', { patientId }), invoke('case_context_list', { patientId })])
-      .then(([nextDrafts, nextTimeline, nextAddenda, nextContexts]) => { if (active) { setDrafts(nextDrafts); setTimeline(nextTimeline); setAddenda(nextAddenda); setCaseContexts(nextContexts); setCaseDemand(''); setCaseObjectives(''); setLoadedPatientId(patientId) } })
+      .then(([nextDrafts, nextTimeline, nextAddenda, nextContexts]) => { if (active) { setDrafts(nextDrafts); setTimeline(nextTimeline); setAddenda(nextAddenda); setCaseContexts(nextContexts); setCaseDemand(''); setCaseObjectives(''); setLoadedPatientId(patientId); setResumeRevision(value => value + 1) } })
       .catch(reason => { if (active) setError(String(reason)) })
     return () => { active = false }
   }, [patientId])
 
-  const updateValues = next => {
+  const updateValues = useCallback(next => {
     valuesRef.current = { ...valuesRef.current, ...next }
     revisionRef.current++
     dirtyRef.current = true
     clearTimeout(autosaveTimerRef.current)
-    if (activeDraft && activeDraft.patientId === patientId) {
-      const { id, patientId: draftPatientId } = draftIdentityRef.current
+    const { id, patientId: draftPatientId } = draftIdentityRef.current
+    if (id && draftPatientId === patientId && !voiceConfirmationPendingRef.current) {
       autosaveTimerRef.current = setTimeout(() => {
         autosaveTimerRef.current = null
-        if (draftIdentityRef.current.id === id && draftIdentityRef.current.patientId === draftPatientId) save().catch(reason => { if (mountedRef.current) setError(String(reason)) })
+        if (draftIdentityRef.current.id === id && draftIdentityRef.current.patientId === draftPatientId) saveRef.current?.().catch(reason => { if (mountedRef.current) setError(String(reason)) })
       }, 600)
     }
-  }
-  const save = () => {
+  }, [patientId])
+
+  const getClinicalTextSnapshot = useCallback(field => {
+    const form = clinicalFormRef.current
+    if (!mountedRef.current || !workspaceActive || !activeDraft?.id || activeDraft.patientId !== patientId
+      || draftIdentityRef.current.id !== activeDraft.id || draftIdentityRef.current.patientId !== patientId
+      || loadedPatientId !== patientId || busyRef.current || savePromiseRef.current || !form?.isConnected) return null
+    const lifecycle = []
+    for (let element = form; element; element = element.parentElement) {
+      const style = getComputedStyle(element)
+      if (element.hidden || element.inert || element.getAttribute('aria-hidden') === 'true'
+        || style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return null
+      const token = element.getAttribute('data-voice-lifecycle')
+      if (token !== null) lifecycle.push(token)
+    }
+    if (field !== undefined) {
+      const ids = { observation: 'session-observation', procedures: 'session-procedures', outcomeDecision: 'session-outcome-decision', referralClosure: 'session-referral-closure' }
+      if (!Object.hasOwn(ids, field)) return null
+      const controls = form.querySelectorAll(`#${ids[field]}`)
+      if (controls.length !== 1) return null
+      const control = controls[0]
+      if (control.tagName !== 'TEXTAREA' || control.matches(':disabled') || control.readOnly) return null
+      for (let element = control; element && element !== form; element = element.parentElement) {
+        const style = getComputedStyle(element)
+        if (element.hidden || element.inert || element.getAttribute('aria-hidden') === 'true'
+          || style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse'
+          || (element.tagName === 'DETAILS' && !element.open)) return null
+      }
+    }
+    if (clinicalTextFields.some(field => typeof valuesRef.current[field] !== 'string')) return null
+    return { patientId, sessionDraftId: activeDraft.id, epoch: clinicalEpochRef.current, revision: revisionRef.current,
+      lifecycle: lifecycle.length ? JSON.stringify(lifecycle) : null,
+      values: Object.fromEntries(clinicalTextFields.map(field => [field, valuesRef.current[field]])) }
+  }, [workspaceActive, activeDraft, patientId, loadedPatientId])
+
+  useEffect(() => {
+    const intent = voiceCommandDraft
+    if (!intent?.commandId || appliedVoiceDraftRef.current === intent.commandId) return
+    if (intent.type === 'session.addendum.open') {
+      if (!workspaceActive || !patientId || intent.target?.patientId !== patientId) {
+        appliedVoiceDraftRef.current = intent.commandId
+        onVoiceDraftApplied?.(intent.commandId)
+        return
+      }
+      if (loadedPatientId !== patientId) return
+      appliedVoiceDraftRef.current = intent.commandId
+      const epoch = sectionRequestEpochRef.current
+      const stillCurrent = () => mountedRef.current && sectionRequestEpochRef.current === epoch && appliedVoiceDraftRef.current === intent.commandId
+      void invoke('session_timeline', { patientId }).then(nextTimeline => {
+        if (!stillCurrent()) return
+        const matches = nextTimeline.filter(item => item.patientId === patientId && item.sessionDate === intent.target.date && item.start === intent.target.start)
+        if (matches.length !== 1 || typeof matches[0].id !== 'string' || !matches[0].id) throw new Error(matches.length > 1 ? 'Há mais de uma sessão finalizada nesse horário. Escolha o registro na tela.' : 'Não encontrei a sessão finalizada exata. Nenhum adendo foi aberto.')
+        const editor = addendumEditorRef.current
+        if (busyRef.current) throw new Error('Aguarde o salvamento em andamento e prepare o pedido novamente.')
+        if (editor.id && editor.id !== matches[0].id && editor.content.trim()) throw new Error('Salve ou cancele o adendo atual antes de abrir outro registro.')
+        setTimeline(nextTimeline)
+        setAddendumSessionId(matches[0].id)
+        if (editor.id !== matches[0].id) setAddendumContent('')
+        setError('')
+        const panel = document.querySelector('details[aria-label="Evolução descritiva somente leitura"]')
+        if (panel) { transitionPanel('addendum', true); panel.open = true }
+        window.requestAnimationFrame(() => {
+          if (!stillCurrent()) return
+          const field = document.getElementById(`addendum-${matches[0].id}`)
+          field?.scrollIntoView({ block: 'center' })
+          field?.focus({ preventScroll: true })
+        })
+      }).catch(reason => { if (stillCurrent()) setError(String(reason)) })
+        .finally(() => { if (mountedRef.current && appliedVoiceDraftRef.current === intent.commandId) onVoiceDraftApplied?.(intent.commandId) })
+      return
+    }
+    if (intent.type === 'session.section.open') {
+      const section = intent.target?.section
+      if (!['library', 'context'].includes(section)) return
+      if (!workspaceActive || (section === 'context' && (!patientId || intent.target.patientId !== patientId))) {
+        appliedVoiceDraftRef.current = intent.commandId
+        onVoiceDraftApplied?.(intent.commandId)
+        return
+      }
+      if (section === 'context' && loadedPatientId !== patientId) return
+      const panel = section === 'library' ? document.getElementById('session-behaviors')
+        : document.querySelector('form[aria-label="Nova revisão do contexto do caso"]')?.closest('details')
+      if (!panel) return
+      appliedVoiceDraftRef.current = intent.commandId
+      transitionPanel(section === 'library' ? 'library' : 'context', true)
+      panel.open = true
+      panel.scrollIntoView({ block: 'center' })
+      panel.querySelector('summary')?.focus({ preventScroll: true })
+      onVoiceDraftApplied?.(intent.commandId)
+      return
+    }
+    if (intent.type === 'behavior.create' || intent.type === 'behavior.update' || intent.type === 'behavior.edit.open') {
+      appliedVoiceDraftRef.current = intent.commandId
+      const applyBehaviorDraft = async () => {
+        const draft = intent.type === 'behavior.edit.open' ? {} : intent.draft
+        if (!draft || (draft.title !== undefined && typeof draft.title !== 'string') || (draft.description !== undefined && typeof draft.description !== 'string')) throw new Error('Campos de comportamento incompatíveis com o formulário.')
+        let template = null
+        if (intent.type === 'behavior.update' || intent.type === 'behavior.edit.open') {
+          if (typeof intent.target?.behaviorId !== 'string' || !intent.target.behaviorId || (intent.type === 'behavior.update' && draft.title === undefined && draft.description === undefined)) throw new Error('Informe o comportamento e os campos que deseja editar.')
+          const nextTemplates = await invoke('behavior_list')
+          if (!mountedRef.current || appliedVoiceDraftRef.current !== intent.commandId) return
+          template = nextTemplates.find(item => item.id === intent.target.behaviorId && item.archivedAt == null)
+          if (!template || !Number.isInteger(template.version) || template.version < 1) throw new Error('Não encontrei uma versão válida do comportamento solicitado. Atualize a biblioteca e tente novamente.')
+          setTemplates(nextTemplates)
+        } else if (typeof draft.title !== 'string' || typeof draft.description !== 'string') throw new Error('Informe título e descrição para criar o comportamento.')
+        setEditingTemplate(template)
+        setTemplateTitle(draft.title ?? template?.title ?? '')
+        setTemplateDescription(draft.description ?? template?.description ?? '')
+        setError(''); setMessage('')
+        const details = document.getElementById('session-behaviors')
+        transitionPanel('library', true)
+        details?.setAttribute('open', '')
+        details?.scrollIntoView({ block: 'center' })
+        document.getElementById('behavior-title')?.focus({ preventScroll: true })
+        onSessionMessage?.('Comportamento preenchido. Confira o formulário e clique no botão de salvar para gravar.')
+      }
+      void applyBehaviorDraft().catch(reason => {
+        if (mountedRef.current && appliedVoiceDraftRef.current === intent.commandId) setError(String(reason))
+      }).finally(() => {
+        if (mountedRef.current && appliedVoiceDraftRef.current === intent.commandId) onVoiceDraftApplied?.(intent.commandId)
+      })
+      return
+    }
+    if (intent.type === 'session.draft.update' && intent.patch?.operation === 'append') {
+      // Consume even a refused request: it must not replay when the UI later becomes ready.
+      appliedVoiceDraftRef.current = intent.commandId
+      try {
+        const snapshot = getClinicalTextSnapshot(intent.dictationSelection?.field)
+        if (intent.dictationSelection) {
+          validateClinicalDictationSelection(intent.dictationSelection, snapshot)
+          if (intent.dictationSelection.field !== intent.patch.field
+            || intent.dictationSelection.patientId !== intent.target?.patientId
+            || intent.dictationSelection.sessionDraftId !== intent.target?.sessionDraftId) throw new Error('Selecione novamente o campo do rascunho antes de aplicar o trecho.')
+        }
+        const combined = validateClinicalTextAppend(intent.target, intent.patch, snapshot)
+        const setter = { observation: setObservation, procedures: setProcedures, outcomeDecision: setOutcomeDecision, referralClosure: setReferralClosure }[intent.patch.field]
+        voiceVersionRef.current++
+        voiceConfirmationPendingRef.current = true
+        setVoiceConfirmationPending(true)
+        setter(combined); updateValues({ [intent.patch.field]: combined })
+        onSessionMessage?.('Trecho acrescentado. Confira o formulário e clique em “Salvar rascunho” para gravar.')
+      } catch (reason) { setError(reason.message) }
+      onVoiceDraftApplied?.(intent.commandId)
+      return
+    }
+    if ((intent.type && intent.type !== 'session.draft.update') || !activeDraft || activeDraft.id !== intent.target?.sessionDraftId || activeDraft.patientId !== intent.target?.patientId || patientId !== activeDraft.patientId) return
+    appliedVoiceDraftRef.current = intent.commandId
+    voiceVersionRef.current++
+    voiceConfirmationPendingRef.current = true
+    setVoiceConfirmationPending(true)
+    const patch = intent.patch
+    if (patch?.field === 'behaviorIds' && ['add', 'remove'].includes(patch.operation) && typeof patch.value === 'string') {
+      const next = patch.operation === 'remove'
+        ? valuesRef.current.behaviorIds.filter(id => id !== patch.value)
+        : valuesRef.current.behaviorIds.includes(patch.value) ? valuesRef.current.behaviorIds : [...valuesRef.current.behaviorIds, patch.value]
+      setBehaviorIds(next); updateValues({ behaviorIds: next })
+      onSessionMessage?.(`Comportamento preenchido. Confira o formulário e clique em “Salvar rascunho” para gravar.`)
+    } else if (['observation', 'procedures', 'outcomeDecision', 'referralClosure'].includes(patch?.field) && patch.operation === 'replace' && typeof patch.value === 'string') {
+      const setter = { observation: setObservation, procedures: setProcedures, outcomeDecision: setOutcomeDecision, referralClosure: setReferralClosure }[patch.field]
+      setter(patch.value); updateValues({ [patch.field]: patch.value })
+      onSessionMessage?.(`Texto preenchido. Confira o formulário e clique em “Salvar rascunho” para gravar.`)
+    } else if (patch?.field === 'indicators' && patch.operation === 'set' && patch.value?.id && Number.isInteger(patch.value.value)) {
+      const previous = valuesRef.current.indicatorEntries.find(item => item.id === patch.value.id) || { id: patch.value.id, value: null, note: null }
+      const entry = { id: patch.value.id, value: patch.value.value, note: previous.note ?? null }
+      const next = [...valuesRef.current.indicatorEntries.filter(item => item.id !== entry.id), entry]
+      setIndicatorEntries(next); updateValues({ indicatorEntries: next })
+      onSessionMessage?.(`Indicador preenchido. Confira o formulário e clique em “Salvar rascunho” para gravar.`)
+    } else onSessionMessage?.('Não apliquei o comando: o campo ou a operação não é compatível com este rascunho.')
+    onVoiceDraftApplied?.(intent.commandId)
+  }, [voiceCommandDraft, activeDraft, patientId, loadedPatientId, workspaceActive, addendumSessionId, addendumContent, onVoiceDraftApplied, onSessionMessage, updateValues, getClinicalTextSnapshot, setEditingTemplate, setAddendumSessionId, transitionPanel])
+  const save = useCallback(() => {
     clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = null
     if (savePromiseRef.current) return savePromiseRef.current
+    if (voiceVersionRef.current > approvedVoiceVersionRef.current) return Promise.reject(new Error('Revise a alteração de voz e clique em “Salvar rascunho” antes de gravar.'))
     const draftId = activeDraft.id
     const draftPatientId = activeDraft.patientId
     if (draftIdentityRef.current.id !== draftId || draftIdentityRef.current.patientId !== draftPatientId || patientId !== draftPatientId) return Promise.reject(new Error('Rascunho ativo alterado antes de salvar'))
@@ -113,10 +339,14 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
         revision = revisionRef.current
         const values = valuesRef.current
         saved = await invoke('session_draft_save', { id: draftId, input: { observation: values.observation, procedures: values.procedures, outcomeDecision: values.outcomeDecision, referralClosure: values.referralClosure, behaviorIds: values.behaviorIds, indicators: values.indicatorEntries } })
-      } while (revision !== revisionRef.current)
+      } while (revision !== revisionRef.current && voiceVersionRef.current <= approvedVoiceVersionRef.current)
       const stillActive = mountedRef.current && draftIdentityRef.current.id === draftId && draftIdentityRef.current.patientId === draftPatientId
       if (stillActive) {
-        dirtyRef.current = false
+        dirtyRef.current = revision !== revisionRef.current
+        if (!dirtyRef.current && voiceVersionRef.current <= approvedVoiceVersionRef.current) {
+          voiceConfirmationPendingRef.current = false
+          setVoiceConfirmationPending(false)
+        }
         setError('')
         if (draftIdentityRef.current.id === draftId && draftIdentityRef.current.patientId === draftPatientId && saved.id === draftId && saved.patientId === draftPatientId) {
           onDraftChange(saved)
@@ -129,12 +359,13 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     savePromiseRef.current = pending
     void pending.then(() => {
       if (savePromiseRef.current === pending) savePromiseRef.current = null
-      if (mountedRef.current && dirtyRef.current && !autosaveTimerRef.current && draftIdentityRef.current.id === draftId && draftIdentityRef.current.patientId === draftPatientId) {
-        autosaveTimerRef.current = setTimeout(() => { autosaveTimerRef.current = null; if (draftIdentityRef.current.id === draftId && draftIdentityRef.current.patientId === draftPatientId) save().catch(reason => { if (mountedRef.current) setError(String(reason)) }) }, 600)
+      if (mountedRef.current && dirtyRef.current && !voiceConfirmationPendingRef.current && !autosaveTimerRef.current && draftIdentityRef.current.id === draftId && draftIdentityRef.current.patientId === draftPatientId) {
+        autosaveTimerRef.current = setTimeout(() => { autosaveTimerRef.current = null; if (draftIdentityRef.current.id === draftId && draftIdentityRef.current.patientId === draftPatientId && !voiceConfirmationPendingRef.current) saveRef.current?.().catch(reason => { if (mountedRef.current) setError(String(reason)) }) }, 600)
       }
     }, () => { if (savePromiseRef.current === pending) savePromiseRef.current = null })
     return pending
-  }
+  }, [activeDraft, patientId, onDraftChange, onChanged])
+  useLayoutEffect(() => { saveRef.current = save }, [save])
   const flush = async () => {
     let saved
     do { saved = await save() } while (dirtyRef.current)
@@ -142,11 +373,15 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   }
 
   useImperativeHandle(ref, () => ({
+    getClinicalTextSnapshot,
+    cancelPendingSectionNavigation: () => { sectionRequestEpochRef.current++ },
     savePending: async () => {
+      if (voiceConfirmationPendingRef.current) throw new Error('Há uma alteração de voz não salva. Revise e clique em “Salvar rascunho” ou cancele o rascunho antes de sair.')
       if (!activeDraft || (!dirtyRef.current && !savePromiseRef.current)) return
       setBusy(true)
       try { await flush() } finally { setBusy(false) }
     },
+    hasUnconfirmedVoiceChanges: () => voiceConfirmationPendingRef.current,
     waitForIdle,
     hasOtherUnsavedEditors: () => Boolean(
       caseDemand.trim() || caseObjectives.trim() || addendumSessionId || addendumContent.trim() ||
@@ -154,6 +389,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     ),
     discardOtherUnsavedEditors: () => {
       if (busyRef.current) throw new Error('Aguarde o salvamento em andamento antes de descartar edições.')
+      advanceEditorCycle('context')
       setCaseDemand(''); setCaseObjectives('')
       setAddendumSessionId(''); setAddendumContent('')
       setTemplateTitle(''); setTemplateDescription(''); setEditingTemplate(null)
@@ -162,18 +398,20 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
 
   const saveDraft = async event => {
     event.preventDefault(); setBusy(true); setError(''); setMessage('')
+    approvedVoiceVersionRef.current = voiceVersionRef.current
     try { await flush(); setMessage('Rascunho salvo no cofre cifrado.') }
     catch (reason) { setError(String(reason)) }
     finally { setBusy(false) }
   }
 
   const finalize = async () => {
-    if (!activeDraft || activeDraft.patientId !== patientId || !observation.trim() || !procedures.trim() || !outcomeDecision.trim() || !window.confirm(`Finalizar sessão sintética do paciente ${patientId}, ocorrência original ${activeDraft.originalDate}?`)) return
+    if (!activeDraft || activeDraft.patientId !== patientId || !observation.trim() || !procedures.trim() || !outcomeDecision.trim() || !await onConfirm(`Finalizar sessão do paciente ${patientId}, ocorrência original ${activeDraft.originalDate}?`)) return
+    if (voiceConfirmationPendingRef.current) { setError('Salve a alteração de voz em “Salvar rascunho” antes de finalizar.'); return }
     setBusy(true); setError(''); setMessage('')
     try {
       const saved = await flush()
       await invoke('session_finalize', { id: saved.id })
-      onSessionMessage('Sessão sintética finalizada e persistida.')
+      onSessionMessage('Sessão finalizada e salva.')
       onDraftChange(null)
       await onChanged()
     } catch (reason) { setError(String(reason)) }
@@ -181,13 +419,14 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   }
 
   const cancel = async () => {
-    if (!activeDraft || !window.confirm(`Cancelar e excluir o rascunho da ocorrência original ${activeDraft.originalDate}? Texto e comportamentos ainda não salvos também serão descartados. Nenhuma sessão finalizada será criada.`)) return
+    if (!activeDraft || !await onConfirm(`Cancelar e excluir o rascunho da ocorrência original ${activeDraft.originalDate}? Texto e comportamentos ainda não salvos também serão descartados. Nenhuma sessão finalizada será criada.`)) return
     setBusy(true); setError(''); setMessage('')
     try {
       clearTimeout(autosaveTimerRef.current)
       if (savePromiseRef.current) await savePromiseRef.current
       await invoke('session_draft_cancel', { id: activeDraft.id })
-      setObservation(''); setProcedures(''); setOutcomeDecision(''); setReferralClosure(''); setBehaviorIds([]); setIndicatorEntries([]); valuesRef.current = { observation: '', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicatorEntries: [] }; revisionRef.current++; dirtyRef.current = false
+      approvedVoiceVersionRef.current = voiceVersionRef.current
+      setObservation(''); setProcedures(''); setOutcomeDecision(''); setReferralClosure(''); setBehaviorIds([]); setIndicatorEntries([]); valuesRef.current = { observation: '', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicatorEntries: [] }; revisionRef.current++; dirtyRef.current = false; voiceConfirmationPendingRef.current = false; setVoiceConfirmationPending(false)
       onSessionMessage('Rascunho cancelado sem registro clínico final.')
       onDraftChange(null)
       await onChanged()
@@ -210,6 +449,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   const selectDraft = async draft => {
     setBusy(true); setError('')
     try {
+      if (voiceConfirmationPendingRef.current) throw new Error('Salve ou cancele a alteração de voz antes de trocar de rascunho.')
       const saved = activeDraft && (dirtyRef.current || savePromiseRef.current) ? await flush() : null
       const selected = saved?.id === draft.id ? saved : draft
       onPatientChange(selected.patientId); onDraftChange(selected)
@@ -221,6 +461,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   const changePatient = async value => {
     setBusy(true); setError('')
     try {
+      if (voiceConfirmationPendingRef.current) throw new Error('Salve ou cancele a alteração de voz antes de trocar de paciente.')
       if (activeDraft && (dirtyRef.current || savePromiseRef.current)) await flush()
       clearTimeout(autosaveTimerRef.current); onPatientChange(value); onDraftChange(null); valuesRef.current = { observation: '', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicatorEntries: [] }; revisionRef.current++; dirtyRef.current = false
       setAddendumSessionId(''); setAddendumContent('')
@@ -229,6 +470,27 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   }
 
   const visibleDrafts = loadedPatientId === patientId ? drafts : []
+  const resumeControl = (draft, index) => ({
+    disabled: busy || !workspaceActive || loadedPatientId !== patientId || draft.patientId !== patientId,
+    'data-voice-draft-resume': 'true',
+    'data-voice-resume-patient': draft.patientId,
+    'data-voice-resume-draft': draft.id,
+    'data-voice-resume-date': draft.originalDate,
+    'data-voice-resume-option': String(index + 1),
+    'data-voice-resume-needs-option': visibleDrafts.filter(item => item.originalDate === draft.originalDate).length > 1 ? 'true' : 'false',
+    'data-voice-action': `sessions:resume:${draft.patientId}:${draft.id}`,
+    'data-voice-record': `draft:${draft.id}`,
+    'data-voice-epoch': `${resumeInstance}:${resumeRevision}`,
+  })
+  const chooseDraftToResume = () => {
+    if (visibleDrafts.length === 1) { void selectDraft(visibleDrafts[0]); return }
+    const panel = document.getElementById('session-other-drafts')
+    if (panel) { panel.open = true; panel.scrollIntoView({ block: 'start', behavior: 'smooth' }); panel.querySelector('summary')?.focus({ preventScroll: true }) }
+  }
+  const templateOption = template => {
+    const sameTitle = templates.filter(item => item.title === template.title)
+    return sameTitle.length > 1 ? ` · opção ${sameTitle.findIndex(item => item.id === template.id) + 1}` : ''
+  }
   const visibleTimeline = loadedPatientId === patientId ? timeline : []
   const visibleAddenda = loadedPatientId === patientId ? addenda : []
   const visibleContexts = loadedPatientId === patientId ? caseContexts : []
@@ -244,6 +506,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     try {
       saved = await invoke('case_context_create', { patientId, demand: caseDemand, objectives: caseObjectives })
     } catch (reason) { setError(String(reason)); setBusy(false); return }
+    advanceEditorCycle('context')
     setCaseDemand(''); setCaseObjectives('')
     setCaseContexts(previous => [saved, ...previous])
     setMessage('Nova revisão datada do contexto salva; revisões anteriores preservadas.')
@@ -252,8 +515,17 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       if (results.some(result => result.status === 'rejected')) setMessage('Nova revisão datada do contexto salva; a atualização da tela falhou. Reabra as sessões para atualizar os dados.')
     } finally { setBusy(false) }
   }
+  const invalidateAddendumRequest = () => {
+    sectionRequestEpochRef.current++
+    if (voiceCommandDraft?.type === 'session.addendum.open') onVoiceDraftApplied?.(voiceCommandDraft.commandId)
+  }
+  const cancelAddendum = () => {
+    invalidateAddendumRequest()
+    setAddendumSessionId(''); setAddendumContent('')
+  }
   const saveAddendum = async event => {
     event.preventDefault(); if (!addendumSessionId || !addendumContent.trim()) return
+    invalidateAddendumRequest()
     setBusy(true); setError(''); setMessage('')
     let saved
     try {
@@ -268,7 +540,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     } finally { setBusy(false) }
   }
   const exportRecord = async () => {
-    if (!patientId || busy || !window.confirm('Esta cópia será um arquivo .txt sem criptografia com dados sensíveis. Escolha um destino local seguro; pastas sincronizadas podem enviar o arquivo à nuvem. Uma queda do aplicativo ou de energia durante a exportação pode deixar um arquivo temporário .circulo-record-*.tmp em texto puro no diretório escolhido. Revise o conteúdo antes de usar. Continuar?')) return
+    if (!patientId || busy || !await onConfirm('Esta cópia será um arquivo .txt sem criptografia com dados sensíveis. Escolha um destino local seguro; pastas sincronizadas podem enviar o arquivo à nuvem. Uma queda do aplicativo ou de energia durante a exportação pode deixar um arquivo temporário .circulo-record-*.tmp em texto puro no diretório escolhido. Revise o conteúdo antes de usar. Continuar?')) return
     setBusy(true); setError(''); setMessage('')
     try {
       const created = await invoke('record_copy_export', { patientId })
@@ -284,27 +556,27 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     updateValues({ indicatorEntries: next })
   }
 
-  return <section className="vault-backup session-workspace" aria-label="Sessões clínicas sintéticas persistentes">
+  return <section ref={workspaceRef} className="vault-backup session-workspace" aria-label="Sessões e registros">
     <h2>Registros do paciente</h2>
-    <p className="vault-warning">Protótipo: use apenas dados fictícios. Registros descritivos, sem interpretação clínica.</p>
     {error && <p role="alert" className="vault-error">{error}</p>}
     {message && <p role="status" className="vault-ok">{message}</p>}
     <label htmlFor="session-patient">Paciente para evolução e sessões</label>
     <select id="session-patient" disabled={busy} value={patientId || ''} onChange={event => changePatient(event.target.value)}>
-      <option value="">Selecione</option>{patients.map(patient => <option key={patient.id} value={patient.id}>{patient.name}{patient.archivedAt != null ? ' · arquivado' : ''}</option>)}
+      <option value="">Selecione</option>{patients.map(patient => <option key={patient.id} value={patient.id}>{patient.name}{entityOptionSuffix(patient, patients)}{patient.archivedAt != null ? ' · arquivado' : ''}</option>)}
     </select>
     {patientId && <section className="session-primary" aria-label="Registrar comportamento ou evolução">
       <h3>Registrar comportamento nesta sessão</h3>
       <p>Marque abaixo o que ocorreu; o comportamento entra no histórico ao finalizar a sessão.</p>
-      {activeDraft?.patientId === patientId ? <button type="button" className="session-primary-button" disabled={busy} onClick={() => { const choices = document.getElementById('draft-behaviors'); choices?.scrollIntoView({ block: 'center' }); choices?.focus({ preventScroll: true }) }}>Escolher comportamentos desta sessão</button> : visibleDrafts.length ? <button type="button" disabled={busy} onClick={() => selectDraft(visibleDrafts[0])}>Retomar sessão de {visibleDrafts[0].originalDate}</button> : <button type="button" disabled={busy || !onStartRecord} onClick={() => onStartRecord?.(patientId)}>Escolher compromisso na Agenda</button>}
+      {activeDraft?.patientId === patientId ? <button type="button" className="session-primary-button" disabled={busy} onClick={() => { const choices = document.getElementById('draft-behaviors'); choices?.scrollIntoView({ block: 'center' }); choices?.focus({ preventScroll: true }) }}>Escolher comportamentos desta sessão</button> : visibleDrafts.length ? <button type="button" disabled={busy} onClick={chooseDraftToResume}>{visibleDrafts.length === 1 ? `Retomar sessão de ${visibleDrafts[0].originalDate}` : 'Escolher rascunho para retomar'}</button> : <button type="button" disabled={busy || !onStartRecord} onClick={() => onStartRecord?.(patientId)}>Escolher compromisso na Agenda</button>}
       {!activeDraft && !visibleDrafts.length && <p>Escolha ou crie um compromisso para este paciente; depois marque os comportamentos na sessão.</p>}
       {!activeDraft && !visibleDrafts.length && !onStartRecord && <p>Abra a Agenda para criar ou escolher um compromisso.</p>}
     </section>}
-    {activeDraft && activeDraft.patientId === patientId && <form id="session-draft" onSubmit={saveDraft} aria-label="Rascunho de sessão sintética">
+    {activeDraft && activeDraft.patientId === patientId && <form ref={clinicalFormRef} id="session-draft" data-voice-record={activeDraft.id} onSubmit={saveDraft} aria-label="Rascunho de sessão">
       <h3>Rascunho da ocorrência {activeDraft.originalDate}</h3>
       <p>Paciente: <strong>{patients.find(patient => patient.id === patientId)?.name || patientId}</strong> · {activeDraft.originalDate}</p>
-      <fieldset id="draft-behaviors" className="session-behavior-choices" tabIndex={-1} disabled={busy}><legend>Comportamentos desta sessão</legend>{templates.length ? templates.map(template => <label key={template.id} className="vault-checkbox"><input type="checkbox" checked={behaviorIds.includes(template.id)} onChange={event => { const next = event.target.checked ? [...behaviorIds, template.id] : behaviorIds.filter(id => id !== template.id); setBehaviorIds(next); updateValues({ behaviorIds: next }) }} /> {template.title} · v{template.version}</label>) : <p>Nenhum comportamento disponível. <a href="#session-behaviors" onClick={() => document.getElementById('session-behaviors')?.setAttribute('open', '')}>Criar na biblioteca</a>.</p>}</fieldset>
-      <div id="draft-actions" className="session-draft-actions"><button type="submit" disabled={busy}>Salvar rascunho</button><button type="button" disabled={busy || activeDraft.patientId !== patientId || missingFinalizationFields.length > 0} aria-describedby={missingFinalizationFields.length ? 'session-finalize-requirements' : undefined} onClick={finalize}>Finalizar sessão sintética</button></div>
+      <fieldset id="draft-behaviors" className="session-behavior-choices" tabIndex={-1} disabled={busy}><legend>Comportamentos desta sessão</legend>{templates.length ? templates.map(template => <label key={template.id} data-voice-record={`${activeDraft.id}:behavior:${template.id}`} data-voice-epoch={template.version} className="vault-checkbox"><input type="checkbox" checked={behaviorIds.includes(template.id)} onChange={event => { const next = event.target.checked ? [...behaviorIds, template.id] : behaviorIds.filter(id => id !== template.id); setBehaviorIds(next); updateValues({ behaviorIds: next }) }} /> {template.title} · v{template.version}{templateOption(template)}</label>) : <p>Nenhum comportamento disponível. <a href="#session-behaviors" onClick={() => (transitionPanel('library', true), document.getElementById('session-behaviors')?.setAttribute('open', ''))}>Criar na biblioteca</a>.</p>}</fieldset>
+      {voiceConfirmationPending && <p role="status">Alteração de voz ainda não salva. Revise os campos e clique em “Salvar rascunho”.</p>}
+      <div id="draft-actions" className="session-draft-actions"><button type="submit" disabled={busy}>Salvar rascunho</button><button type="button" disabled={busy || activeDraft.patientId !== patientId || missingFinalizationFields.length > 0} aria-describedby={missingFinalizationFields.length ? 'session-finalize-requirements' : undefined} onClick={finalize}>Finalizar sessão</button></div>
       <p id="session-finalize-requirements" className="session-finalize-requirements" role="status" aria-live="polite">{missingFinalizationFields.length ? `Para finalizar, preencha: ${missingFinalizationFields.join(', ')}.` : 'Campos necessários preenchidos; a sessão pode ser finalizada.'}</p>
       <nav className="session-draft-steps" aria-label="Etapas do rascunho"><a href="#draft-behaviors">Comportamentos</a> · <a href="#session-observation">Evolução descritiva</a> · <a href="#draft-indicators">Indicadores e escalas</a> · <a href="#draft-actions">Salvar ou finalizar</a></nav>
       <label htmlFor="session-observation">Observações descritivas</label><textarea disabled={busy} id="session-observation" maxLength={4000} value={observation} onChange={event => { setObservation(event.target.value); updateValues({ observation: event.target.value }) }} />
@@ -320,29 +592,29 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
             <option value="">Sem registro</option>{indicator.labels.map((label, index) => <option key={label} value={index}>{label}</option>)}
           </select>
           <label htmlFor={`indicator-note-${indicator.id}`}>Nota contextual opcional · {indicator.name}</label>
-          <textarea disabled={busy} id={`indicator-note-${indicator.id}`} maxLength={500} value={entry?.note || ''} onChange={event => setIndicator(indicator.id, { note: event.target.value })} />
+          <textarea disabled={busy} id={`indicator-note-${indicator.id}`} data-voice-alias={`Nota contextual de ${indicator.name}`} maxLength={500} value={entry?.note || ''} onChange={event => setIndicator(indicator.id, { note: event.target.value })} />
           <button type="button" disabled={busy} className="vault-secondary" onClick={() => setIndicator(indicator.id, { value: null, note: null })}>Limpar {indicator.name}</button>
         </div>
       })}</fieldset>
       {!visibleContexts.length && <p>Contexto do caso não registrado; a sessão pode ser finalizada com esta lacuna.</p>}
       <button type="button" className="vault-secondary" disabled={busy} onClick={cancel}>Cancelar rascunho</button>
     </form>}
-    {patientId && <details className="session-secondary"><summary>Outros rascunhos do paciente</summary>{visibleDrafts.length ? <ul className="vault-patients">{visibleDrafts.map(draft => <li key={draft.id}>Ocorrência original {draft.originalDate}<button type="button" disabled={busy} className="vault-secondary" onClick={() => selectDraft(draft)}>Retomar rascunho {draft.originalDate}</button></li>)}</ul> : <p>Nenhum rascunho deste paciente.</p>}</details>}
-    <details id="session-behaviors" className="session-secondary"><summary>Biblioteca de comportamentos reutilizáveis</summary><p>Crie ou edite opções para usar em sessões. A biblioteca não vincula o item ao paciente.</p><form onSubmit={saveTemplate} aria-label="Comportamento reutilizável"><label htmlFor="behavior-title">Título descritivo</label><input disabled={busy} id="behavior-title" maxLength={160} required value={templateTitle} onChange={event => setTemplateTitle(event.target.value)} /><label htmlFor="behavior-description">Descrição opcional</label><textarea disabled={busy} id="behavior-description" maxLength={1000} value={templateDescription} onChange={event => setTemplateDescription(event.target.value)} /><button disabled={busy} type="submit">{editingTemplate ? 'Salvar versão do comportamento' : 'Criar comportamento reutilizável'}</button>{editingTemplate && <button type="button" className="vault-secondary" onClick={() => { setEditingTemplate(null); setTemplateTitle(''); setTemplateDescription('') }}>Cancelar edição</button>}</form>{templates.length > 0 && <ul className="vault-patients">{templates.map(template => <li key={template.id}>{template.title} · v{template.version}<small>{template.description}</small><button type="button" disabled={busy} className="vault-secondary" onClick={() => { setEditingTemplate(template); setTemplateTitle(template.title); setTemplateDescription(template.description); document.getElementById('session-behaviors')?.setAttribute('open', '') }}>Editar comportamento {template.title}</button></li>)}</ul>}</details>
-    {patientId && <details className="session-secondary"><summary>Contexto do caso</summary>{visibleContexts.length ? <><h4>Contexto atual</h4><p>Registrado em <time dateTime={visibleContexts[0].recordedAt}>{new Date(visibleContexts[0].recordedAt).toLocaleString('pt-BR')}</time>{visibleContexts[0].author && ` · Identidade local declarada: ${visibleContexts[0].author.displayName} · ${visibleContexts[0].author.registration}`}</p><dl><dt>Demanda avaliada</dt><dd>{visibleContexts[0].demand}</dd><dt>Objetivos de trabalho</dt><dd>{visibleContexts[0].objectives}</dd></dl><h4>Revisões anteriores</h4>{visibleContexts.length > 1 ? <ol>{visibleContexts.slice(1).map(item => <li key={item.id}><time dateTime={item.recordedAt}>{new Date(item.recordedAt).toLocaleString('pt-BR')}</time>{item.author && ` · ${item.author.displayName} · ${item.author.registration}`}<dl><dt>Demanda avaliada</dt><dd>{item.demand}</dd><dt>Objetivos de trabalho</dt><dd>{item.objectives}</dd></dl></li>)}</ol> : <p>Nenhuma revisão anterior.</p>}</> : <p role="status">Contexto do caso não registrado para este paciente.</p>}<form onSubmit={saveCaseContext} aria-label="Nova revisão do contexto do caso"><p>Cada envio cria uma revisão datada; anteriores são preservadas.</p><label htmlFor="case-demand">Demanda avaliada</label><textarea id="case-demand" disabled={busy} required maxLength={4000} value={caseDemand} onChange={event => setCaseDemand(event.target.value)} /><label htmlFor="case-objectives">Objetivos de trabalho</label><textarea id="case-objectives" disabled={busy} required maxLength={4000} value={caseObjectives} onChange={event => setCaseObjectives(event.target.value)} /><button type="submit" disabled={busy || !caseDemand.trim() || !caseObjectives.trim()}>Salvar nova revisão do contexto</button></form></details>}
+    {patientId && <details id="session-other-drafts" className="session-secondary"><summary>Outros rascunhos do paciente</summary>{visibleDrafts.length ? <ul className="vault-patients">{visibleDrafts.map((draft, index) => <li key={draft.id} data-voice-record={`draft:${draft.id}`}>Ocorrência original {draft.originalDate}<button type="button" {...resumeControl(draft, index)} className="vault-secondary" onClick={() => selectDraft(draft)}>Retomar rascunho {draft.originalDate} · opção {index + 1}</button></li>)}</ul> : <p>Nenhum rascunho deste paciente.</p>}</details>}
+    <details onToggle={event => transitionPanel('library', event.currentTarget.open)} id="session-behaviors" className="session-secondary"><summary onClick={event => transitionPanel('library', !event.currentTarget.parentElement.open)}>Biblioteca de comportamentos reutilizáveis</summary><p>Crie ou edite opções para usar em sessões. A biblioteca não vincula o item ao paciente.</p><form ref={libraryFormRef} data-voice-lifecycle={`${resumeInstance}:library:${editorCycles.library}`} data-voice-record={editingTemplate ? `behavior:${editingTemplate.id}` : 'behavior:new'} data-voice-epoch={editingTemplate?.version || 0} onSubmit={saveTemplate} aria-label="Comportamento reutilizável"><label htmlFor="behavior-title">Título descritivo</label><input disabled={busy} id="behavior-title" maxLength={160} required value={templateTitle} onChange={event => setTemplateTitle(event.target.value)} /><label htmlFor="behavior-description">Descrição opcional</label><textarea disabled={busy} id="behavior-description" maxLength={1000} value={templateDescription} onChange={event => setTemplateDescription(event.target.value)} /><button disabled={busy} type="submit">{editingTemplate ? 'Salvar versão do comportamento' : 'Criar comportamento reutilizável'}</button>{editingTemplate && <button type="button" className="vault-secondary" onClick={() => { setEditingTemplate(null); setTemplateTitle(''); setTemplateDescription('') }}>Cancelar edição</button>}</form>{templates.length > 0 && <ul className="vault-patients">{templates.map(template => <li key={template.id} data-voice-record={`behavior:${template.id}`} data-voice-epoch={template.version}>{template.title} · v{template.version}<small>{template.description}</small><button type="button" disabled={busy} className="vault-secondary" onClick={() => { setEditingTemplate(template); setTemplateTitle(template.title); setTemplateDescription(template.description); transitionPanel('library', true); document.getElementById('session-behaviors')?.setAttribute('open', '') }}>Editar comportamento {template.title}{templateOption(template)}</button></li>)}</ul>}</details>
+    {patientId && <details onToggle={event => transitionPanel('context', event.currentTarget.open)} className="session-secondary"><summary onClick={event => transitionPanel('context', !event.currentTarget.parentElement.open)}>Contexto do caso</summary>{visibleContexts.length ? <><h4>Contexto atual</h4><p>Registrado em <time dateTime={visibleContexts[0].recordedAt}>{new Date(visibleContexts[0].recordedAt).toLocaleString('pt-BR')}</time>{visibleContexts[0].author && ` · Identidade local declarada: ${visibleContexts[0].author.displayName} · ${visibleContexts[0].author.registration}`}</p><dl><dt>Demanda avaliada</dt><dd>{visibleContexts[0].demand}</dd><dt>Objetivos de trabalho</dt><dd>{visibleContexts[0].objectives}</dd></dl><h4>Revisões anteriores</h4>{visibleContexts.length > 1 ? <ol>{visibleContexts.slice(1).map(item => <li key={item.id}><time dateTime={item.recordedAt}>{new Date(item.recordedAt).toLocaleString('pt-BR')}</time>{item.author && ` · ${item.author.displayName} · ${item.author.registration}`}<dl><dt>Demanda avaliada</dt><dd>{item.demand}</dd><dt>Objetivos de trabalho</dt><dd>{item.objectives}</dd></dl></li>)}</ol> : <p>Nenhuma revisão anterior.</p>}</> : <p role="status">Contexto do caso não registrado para este paciente.</p>}<form ref={contextFormRef} data-voice-record={`context:${patientId}`} data-voice-epoch={`${resumeInstance}:${resumeRevision}`} data-voice-lifecycle={`${resumeInstance}:context:${editorCycles.context}`} onSubmit={saveCaseContext} aria-label="Nova revisão do contexto do caso"><p>Cada envio cria uma revisão datada; anteriores são preservadas.</p><label htmlFor="case-demand">Demanda avaliada</label><textarea id="case-demand" disabled={busy || loadedPatientId !== patientId} required maxLength={4000} value={caseDemand} onChange={event => setCaseDemand(event.target.value)} /><label htmlFor="case-objectives">Objetivos de trabalho</label><textarea id="case-objectives" disabled={busy || loadedPatientId !== patientId} required maxLength={4000} value={caseObjectives} onChange={event => setCaseObjectives(event.target.value)} /><button type="submit" disabled={busy || loadedPatientId !== patientId || !caseDemand.trim() || !caseObjectives.trim()}>Salvar nova revisão do contexto</button></form></details>}
     {patientId && <details className="session-secondary"><summary>Exportar cópia legível</summary><p className="vault-warning">A cópia .txt não é cifrada. Escolha destino local seguro e revise o conteúdo. Uma queda durante a exportação pode deixar arquivo temporário em texto puro.</p><button type="button" disabled={busy} onClick={exportRecord}>Exportar cópia legível deste paciente</button></details>}
-    <details id="session-evolution" className="desktop-evolution session-secondary" aria-label="Evolução descritiva somente leitura">
-      <summary>Evolução e escalas registradas · Adicionar adendo</summary>
-      {patientId && <button type="button" disabled={busy || (!onStartRecord && !activeDraft && !visibleDrafts.length)} onClick={() => activeDraft?.patientId === patientId ? document.getElementById('session-draft')?.scrollIntoView() : visibleDrafts.length ? selectDraft(visibleDrafts[0]) : onStartRecord?.(patientId)}>Registrar nova sessão ou continuar rascunho</button>}
+    <details onToggle={event => transitionPanel('addendum', event.currentTarget.open)} id="session-evolution" className="desktop-evolution session-secondary" aria-label="Evolução descritiva somente leitura">
+      <summary onClick={event => transitionPanel('addendum', !event.currentTarget.parentElement.open)}>Evolução e escalas registradas · Adicionar adendo</summary>
+      {patientId && <button type="button" disabled={busy || (!onStartRecord && !activeDraft && !visibleDrafts.length)} onClick={() => activeDraft?.patientId === patientId ? document.getElementById('session-draft')?.scrollIntoView() : visibleDrafts.length ? chooseDraftToResume() : onStartRecord?.(patientId)}>Registrar nova sessão ou continuar rascunho</button>}
       <p>Registros persistidos em ordem de data da sessão. Esta visualização apenas descreve o que foi anotado; não é avaliação clínica e não calcula tendências.</p>
-      {visibleTimeline.length ? <ol className="desktop-evolution-list">{visibleTimeline.map(session => <li key={session.id}>
+      {visibleTimeline.length ? <ol className="desktop-evolution-list">{visibleTimeline.map(session => <li key={session.id} data-voice-record={`session:${session.id}`}>
         <header><strong>{session.sessionDate}</strong><span>{session.start}–{session.end} · {session.modality}{session.wasRescheduled ? ' · remarcada' : ''}</span></header>
         <p>{session.recordedAt ? `Registrado em ${new Date(session.recordedAt).toLocaleString('pt-BR')} (UTC: ${session.recordedAt})` : 'Horário de registro não disponível'}{session.author && ` · Identidade local declarada: ${session.author.displayName} · ${session.author.registration}`}</p>
         <dl><dt>Observação original</dt><dd>{session.observation?.trim() || 'Sem registro'}</dd><dt>Comportamentos registrados</dt><dd>{session.behaviors?.length ? <ul>{session.behaviors.map(item => <li key={`${item.templateId}-${item.templateVersion}`}>{item.title} · v{item.templateVersion}{item.description ? ` · ${item.description}` : ''}</li>)}</ul> : 'Sem registro'}</dd><dt>Indicadores registrados</dt><dd>{session.indicators?.length ? <ul>{session.indicators.map(item => <li key={`${item.id}-${item.version}`}>{item.name} · v{item.version}: {item.value == null ? 'Sem registro' : item.labels[item.value]}{item.note && <small>Nota contextual: {item.note}</small>}</li>)}</ul> : 'Sem registro'}</dd></dl>
         <dl><dt>Procedimentos realizados</dt><dd>{session.procedures?.trim() || 'não registrado'}</dd><dt>Resultado e decisão</dt><dd>{session.outcomeDecision?.trim() || 'não registrado'}</dd><dt>Encaminhamento ou encerramento</dt><dd>{session.referralClosure?.trim() || 'não registrado'}</dd></dl>
         <h4>Adendos datados</h4>
         {visibleAddenda.filter(item => item.sessionId === session.id).length ? <ol>{visibleAddenda.filter(item => item.sessionId === session.id).map(item => <li key={item.id}><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString('pt-BR')}</time> · {item.content}</li>)}</ol> : <p>Sem adendos.</p>}
-        {addendumSessionId === session.id ? <form onSubmit={saveAddendum}><label htmlFor={`addendum-${session.id}`}>Texto do adendo (até 4000 caracteres)</label><textarea id={`addendum-${session.id}`} disabled={busy} required maxLength={4000} value={addendumContent} onChange={event => setAddendumContent(event.target.value)} /><button type="submit" disabled={busy || !addendumContent.trim()}>Salvar adendo imutável</button><button type="button" className="vault-secondary" disabled={busy} onClick={() => { setAddendumSessionId(''); setAddendumContent('') }}>Cancelar</button></form> : <button type="button" className="vault-secondary" disabled={busy} onClick={() => { setAddendumSessionId(session.id); setAddendumContent('') }}>Adicionar adendo</button>}
+        {addendumSessionId === session.id ? <form ref={addendumFormRef} data-voice-lifecycle={`${resumeInstance}:addendum:${editorCycles.addendum}`} onSubmit={saveAddendum}><label htmlFor={`addendum-${session.id}`}>Texto do adendo (até 4000 caracteres)</label><textarea id={`addendum-${session.id}`} disabled={busy} required maxLength={4000} value={addendumContent} onChange={event => setAddendumContent(event.target.value)} /><button type="submit" disabled={busy || !addendumContent.trim()}>Salvar adendo imutável</button><button type="button" className="vault-secondary" disabled={busy} onClick={cancelAddendum}>Cancelar</button></form> : <button type="button" className="vault-secondary" data-voice-alias="Adicionar adendo" data-voice-label={`Adicionar adendo de ${patients.find(patient => patient.id === patientId)?.name || 'Paciente'} em ${session.sessionDate} às ${session.start}–${session.end}`} disabled={busy} onClick={() => { setAddendumSessionId(session.id); setAddendumContent('') }}>Adicionar adendo</button>}
       </li>)}</ol> : <p>Nenhuma sessão finalizada deste paciente.</p>}
       <h4>Registros longitudinais por escala compatível</h4>
       <p>Comparação apenas quando ID, versão e rótulos do snapshot coincidem exatamente. Escalas incompatíveis ficam separadas; não há média nem tendência calculada.</p>

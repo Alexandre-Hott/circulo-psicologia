@@ -1,0 +1,5 @@
+[
+  { "Index": 0, "IntendedCommand": "Encerrar série de Ana Clara na segunda às quinze horas.", "Transcript": "Encerrar série de Ana Clara na segunda às 15 horas." },
+  { "Index": 1, "IntendedCommand": "Antecipar término de Ana Clara na segunda às quinze horas.", "Transcript": "Anticipar termino de Ana Clara na segunda às 15 horas." },
+  { "Index": 2, "IntendedCommand": "Confirmar comando.", "Transcript": "Confirmar comando." }
+]

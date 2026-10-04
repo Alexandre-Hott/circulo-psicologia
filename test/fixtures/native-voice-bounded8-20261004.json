@@ -1,0 +1,60 @@
+{
+  "Provenance": {
+    "NativeSession": 55741,
+    "ExitCode": 0,
+    "ElapsedSeconds": 33.103,
+    "NativeArtifact": "C:/Users/alexandre/AppData/Local/Temp/circulo-asr79-bounded8-457d64838c914d4eb1223ec0b0aeb57f/native-result.json",
+    "NativeArtifactSHA256": "1272FA9C5A915EC7BCDA207BE320BBCB60377023578A766143468CF424A86629",
+    "Scope": "Actual Rust/Whisper output from eight retained synthetic WAVs. UI replay simulates media/IPC and does not run ASR or measure physical speech accuracy."
+  },
+  "Cases": [
+    {
+      "Index": 0,
+      "ExpectedSpoken": "Marcar sessão semanal para Ana Clara toda quinta às quinze horas.",
+      "Transcript": "Marcar sessã, Libra Óssemanal, para Ana Clara, toda quinta, esse 15 horas.",
+      "NativeSemanticStatus": "failed"
+    },
+    {
+      "Index": 1,
+      "ExpectedSpoken": "Cadastrar paciente Bia Fictícia com nove anos.",
+      "Transcript": "Cadastrar paciente bia fictânsia com nove anos.",
+      "NativeSemanticStatus": "failed"
+    },
+    {
+      "Index": 2,
+      "ExpectedSpoken": "Registrar comportamento Pede ajuda para Ana Clara na sessão.",
+      "Transcript": "Registrar comportamento, pede ajuda para Ana Clara na sesã libra-o.",
+      "NativeSemanticStatus": "passed"
+    },
+    {
+      "Index": 3,
+      "ExpectedSpoken": "Acrescentar observação da sessão de Ana Clara com pediu ajuda.",
+      "Transcript": "Acrescentar observação da seção de Ana Clara compidiu ajuda.",
+      "NativeSemanticStatus": "failed"
+    },
+    {
+      "Index": 4,
+      "ExpectedSpoken": "Acrescentar procedimentos da sessão de Ana Clara com fez jogo de turnos.",
+      "Transcript": "Acrescentar procedimentos da sessão de Ana Clara com fez jogo de turnos.",
+      "NativeSemanticStatus": "passed"
+    },
+    {
+      "Index": 5,
+      "ExpectedSpoken": "Acrescentar resultado da sessão de Ana Clara com manteve atenção.",
+      "Transcript": "Acrescentar resultado da seção de Ana Clara com manteve atenção.",
+      "NativeSemanticStatus": "passed"
+    },
+    {
+      "Index": 6,
+      "ExpectedSpoken": "Acrescentar encaminhamento da sessão de Ana Clara com próxima sessão semanal.",
+      "Transcript": "Acrescentar encaminhamento da seção de Ana Clara com próxima seção semanal.",
+      "NativeSemanticStatus": "failed"
+    },
+    {
+      "Index": 7,
+      "ExpectedSpoken": "Confirmar comando.",
+      "Transcript": "Confirmar comando.",
+      "NativeSemanticStatus": "not-evaluated"
+    }
+  ]
+}

@@ -1,11 +1,29 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Círculo",
-  "version": "0.2.20",
+  "version": "0.2.84",
   "identifier": "br.circulo.psicologia",
   "build": { "beforeDevCommand": "npm run dev", "beforeBuildCommand": "npm run build", "devUrl": "http://localhost:5173", "frontendDist": "../dist" },
-  "app": { "windows": [{ "title": "Círculo", "width": 1200, "height": 800, "minWidth": 900, "minHeight": 650 }] },
-  "bundle": { "active": true, "targets": ["nsis"], "createUpdaterArtifacts": true },
+  "app": { "windows": [{ "label": "main", "title": "Círculo", "width": 1200, "height": 800, "minWidth": 900, "minHeight": 650, "create": false }] },
+  "bundle": { "active": true, "targets": ["nsis"], "createUpdaterArtifacts": true, "resources": {
+    "resources/voice/ggml-small-q5_1.bin": "voice/ggml-small-q5_1.bin",
+    "resources/voice/whisper-cli.exe": "voice/whisper-cli.exe",
+    "resources/voice/ggml-base.dll": "voice/ggml-base.dll",
+    "resources/voice/ggml-cpu-alderlake.dll": "voice/ggml-cpu-alderlake.dll",
+    "resources/voice/ggml-cpu-cannonlake.dll": "voice/ggml-cpu-cannonlake.dll",
+    "resources/voice/ggml-cpu-cascadelake.dll": "voice/ggml-cpu-cascadelake.dll",
+    "resources/voice/ggml-cpu-haswell.dll": "voice/ggml-cpu-haswell.dll",
+    "resources/voice/ggml-cpu-icelake.dll": "voice/ggml-cpu-icelake.dll",
+    "resources/voice/ggml-cpu-sandybridge.dll": "voice/ggml-cpu-sandybridge.dll",
+    "resources/voice/ggml-cpu-skylakex.dll": "voice/ggml-cpu-skylakex.dll",
+    "resources/voice/ggml-cpu-sse42.dll": "voice/ggml-cpu-sse42.dll",
+    "resources/voice/ggml-cpu-x64.dll": "voice/ggml-cpu-x64.dll",
+    "resources/voice/ggml.dll": "voice/ggml.dll",
+    "resources/voice/parakeet.dll": "voice/parakeet.dll",
+    "resources/voice/SDL2.dll": "voice/SDL2.dll",
+    "resources/voice/whisper.dll": "voice/whisper.dll",
+    "resources/voice/THIRD-PARTY-NOTICES.txt": "voice/THIRD-PARTY-NOTICES.txt"
+  } },
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFCMzNBQUI3QTFERTU3NgpSV1IyNVIxNnF6cXpDbm92dkV3cG12TUV6bDFCSEFCcDVpTGJ6NlI2aE0wNVJSeGd2YjM3TE41YQo=",

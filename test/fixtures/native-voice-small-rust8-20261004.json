@@ -1,0 +1,425 @@
+{
+  "Provenance": {
+    "ArtifactRoot": "C:/Users/alexandre/AppData/Local/Temp/circulo-smallq5-rust8-result-837e1347fb8f4b75a4d874bd592f3b09",
+    "NativeArtifact": "C:/Users/alexandre/AppData/Local/Temp/circulo-smallq5-rust8-result-837e1347fb8f4b75a4d874bd592f3b09/native-result.json",
+    "NativeArtifactSHA256": "998504EA35C2775B0787ED07D4D3F406921714028FF874CE9A45169058BF8E72",
+    "InputManifestSHA256": "43E99EDD43784E48DC0AE87936126A18CBA35CFEA1E5923421A89D7C665C6D7C",
+    "QualityReportSHA256": "24863B404B49DF20045FCE3E7DAF1B19F3C8FA9E0DCB57185EB345FBD3D6EBBE",
+    "RunResultSHA256": "A41B5BC755C9D863B5A47F1888D887EFCDB8D099B03F513512D4AC22E3FA67F9",
+    "ArtifactHashes": [
+      {
+        "path": "evaluation-stderr.txt",
+        "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+      },
+      {
+        "path": "evaluation-stdout.txt",
+        "sha256": "020D92490CBAFE5EFC4ADC63E6FF62F3E454F36830DFB3B0CD2E9230AD73D17D"
+      },
+      {
+        "path": "input-manifest.json",
+        "sha256": "43E99EDD43784E48DC0AE87936126A18CBA35CFEA1E5923421A89D7C665C6D7C"
+      },
+      {
+        "path": "native-result.json",
+        "sha256": "998504EA35C2775B0787ED07D4D3F406921714028FF874CE9A45169058BF8E72"
+      },
+      {
+        "path": "native-stderr.txt",
+        "sha256": "3BDC247638D66605C71313ACCFC0A51BCB632CEEEDC458DEFF6DE999BB1E4FBD"
+      },
+      {
+        "path": "native-stdout.txt",
+        "sha256": "BDB45D49C42FE135266F6CB7F5541EADF7BA8056ED573F61E2EA89DCC05B0663"
+      },
+      {
+        "path": "quality-report.json",
+        "sha256": "24863B404B49DF20045FCE3E7DAF1B19F3C8FA9E0DCB57185EB345FBD3D6EBBE"
+      },
+      {
+        "path": "run-result.json",
+        "sha256": "A41B5BC755C9D863B5A47F1888D887EFCDB8D099B03F513512D4AC22E3FA67F9"
+      }
+    ],
+    "Command": "cargo test --release --offline --locked native_voice::tests::transcribes_synthetic_wav_through_the_same_local_backend_as_the_app -- --exact --ignored --nocapture --test-threads=1",
+    "exitCode": 2,
+    "nativeExitCode": 0,
+    "timedOut": false,
+    "elapsedSeconds": 51.2912555,
+    "rustTestSeconds": "37.47",
+    "compilationSeconds": "11.81",
+    "latencyLimitation": "Existing serial harness emits no individual-case timing; native stderr is intentionally null",
+    "inputsUnchanged": true,
+    "Model": "ggml-small-q5_1.bin",
+    "ModelBytes": 190085487,
+    "ModelSHA256": "AE85E4A935D7A567BD102FE55AFC16BB595BDB618E11B2FC7591BC08120411BB",
+    "CliSHA256": "58245314FB73B30FBD0CF0542C5C172E23F02B6EB7CAD7B51E792439CF5E1755",
+    "SourceHashes": [
+      {
+        "path": "src/centralCommandRouter.js",
+        "sha256": "9E11688E7BE40981DB8472BCE0EC930073DAF6B6867581B2470D67D005CE8966"
+      },
+      {
+        "path": "src/DesktopVault.jsx",
+        "sha256": "D646132E5384DB0EC9999BDCD5BBB4F38B677822A7E1AC954CEBB8EEB4A69614"
+      },
+      {
+        "path": "src/VoiceCommandCenter.jsx",
+        "sha256": "901AB6D97D0A9C14C09827FAA4F49554DBADEC6A4C90D9A3D27477D69BCFC438"
+      },
+      {
+        "path": "src-tauri/src/native_voice.rs",
+        "sha256": "C5457E287964D256A5FEE6736276876A056CD1BD3A7A070A0D310966C64B84C7"
+      }
+    ],
+    "Prompt": "Abrir agenda. Abrir pacientes. Abrir sessões. Abrir análises deste mês. Abrir ajustes. Clicar em Novo cadastro. Confirmar comando. Cadastrar paciente. Editar paciente. Marcar sessão semanal. Criar comportamento. Registrar comportamento na sessão. Observação, evolução e indicador. Ana Clara. Bia Fictícia.",
+    "PatientNames": [
+      "Ana Clara",
+      "Bia Fictícia"
+    ],
+    "TimeoutSeconds": 60,
+    "GlobalTimeoutSeconds": 600,
+    "Retries": 0,
+    "Scope": "Actual Rust transcribe output (outer-trimmed by production), not reconstructed raw CLI bytes. UI media/IPC replay is synthetic, not new ASR, physical microphone precision, confirmation execution or persistence."
+  },
+  "Quality": {
+    "Passed": 5,
+    "Failed": 2,
+    "NotEvaluated": 1
+  },
+  "Cases": [
+    {
+      "Index": 0,
+      "ExpectedSpoken": "Marcar sessão semanal para Ana Clara toda quinta às quinze horas.",
+      "Transcript": "Marcar sessã-libra osemanal para Ana Clara toda quinta-anésse 15 horas.",
+      "NativeSemanticStatus": "failed",
+      "NativeExpectedIntent": {
+        "type": "appointment.recurring.create",
+        "draft": {
+          "appointmentType": "Recorrente",
+          "patientId": "ana",
+          "patientName": "Ana Clara",
+          "weekday": 4,
+          "frequency": "Semanal",
+          "start": "15:00",
+          "end": "15:50",
+          "startDate": "2026-10-03",
+          "endDate": null,
+          "modality": "Presencial",
+          "meetingLink": ""
+        }
+      },
+      "NativeActualIntent": null,
+      "NativeLiteralBodyExact": null,
+      "ConfirmationTextOnly": false,
+      "Wav": {
+        "OriginalSource": "C:/Users/alexandre/AppData/Local/Temp/circulo-whisper-synthetic-5cc26161d9d24bbe9e983a2901d147ae/synthetic-command-0.wav",
+        "NativeInput": "C:/Users/alexandre/AppData/Local/Temp/circulo-asr79-bounded8-457d64838c914d4eb1223ec0b0aeb57f/synthetic-command-0.wav",
+        "SHA256": "77D9EDDEF437585EA0AA97B725D5BF7ABCB57600517367E63EB5C357789EE055",
+        "Bytes": 365454,
+        "DurationSeconds": 8.285896,
+        "SampleRate": 22050,
+        "Channels": 1,
+        "Bits": 16
+      }
+    },
+    {
+      "Index": 1,
+      "ExpectedSpoken": "Cadastrar paciente Bia Fictícia com nove anos.",
+      "Transcript": "Cadastrar paciente. Bia Fictícia com 9 anos.",
+      "NativeSemanticStatus": "passed",
+      "NativeExpectedIntent": {
+        "type": "patient.create",
+        "draft": {
+          "name": "Bia Fictícia",
+          "age": 9
+        }
+      },
+      "NativeActualIntent": {
+        "type": "patient.create",
+        "draft": {
+          "name": "Bia Fictícia",
+          "age": 9
+        }
+      },
+      "NativeLiteralBodyExact": null,
+      "ConfirmationTextOnly": false,
+      "Wav": {
+        "OriginalSource": "C:/Users/alexandre/AppData/Local/Temp/circulo-whisper-synthetic-5cc26161d9d24bbe9e983a2901d147ae/synthetic-command-1.wav",
+        "NativeInput": "C:/Users/alexandre/AppData/Local/Temp/circulo-asr79-bounded8-457d64838c914d4eb1223ec0b0aeb57f/synthetic-command-1.wav",
+        "SHA256": "75556B0955AC932300761ABB69BA1AFAA6146FD630AB93EB526415E07DEA4340",
+        "Bytes": 265990,
+        "DurationSeconds": 6.030476,
+        "SampleRate": 22050,
+        "Channels": 1,
+        "Bits": 16
+      }
+    },
+    {
+      "Index": 2,
+      "ExpectedSpoken": "Registrar comportamento Pede ajuda para Ana Clara na sessão.",
+      "Transcript": "Registrar comportamento pede ajuda para Ana Clara na Sesã Libra O.",
+      "NativeSemanticStatus": "passed",
+      "NativeExpectedIntent": {
+        "type": "session.draft.update",
+        "target": {
+          "patientId": "ana",
+          "patientName": "Ana Clara",
+          "sessionDraftId": "synthetic-draft",
+          "sessionDate": null
+        },
+        "patch": {
+          "field": "behaviorIds",
+          "operation": "add",
+          "value": "help",
+          "label": "Pede ajuda"
+        }
+      },
+      "NativeActualIntent": {
+        "type": "session.draft.update",
+        "target": {
+          "patientId": "ana",
+          "patientName": "Ana Clara",
+          "sessionDraftId": "synthetic-draft",
+          "sessionDate": null
+        },
+        "patch": {
+          "field": "behaviorIds",
+          "operation": "add",
+          "value": "help",
+          "label": "Pede ajuda"
+        }
+      },
+      "NativeLiteralBodyExact": null,
+      "ConfirmationTextOnly": false,
+      "Wav": {
+        "OriginalSource": "C:/Users/alexandre/AppData/Local/Temp/circulo-whisper-synthetic-5cc26161d9d24bbe9e983a2901d147ae/synthetic-command-2.wav",
+        "NativeInput": "C:/Users/alexandre/AppData/Local/Temp/circulo-asr79-bounded8-457d64838c914d4eb1223ec0b0aeb57f/synthetic-command-2.wav",
+        "SHA256": "7AC23418806641E725F7AF8B72473FA55CF2EA2A516E0EEB1C27750046EFB3AB",
+        "Bytes": 338722,
+        "DurationSeconds": 7.679728,
+        "SampleRate": 22050,
+        "Channels": 1,
+        "Bits": 16
+      }
+    },
+    {
+      "Index": 3,
+      "ExpectedSpoken": "Acrescentar observação da sessão de Ana Clara com pediu ajuda.",
+      "Transcript": "Acrescentar observação da sessão de Ana Clara compediu ajuda.",
+      "NativeSemanticStatus": "failed",
+      "NativeExpectedIntent": {
+        "type": "session.draft.update",
+        "target": {
+          "patientId": "ana",
+          "patientName": "Ana Clara",
+          "sessionDraftId": "synthetic-draft",
+          "sessionDate": "2026-10-04"
+        },
+        "patch": {
+          "field": "observation",
+          "operation": "append",
+          "value": "pediu ajuda.",
+          "separator": " ",
+          "baseValue": "Base fictícia.",
+          "baseEpoch": 1,
+          "baseRevision": 7
+        }
+      },
+      "NativeActualIntent": null,
+      "NativeLiteralBodyExact": false,
+      "ConfirmationTextOnly": false,
+      "Wav": {
+        "OriginalSource": "C:/Users/alexandre/AppData/Local/Temp/circulo-whisper-synthetic-4d5d6738249843e7b82ebf665557f4df/synthetic-command-0.wav",
+        "NativeInput": "C:/Users/alexandre/AppData/Local/Temp/circulo-asr79-bounded8-457d64838c914d4eb1223ec0b0aeb57f/synthetic-command-3.wav",
+        "SHA256": "7EA01A76F39FF9864C901D998D601A86E3F87E6085617D581BAE59C1086350C9",
+        "Bytes": 250194,
+        "DurationSeconds": 5.67229,
+        "SampleRate": 22050,
+        "Channels": 1,
+        "Bits": 16
+      }
+    },
+    {
+      "Index": 4,
+      "ExpectedSpoken": "Acrescentar procedimentos da sessão de Ana Clara com fez jogo de turnos.",
+      "Transcript": "Acrescentar procedimentos da sessão de Ana Clara com fez jogo de turnos.",
+      "NativeSemanticStatus": "passed",
+      "NativeExpectedIntent": {
+        "type": "session.draft.update",
+        "target": {
+          "patientId": "ana",
+          "patientName": "Ana Clara",
+          "sessionDraftId": "synthetic-draft",
+          "sessionDate": "2026-10-04"
+        },
+        "patch": {
+          "field": "procedures",
+          "operation": "append",
+          "value": "fez jogo de turnos.",
+          "separator": " ",
+          "baseValue": "Base fictícia.",
+          "baseEpoch": 1,
+          "baseRevision": 7
+        }
+      },
+      "NativeActualIntent": {
+        "type": "session.draft.update",
+        "target": {
+          "patientId": "ana",
+          "patientName": "Ana Clara",
+          "sessionDraftId": "synthetic-draft",
+          "sessionDate": "2026-10-04"
+        },
+        "patch": {
+          "field": "procedures",
+          "operation": "append",
+          "value": "fez jogo de turnos.",
+          "separator": " ",
+          "baseValue": "Base fictícia.",
+          "baseEpoch": 1,
+          "baseRevision": 7
+        }
+      },
+      "NativeLiteralBodyExact": true,
+      "ConfirmationTextOnly": false,
+      "Wav": {
+        "OriginalSource": "C:/Users/alexandre/AppData/Local/Temp/circulo-whisper-synthetic-4d5d6738249843e7b82ebf665557f4df/synthetic-command-1.wav",
+        "NativeInput": "C:/Users/alexandre/AppData/Local/Temp/circulo-asr79-bounded8-457d64838c914d4eb1223ec0b0aeb57f/synthetic-command-4.wav",
+        "SHA256": "231ECCC8CEF3ADF9FB05A9CA65424D4E7220E219814895913C36514AFB4C1056",
+        "Bytes": 283966,
+        "DurationSeconds": 6.438095,
+        "SampleRate": 22050,
+        "Channels": 1,
+        "Bits": 16
+      }
+    },
+    {
+      "Index": 5,
+      "ExpectedSpoken": "Acrescentar resultado da sessão de Ana Clara com manteve atenção.",
+      "Transcript": "Acrescentar resultado da sessão de Ana Clara com manteve atenção.",
+      "NativeSemanticStatus": "passed",
+      "NativeExpectedIntent": {
+        "type": "session.draft.update",
+        "target": {
+          "patientId": "ana",
+          "patientName": "Ana Clara",
+          "sessionDraftId": "synthetic-draft",
+          "sessionDate": "2026-10-04"
+        },
+        "patch": {
+          "field": "outcomeDecision",
+          "operation": "append",
+          "value": "manteve atenção.",
+          "separator": " ",
+          "baseValue": "Base fictícia.",
+          "baseEpoch": 1,
+          "baseRevision": 7
+        }
+      },
+      "NativeActualIntent": {
+        "type": "session.draft.update",
+        "target": {
+          "patientId": "ana",
+          "patientName": "Ana Clara",
+          "sessionDraftId": "synthetic-draft",
+          "sessionDate": "2026-10-04"
+        },
+        "patch": {
+          "field": "outcomeDecision",
+          "operation": "append",
+          "value": "manteve atenção.",
+          "separator": " ",
+          "baseValue": "Base fictícia.",
+          "baseEpoch": 1,
+          "baseRevision": 7
+        }
+      },
+      "NativeLiteralBodyExact": true,
+      "ConfirmationTextOnly": false,
+      "Wav": {
+        "OriginalSource": "C:/Users/alexandre/AppData/Local/Temp/circulo-whisper-synthetic-4d5d6738249843e7b82ebf665557f4df/synthetic-command-2.wav",
+        "NativeInput": "C:/Users/alexandre/AppData/Local/Temp/circulo-asr79-bounded8-457d64838c914d4eb1223ec0b0aeb57f/synthetic-command-5.wav",
+        "SHA256": "138A5093093283CF4D34F15CAD5941BD82F7CFAE4ECE74A45AFCF25F886AF144",
+        "Bytes": 259100,
+        "DurationSeconds": 5.87424,
+        "SampleRate": 22050,
+        "Channels": 1,
+        "Bits": 16
+      }
+    },
+    {
+      "Index": 6,
+      "ExpectedSpoken": "Acrescentar encaminhamento da sessão de Ana Clara com próxima sessão semanal.",
+      "Transcript": "Acrescentar encaminhamento da sessão de Ana Clara com próxima sessão semanal.",
+      "NativeSemanticStatus": "passed",
+      "NativeExpectedIntent": {
+        "type": "session.draft.update",
+        "target": {
+          "patientId": "ana",
+          "patientName": "Ana Clara",
+          "sessionDraftId": "synthetic-draft",
+          "sessionDate": "2026-10-04"
+        },
+        "patch": {
+          "field": "referralClosure",
+          "operation": "append",
+          "value": "próxima sessão semanal.",
+          "separator": " ",
+          "baseValue": "Base fictícia.",
+          "baseEpoch": 1,
+          "baseRevision": 7
+        }
+      },
+      "NativeActualIntent": {
+        "type": "session.draft.update",
+        "target": {
+          "patientId": "ana",
+          "patientName": "Ana Clara",
+          "sessionDraftId": "synthetic-draft",
+          "sessionDate": "2026-10-04"
+        },
+        "patch": {
+          "field": "referralClosure",
+          "operation": "append",
+          "value": "próxima sessão semanal.",
+          "separator": " ",
+          "baseValue": "Base fictícia.",
+          "baseEpoch": 1,
+          "baseRevision": 7
+        }
+      },
+      "NativeLiteralBodyExact": true,
+      "ConfirmationTextOnly": false,
+      "Wav": {
+        "OriginalSource": "C:/Users/alexandre/AppData/Local/Temp/circulo-whisper-synthetic-4d5d6738249843e7b82ebf665557f4df/synthetic-command-3.wav",
+        "NativeInput": "C:/Users/alexandre/AppData/Local/Temp/circulo-asr79-bounded8-457d64838c914d4eb1223ec0b0aeb57f/synthetic-command-6.wav",
+        "SHA256": "A0B3A6009E5939B392704A36FC379572CED7C4B1BD273AAF55C4394FB6D517E5",
+        "Bytes": 292646,
+        "DurationSeconds": 6.634921,
+        "SampleRate": 22050,
+        "Channels": 1,
+        "Bits": 16
+      }
+    },
+    {
+      "Index": 7,
+      "ExpectedSpoken": "Confirmar comando.",
+      "Transcript": "Confirmar comando.",
+      "NativeSemanticStatus": "not-evaluated",
+      "NativeExpectedIntent": null,
+      "NativeActualIntent": null,
+      "NativeLiteralBodyExact": null,
+      "ConfirmationTextOnly": true,
+      "Wav": {
+        "OriginalSource": "C:/Users/alexandre/AppData/Local/Temp/circulo-whisper-synthetic-4d5d6738249843e7b82ebf665557f4df/synthetic-command-4.wav",
+        "NativeInput": "C:/Users/alexandre/AppData/Local/Temp/circulo-asr79-bounded8-457d64838c914d4eb1223ec0b0aeb57f/synthetic-command-7.wav",
+        "SHA256": "227928BF52AFC831490D216C7DD79032361C85263E0D49084C3C090C220C0513",
+        "Bytes": 108450,
+        "DurationSeconds": 2.458141,
+        "SampleRate": 22050,
+        "Channels": 1,
+        "Bits": 16
+      }
+    }
+  ]
+}

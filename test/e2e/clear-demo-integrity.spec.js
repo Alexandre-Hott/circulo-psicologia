@@ -57,7 +57,7 @@ test('keyboard-confirmed demo reset clears every collection and permits a fresh 
   expect(downloads).toHaveLength(0)
 
   await page.getByRole('navigation').getByRole('button',{name:'Pacientes'}).click()
-  await expect(page.getByText(/Nenhum perfil na memória/)).toBeVisible()
+  await expect(page.getByText(/Nenhum perfil cadastrado/)).toBeVisible()
   await expect(page.locator('.kid-card')).toHaveCount(0)
   await page.getByRole('navigation').getByRole('button',{name:'Biblioteca'}).click()
   await expect(page.getByText(/Nenhum item na biblioteca/)).toBeVisible()

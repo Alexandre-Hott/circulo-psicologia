@@ -8,6 +8,13 @@ const isDesktop = Boolean(window.__TAURI_INTERNALS__)
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    {isDesktop ? <DesktopVault /> : <App />}
+    {isDesktop
+      ? <DesktopVault />
+      : <>
+          <aside className="browser-mode-note" aria-label="Demonstração no navegador">
+            Demonstração no navegador · alterações somem ao recarregar · ditado offline no aplicativo Windows.
+          </aside>
+          <App />
+        </>}
   </StrictMode>,
 )

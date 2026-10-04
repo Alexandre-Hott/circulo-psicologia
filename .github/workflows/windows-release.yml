@@ -1,6 +1,8 @@
 name: Windows release (gated)
 
 on:
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       release:
@@ -40,6 +42,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: npm ci
       - run: npm install -D @tauri-apps/cli
+      - run: npm run voice:prepare
       # Configure Azure Trusted Signing or equivalent here. Certificate material stays in GitHub secrets.
       - name: Verify signing gate
         shell: pwsh

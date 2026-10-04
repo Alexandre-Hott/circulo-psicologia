@@ -1,0 +1,25 @@
+{
+  "Provenance": {
+    "ArtifactRoot": "C:/Users/alexandre/AppData/Local/Temp/circulo-trusted1-title-correction-9adc56aa09f544c1bfba33940a368270",
+    "NativeStdout": "C:/Users/alexandre/AppData/Local/Temp/circulo-trusted1-title-correction-9adc56aa09f544c1bfba33940a368270/results/native-stdout.log",
+    "NativeStdoutSHA256": "E8D2EC8FDB21210EAC1C10AB9BC2D96DF36084642437391C81CFBCE164734B19",
+    "Wav": "C:/Users/alexandre/AppData/Local/Temp/circulo-trusted1-title-correction-9adc56aa09f544c1bfba33940a368270/generation/synthetic-command-0.wav",
+    "WavSHA256": "4D7FF90FFD4CC750DCA95BF0C0FB7F6F66CF6942E2D74753E2C20CAB2A8691C5",
+    "NativeHandle": "4501d4",
+    "NativePID": 22288,
+    "NativeExitCode": 0,
+    "NativeElapsedMsReportedByMAIN": 6165,
+    "Marker": "CIRCULO_SYNTHETIC_RESULT_JSON:",
+    "Replay": "Synthetic PCM/IPC replay only; no additional ASR."
+  },
+  "Cases": [
+    {
+      "Index": 0,
+      "ExpectedCommand": "Preencher Título descritivo com Espera a vez",
+      "Transcript": "Preencher título descritivo com espera a vez.",
+      "ExpectedValue": "Espera a vez",
+      "ParsedValue": "espera a vez",
+      "StrictLiteralMatch": false
+    }
+  ]
+}

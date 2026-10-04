@@ -26,7 +26,7 @@ const finishOpenedSession = async (page, summary) => {
 
 test('create a synthetic patient, find the profile, and explain reload reset', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByText(/dados sintéticos somente em memória/i).first()).toBeVisible()
+  await expect(page.getByRole('complementary',{name:'Demonstração no navegador'})).toContainText('alterações somem ao recarregar')
   await page.getByRole('button',{name:/Cadastrar paciente/}).click()
   await page.getByLabel('Nome',{exact:true}).fill('Joana Exemplo')
   await page.getByLabel('Idade',{exact:true}).fill('9')
@@ -38,19 +38,17 @@ test('create a synthetic patient, find the profile, and explain reload reset', a
   await page.getByRole('button',{name:/Joana Exemplo/}).click()
   await expect(page.getByRole('heading',{name:'Joana Exemplo'})).toBeVisible()
   await page.reload()
-  await expect(page.getByText(/não são restauradas após recarregar/i)).toBeVisible()
+  await expect(page.getByRole('complementary',{name:'Demonstração no navegador'})).toContainText('alterações somem ao recarregar')
   await expect(page.getByRole('button',{name:/Joana Exemplo/})).toHaveCount(0)
 })
 
-test('persistent demo notice follows the workflow without covering mobile controls', async ({ page }) => {
+test('compact browser note follows the workflow without covering mobile controls', async ({ page }) => {
   await page.goto('/')
-  const notice=page.getByRole('complementary',{name:'Aviso sobre dados de demonstração'})
+  const notice=page.getByRole('complementary',{name:'Demonstração no navegador'})
   const check=async()=>{
     await expect(notice).toBeVisible()
-    await expect(notice).toContainText('dados fictícios')
-    await expect(notice).toContainText('apenas na memória desta página')
-    await expect(notice).toContainText('recarregar descarta as alterações')
-    await expect(notice).toContainText('Não use dados clínicos reais')
+    await expect(notice).toContainText('alterações somem ao recarregar')
+    await expect(notice).toContainText('ditado offline no aplicativo Windows')
   }
   await check()
   await page.getByRole('button',{name:/Cadastrar paciente/}).click()
@@ -325,7 +323,7 @@ test('a new standalone draft uses preference while a resumed draft keeps its ear
   await expect(page.getByLabel('Como o paciente chegou?')).toHaveValue('Rascunho sintético de Elisa')
 })
 
-test('online recurring reference is validated and reaches the agenda-origin session snapshot as text', async ({ page }) => {
+test('online recurring reference is validated and reaches the agenda-origin session snapshot as text', async ({ page, baseURL }) => {
   await page.goto('/')
   await page.getByRole('button',{name:/Agenda/}).click()
   await page.getByLabel('Data da agenda').fill('2026-09-29')
@@ -347,7 +345,7 @@ test('online recurring reference is validated and reaches the agenda-origin sess
   await occurrenceDialog.getByRole('button',{name:'Iniciar sessão'}).click()
   await expect(page.getByLabel('Modalidade')).toHaveValue('Online')
   await expect(page.getByLabel('Link externo (opcional)')).toHaveValue('https://example.test/room')
-  await expect(page).toHaveURL(/127\.0\.0\.1:5189/)
+  await expect(page).toHaveURL(`${baseURL}/`)
   await finishOpenedSession(page,'Referência online sintética')
   await expect(page.getByText('Referência externa: https://example.test/room')).toBeVisible()
   await expect(page.getByRole('group',{name:'Origem da agenda'})).not.toContainText('https://example.test/room')
@@ -720,9 +718,9 @@ test('backup help buttons explain unavailable operations without changing record
     const dialog=page.getByRole('dialog',{name:'Disponível somente no app desktop'})
     await expect(dialog).toBeVisible()
     await expect(dialog).toContainText(`A operação “${operation}” não está disponível`)
-    await expect(dialog).toContainText('apenas na memória da página e desaparecem ao recarregar')
-    await expect(dialog).toContainText('banco local cifrado')
-    await expect(dialog).toContainText('Esta tela não cria arquivos')
+    await expect(dialog).toContainText('ao recarregar, as alterações desaparecem')
+    await expect(dialog).toContainText('abra o aplicativo Windows')
+    await expect(dialog).toContainText('não cria arquivos')
     await expect(dialog.getByRole('button',{name:'Entendi'})).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(dialog.getByRole('button',{name:'Fechar Disponível somente no app desktop'})).toBeFocused()
@@ -1087,9 +1085,9 @@ test('edit library item by keyboard and clear the demonstration only after expli
   await expect(summary).toContainText('Sessões finalizadas: 0')
   await expect(summary).toContainText('Itens da biblioteca: 0')
   await page.getByRole('button',{name:/Pacientes/}).click()
-  await expect(page.getByText(/Nenhum perfil na memória/)).toBeVisible()
+  await expect(page.getByText(/Nenhum perfil cadastrado/)).toBeVisible()
   await page.reload()
-  await expect(page.getByText(/não são restauradas após recarregar/i)).toBeVisible()
+  await expect(page.getByRole('complementary',{name:'Demonstração no navegador'})).toContainText('alterações somem ao recarregar')
   await expect(page.getByRole('button',{name:/Luna Martins/})).toBeVisible()
 })
 
@@ -1547,7 +1545,7 @@ test('complete a synthetic session while keeping private notes out of profile an
   await expect(page.getByText('Nota privada sintética não compartilhável')).toHaveCount(0)
   await expect(page.getByRole('region',{name:'Registros por sessão'})).not.toContainText('Origem: Agenda')
   await page.reload()
-  await expect(page.getByText(/não são restauradas após recarregar/i)).toBeVisible()
+  await expect(page.getByRole('complementary',{name:'Demonstração no navegador'})).toContainText('alterações somem ao recarregar')
   await page.getByRole('button',{name:/Luna Martins/}).click()
   await expect(page.getByText('Resumo sintético visível no perfil')).toHaveCount(0)
 })
