@@ -1127,6 +1127,45 @@ test('empty desktop vault restores a v5 backup with a new local password', async
   await expect(page.getByText('Paciente Importado Fictício')).toHaveCount(0)
 })
 
+for (const failed of [false, true]) test(`restauração mantém busy durante confirmação pendente: ${failed ? 'recuperação de falha' : 'sucesso'}`, async ({ page }) => {
+  await page.addInitScript(failed => {
+    window.restoreBusy = { started: false, unlocked: false, patientResolvers: [] }
+    window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
+      if (command === 'vault_status') {
+        if (window.restoreBusy.started) return await new Promise(resolve => { window.restoreBusy.finishStatus = () => resolve({ initialized: true, unlocked: window.restoreBusy.unlocked, profileState: 'ready' }) })
+        return { initialized: true, unlocked: false, profileState: 'ready' }
+      }
+      if (command === 'auto_backup_status') return { present: true, available: true, keyEnvelopePresent: true, dirty: false }
+      if (command === 'auto_backup_validate') return args.password === 'senha ficticia longa'
+      if (command === 'auto_backup_restore') {
+        window.restoreBusy.started = true
+        if (failed) throw new Error('Falha fictícia ao restaurar')
+        window.restoreBusy.unlocked = true; return null
+      }
+      if (command === 'patient_list') return await new Promise(resolve => window.restoreBusy.patientResolvers.push(resolve))
+      if (['agenda_occurrences', 'behavior_list', 'indicator_catalog'].includes(command)) return []
+      if (command === 'plugin:updater|check') return null
+      throw new Error(`Operação inesperada: ${command}`)
+    } }
+  }, failed)
+  await openPatients(page)
+  await page.locator('summary').getByText('Opções avançadas de backup e restauração', { exact: true }).click()
+  await page.getByLabel('Senha local para verificar cópia automática').fill('senha ficticia longa')
+  await page.getByRole('button', { name: 'Verificar cópia automática local' }).click()
+  await page.getByRole('button', { name: 'Recuperar cópia automática local' }).click()
+  await answerConfirmation(page, 'Substituir o banco local pela última cópia automática cifrada?')
+  await expect.poll(() => page.evaluate(() => typeof window.restoreBusy.finishStatus)).toBe('function')
+  await expect(page.getByRole('button', { name: 'Desbloquear', exact: true })).toBeDisabled()
+  await page.evaluate(() => window.restoreBusy.finishStatus())
+  if (failed) await expect(page.getByRole('button', { name: 'Desbloquear', exact: true })).toBeEnabled()
+  else {
+    await expect.poll(() => page.evaluate(() => window.restoreBusy.patientResolvers.length)).toBeGreaterThan(0)
+    await expect(page.getByRole('button', { name: 'Bloquear', exact: true })).toBeDisabled()
+    await page.evaluate(() => window.restoreBusy.patientResolvers.forEach(resolve => resolve([])))
+    await expect(page.getByRole('button', { name: 'Bloquear', exact: true })).toBeEnabled()
+  }
+})
+
 test('restauração local confirma desbloqueio, mostra pacientes e ignora lista antiga', async ({ page }) => {
   await page.addInitScript(() => {
     let unlocked = false

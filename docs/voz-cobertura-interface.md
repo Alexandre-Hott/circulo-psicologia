@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Complemento após0.2.50: operações antigas após bloqueio
+
+P2 anterior reproduzido por comando nos componentes (0/2 antes): aguardar refresh da criação, bloquear/desbloquear e liberar consulta antiga abria Sessões. Geração de montagem e geração do Vault agora invalidam continuações/resultados/erros; busy antigo não libera unlock novo, inclusive no chamador natural. Restauração preserva seu busy durante confirmação/carregamento. **243JS e59/59E2E em2,5min** finais aprovados (calendário12, transições7, shell40); focused4/4 em21,7s e revisão independente final sem achados nos dois pontos adicionais. Backend/captura simulados, nenhuma prova de microfone/janela instalada. Mudanças posteriores ao instalador50; instalado47 preservado. Consolidar com o retry nativo no próximo pacote. [Histórico das tentativas e limites](melhoria-continua-voz.md). Meta ativa.
+
 ## Complemento após0.2.50: retry de Registrar sessão
 
 Banco nativo reutiliza um rascunho único/compatível da ocorrência, preservando ID/texto; duplicados anteriores exigem retomada explícita sem limpeza. Falhas de refresh após criação/início não fazem o fluxo anunciar que a sessão não foi criada. **243JS,86Rust release aprovados/1 áudio opt-in ignorado**; novo teste cifrado verifica chamadas simultâneas e reabertura. E2E ampliados101/102 (falha em fixtureafter-start); fixture tornada determinística, dois focados2/2 e arquivo calendário final6/6 em49,8s. Não declarar102/102. Incremento posterior ao instalador50, sem microfone humano/perfil real. Revisão final estática sem bloqueante; P2 candidato de resposta antiga após bloqueio/desbloqueio registrado para reprodução integrada. [Detalhes](melhoria-continua-voz.md). Meta ativa.

@@ -12,15 +12,24 @@ async function openApp(page, { failStart = false, seed = false, failAuxiliary = 
     let fail = failStart
     let auxiliaryFailed = false
     let refreshAfterStart = false
-    window.calendarVoice = { series, drafts, sessions, calls: [], unexpected: [] }
+    window.calendarVoice = { series, drafts, sessions, calls: [], unexpected: [], unlocked: true }
     window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
       window.calendarVoice.calls.push(clone({ command, args }))
+      if (command === 'behavior_list' && series.length && !drafts.length && window.calendarVoice.pauseCreationRefresh && !window.calendarVoice.deferredCreationRefresh) {
+        window.calendarVoice.deferredCreationRefresh = true
+        return await new Promise((resolve, reject) => { window.calendarVoice.finishCreationRefresh = accepted => accepted ? resolve([]) : reject(new Error('Atualização fictícia atrasada')) })
+      }
       if ((!auxiliaryFailed && failAuxiliary === 'after-create' && command === 'behavior_list' && series.length > 0 && drafts.length === 0) || (failAuxiliary === 'after-start' && command === 'indicator_catalog' && refreshAfterStart && !window.calendarVoice.releaseAuxiliary)) {
         auxiliaryFailed = true
         window.calendarVoice.auxiliaryFailure = command
         throw new Error('Falha sintética na atualização auxiliar')
       }
-      if (command === 'vault_status') return { initialized: true, unlocked: true, profileState: 'ready' }
+      if (command === 'vault_status') return { initialized: true, unlocked: window.calendarVoice.unlocked, profileState: 'ready' }
+      if (command === 'vault_unlock') {
+        if (window.calendarVoice.pauseUnlock) await new Promise(resolve => { window.calendarVoice.finishUnlock = resolve })
+        window.calendarVoice.unlocked = true; return null
+      }
+      if (command === 'vault_lock') { window.calendarVoice.unlocked = false; return null }
       if (command === 'auto_backup_status') { if (drafts.length) refreshAfterStart = true; return { available: false, dirty: false } }
       if (command === 'plugin:updater|check') return null
       if (command === 'patient_list') return [patient]
@@ -32,7 +41,9 @@ async function openApp(page, { failStart = false, seed = false, failAuxiliary = 
         const existing = drafts.find(item => item.seriesId === args.seriesId && item.originalDate === args.originalDate)
         if (existing) return clone(existing)
         const draft = { id: `draft-lia-${drafts.length + 1}`, patientId: 'lia', seriesId: args.seriesId, originalDate: args.originalDate, observation: '', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicators: [] }
-        drafts.push(draft); return clone(draft)
+        drafts.push(draft)
+        if (window.calendarVoice.pauseStart) return await new Promise((resolve, reject) => { window.calendarVoice.finishStart = accepted => accepted ? resolve(clone(draft)) : reject(new Error('Início fictício atrasado')) })
+        return clone(draft)
       }
       if (command === 'session_draft_list') return clone(drafts.filter(item => item.patientId === args.patientId))
       if (command === 'session_timeline') return clone(sessions.filter(item => item.patientId === args.patientId))
@@ -101,6 +112,70 @@ async function command(page, text) {
 }
 
 const calls = (page, commandName) => page.evaluate(name => window.calendarVoice.calls.filter(item => item.command === name), commandName)
+
+for (const natural of [false, true]) test(`resultado antigo de início não libera busy do novo desbloqueio: ${natural ? 'pedido natural' : 'botão'}`, async ({ page }) => {
+  await openApp(page, { seed: natural })
+  if (!natural) await command(page, 'Clicar em Registrar sessão')
+  await page.evaluate(() => { window.calendarVoice.pauseStart = true })
+  await command(page, natural ? 'Iniciar sessão de Lia Exemplo no dia 31/10/2026 às 14 horas' : 'Clicar em Criar e iniciar sessão')
+  await expect.poll(() => page.evaluate(() => typeof window.calendarVoice.finishStart)).toBe('function')
+  await page.evaluate(() => { window.calendarVoice.unlocked = false; window.calendarVoice.pauseUnlock = true; window.dispatchEvent(new Event('focus')) })
+  await expect(page.getByLabel('Senha do cofre')).toBeVisible()
+  await page.getByLabel('Senha do cofre').fill('senha-ficticia-2026')
+  const unlock = page.getByRole('button', { name: 'Desbloquear', exact: true })
+  await unlock.click()
+  await expect.poll(() => page.evaluate(() => typeof window.calendarVoice.finishUnlock)).toBe('function')
+  await page.evaluate(() => window.calendarVoice.finishStart(true))
+  await page.clock.runFor(64)
+  await expect(unlock).toBeDisabled()
+  await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toHaveCount(0)
+  await page.evaluate(() => window.calendarVoice.finishUnlock())
+  await expect(page.getByRole('region', { name: 'Início', exact: true })).toBeVisible()
+})
+
+for (const accepted of [true, false]) {
+  test(`início por voz ignora resultado do cofre anterior: ${accepted ? 'sucesso' : 'erro'}`, async ({ page }) => {
+    await openApp(page)
+    await command(page, 'Clicar em Registrar sessão')
+    await page.evaluate(() => { window.calendarVoice.pauseStart = true })
+    await command(page, 'Clicar em Criar e iniciar sessão')
+    await expect.poll(() => page.evaluate(() => typeof window.calendarVoice.finishStart)).toBe('function')
+    await page.evaluate(() => { window.calendarVoice.unlocked = false; window.dispatchEvent(new Event('focus')) })
+    await expect(page.getByLabel('Senha do cofre')).toBeVisible()
+    await page.getByLabel('Senha do cofre').fill('senha-ficticia-2026')
+    await page.getByRole('button', { name: 'Desbloquear', exact: true }).click()
+    await expect(page.getByRole('region', { name: 'Início', exact: true })).toBeVisible()
+    await page.evaluate(value => window.calendarVoice.finishStart(value), accepted)
+    await page.clock.runFor(64)
+    await expect(page.getByRole('region', { name: 'Início', exact: true })).toBeVisible()
+    await expect(page.getByText(/Início fictício atrasado|Sessão aberta\./)).toHaveCount(0)
+    await expect(page.getByRole('form', { name: 'Rascunho de sessão' })).toHaveCount(0)
+    expect(await calls(page, 'session_draft_start')).toHaveLength(1)
+    expect(await page.evaluate(() => window.calendarVoice.drafts)).toHaveLength(1)
+    await command(page, 'Abrir agenda')
+    await expect(page.getByRole('region', { name: 'Agenda', exact: true })).toBeVisible()
+  })
+
+  test(`criação por voz não continua após novo desbloqueio: refresh ${accepted ? 'resolvido' : 'rejeitado'}`, async ({ page }) => {
+    await openApp(page)
+    await command(page, 'Clicar em Registrar sessão')
+    await command(page, 'Preencher Data do compromisso com 15/11/2026')
+    await page.evaluate(() => { window.calendarVoice.pauseCreationRefresh = true })
+    await command(page, 'Clicar em Criar e iniciar sessão')
+    await expect.poll(() => page.evaluate(() => typeof window.calendarVoice.finishCreationRefresh)).toBe('function')
+    await page.evaluate(() => { window.calendarVoice.unlocked = false; window.dispatchEvent(new Event('focus')) })
+    await expect(page.getByLabel('Senha do cofre')).toBeVisible()
+    await page.getByLabel('Senha do cofre').fill('senha-ficticia-2026')
+    await page.getByRole('button', { name: 'Desbloquear', exact: true }).click()
+    await expect(page.getByRole('region', { name: 'Início', exact: true })).toBeVisible()
+    await page.evaluate(value => window.calendarVoice.finishCreationRefresh(value), accepted)
+    await page.clock.runFor(64)
+    await expect(page.getByRole('region', { name: 'Início', exact: true })).toBeVisible()
+    expect(await calls(page, 'session_draft_start')).toEqual([])
+    expect(await page.evaluate(() => window.calendarVoice.series)).toHaveLength(1)
+    expect(await page.evaluate(() => window.calendarVoice.drafts)).toEqual([])
+  })
+}
 
 for (const failAuxiliary of ['after-create', 'after-start']) {
   test(`sessão por voz preserva sucesso parcial e ID no retry: ${failAuxiliary}`, async ({ page }) => {

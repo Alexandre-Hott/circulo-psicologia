@@ -261,7 +261,7 @@ export default function DesktopVault() {
         setAgendaOpen(true)
         setQuickStart(false)
         setSpace('agenda')
-      } finally { setBusy(false) }
+      } finally { if (generation === vaultGeneration.current) setBusy(false) }
       return
     }
     if (intent.type === 'patient.create' || intent.type === 'patient.update' || intent.type === 'patient.edit.open') {
@@ -563,11 +563,12 @@ export default function DesktopVault() {
     } catch (reason) { setError(String(reason)) }
     finally { setBusy(false) }
   }
-  const clearUnlockedState = () => {
+  const clearUnlockedState = ({ preserveBusy = false } = {}) => {
     answerConfirmation(false)
     vaultGeneration.current += 1
     patientRequest.current += 1
     vaultUnlocked.current = false
+    if (!preserveBusy) setBusy(false)
     unlockedDay.current = null
     setPatients([])
     setEditing(null)
@@ -605,7 +606,7 @@ export default function DesktopVault() {
     setStatus({ initialized: true, unlocked: false, profileState: 'ready' })
   }
   const confirmRestoredVault = async () => {
-    clearUnlockedState()
+    clearUnlockedState({ preserveBusy: true })
     const confirmed = await invoke('vault_status')
     if (!confirmed?.initialized || !confirmed.unlocked || confirmed.profileState !== 'ready') {
       setStatus(confirmed)
@@ -619,7 +620,7 @@ export default function DesktopVault() {
     await refreshAuto()
   }
   const recoverRestoreFailure = async () => {
-    clearUnlockedState()
+    clearUnlockedState({ preserveBusy: true })
     try {
       const confirmed = await invoke('vault_status')
       if (confirmed?.unlocked) {
@@ -776,11 +777,16 @@ export default function DesktopVault() {
   }
 
   const startSessionFromAgenda = async occurrence => {
+    const generation = vaultGeneration.current
+    const current = () => vaultUnlocked.current && generation === vaultGeneration.current
+    if (!current()) return false
     setQuickStart(false)
     setBusy(true); setError(''); setMessage('')
     try {
       await sessionsRef.current?.savePending()
+      if (!current()) return false
       const draft = await invoke('session_draft_start', { seriesId: occurrence.seriesId, originalDate: occurrence.originalDate })
+      if (!current()) return false
       setSessionPatientId(draft.patientId)
       setSessionVoiceDraft(null)
       setActiveDraft(draft)
@@ -789,10 +795,10 @@ export default function DesktopVault() {
       setSessionsOpen(true)
       setSpace('sessions')
       try { await refreshWorkspace() }
-      catch (reason) { setError(`Sessão aberta. Não foi possível atualizar informações auxiliares: ${String(reason)}`) }
-      return true
-    } catch (reason) { setError(String(reason)); return false }
-    finally { setBusy(false) }
+      catch (reason) { if (current()) setError(`Sessão aberta. Não foi possível atualizar informações auxiliares: ${String(reason)}`) }
+      return current()
+    } catch (reason) { if (current()) setError(String(reason)); return false }
+    finally { if (generation === vaultGeneration.current) setBusy(false) }
   }
 
   const openPatientSessions = async patientId => {

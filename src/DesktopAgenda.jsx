@@ -78,6 +78,8 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, onC
   const appliedVoiceCommandRef = useRef('')
   const appliedVoiceViewRef = useRef('')
   const appliedVoiceOccurrenceRef = useRef('')
+  const mountGenerationRef = useRef(0)
+  useEffect(() => () => { mountGenerationRef.current++ }, [])
 
   useEffect(() => {
     if (!voiceViewRequest?.commandId || appliedVoiceViewRef.current === voiceViewRequest.commandId) return
@@ -215,9 +217,12 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, onC
 
   const create = async event => {
     event.preventDefault(); setBusy(true); setError(''); setMessage('')
+    const generation = mountGenerationRef.current
+    const current = () => generation === mountGenerationRef.current
     try {
       const input = { ...form, weekday: appointmentType === 'Avulsa' ? civilWeekday(form.startDate) : Number(form.weekday), frequency: appointmentType === 'Avulsa' ? 'Avulsa' : form.frequency, endDate: appointmentType === 'Avulsa' ? form.startDate : form.endDate || null, meetingLink: form.modality === 'Online' ? form.meetingLink.trim() || null : null }
       const created = await invoke('agenda_create_series', { input })
+      if (!current()) return
       const startNow = quickStart && appointmentType === 'Avulsa'
       if (startNow) onQuickStartConsumed?.()
       setMessage(appointmentType === 'Avulsa' ? 'Compromisso avulso salvo no cofre cifrado.' : 'Série recorrente salva no cofre cifrado.')
@@ -226,15 +231,17 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, onC
       setCommandReview(null)
       setCommandText('')
       try { await onChanged() }
-      catch (reason) { setError(`Compromisso salvo. Não foi possível atualizar informações auxiliares: ${String(reason)}`) }
+      catch (reason) { if (current()) setError(`Compromisso salvo. Não foi possível atualizar informações auxiliares: ${String(reason)}`) }
+      if (!current()) return
       try { await load(...rangeFor(input.startDate, mode)) }
-      catch (reason) { setError(`Compromisso salvo. Não foi possível atualizar o calendário: ${String(reason)}`) }
+      catch (reason) { if (current()) setError(`Compromisso salvo. Não foi possível atualizar o calendário: ${String(reason)}`) }
+      if (!current()) return
       if (startNow) {
         const started = await onStartSession({ seriesId: created.id, originalDate: input.startDate })
-        if (!started) setMessage('Compromisso criado, mas a sessão não iniciou. Use Iniciar sessão no compromisso exibido abaixo.')
+        if (!started && current()) setMessage('Compromisso criado, mas a sessão não iniciou. Use Iniciar sessão no compromisso exibido abaixo.')
       }
-    } catch (reason) { setError(String(reason)) }
-    finally { setBusy(false) }
+    } catch (reason) { if (current()) setError(String(reason)) }
+    finally { if (current()) setBusy(false) }
   }
 
   const selectOccurrence = (occurrence, originButton) => {
