@@ -116,3 +116,17 @@ for (const mode of ['empty', 'permission', 'transcript']) test(`nova transcriç�
   await expect(mode === 'transcript' ? page.locator('.voice-command-preview') : page.locator('.voice-command-error')).toBeVisible()
   await expect(page.getByLabel('Intent emitted')).toBeEmpty()
 })
+
+test('erro tardio de áudio não descarta proposta nova digitada durante a captura', async ({ page }) => {
+  await page.goto('/test/e2e/fixtures/voice-command-center.html?voiceTranscript=deferred')
+  await page.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await expect.poll(() => page.evaluate(() => typeof window.__rejectVoiceTranscript)).toBe('function')
+  await page.getByLabel('Seu comando').fill('Cadastrar paciente Bia de Teste com 8 anos')
+  await page.getByRole('button', { name: 'Preparar rascunho' }).click()
+  const before = await page.getByLabel('Intent emitted').textContent()
+  await page.evaluate(() => window.__rejectVoiceTranscript(new Error('Erro antigo fictício')))
+  await expect(page.getByRole('button', { name: 'Ouvir e transcrever' })).toBeEnabled()
+  await expect(page.getByLabel('Intent emitted')).toHaveText(before)
+  await expect(page.locator('.voice-command-preview')).toContainText('Bia de Teste')
+  await expect(page.locator('.voice-command-error')).toHaveCount(0)
+})

@@ -63,9 +63,12 @@ function matches(query, entries) {
   // It still competes with every visible match and retains the actual button
   // fingerprint, so a proposal cannot cross from creation to another editor.
   const behaviorSave = normalized === 'salvar comportamento'
+  // Exact Portuguese recognition variant, only for this visible party role.
+  // Never rewrite a name, relation, text field or another checkbox label.
+  const administrativeRoleAlias = normalized === 'contrato administrativo'
   // Explicit legacy aliases compete with all matching controls, never picking
   // the first retry when two operations share an old short command.
-  const exact = entries.filter(item => fold(item.name) === normalized || (behaviorSave && item.element.matches('button') && ['criar comportamento reutilizavel', 'salvar versao do comportamento'].includes(fold(item.name))) || fold(item.element.getAttribute('data-voice-alias') || '') === normalized || fold(`${item.name} de ${item.context}`) === normalized || fold(`${item.name} em ${item.context}`) === normalized)
+  const exact = entries.filter(item => fold(item.name) === normalized || (administrativeRoleAlias && item.element.type === 'checkbox' && fold(item.name) === 'contato administrativo' && item.element.closest('form[data-voice-record^="party:"]')) || (behaviorSave && item.element.matches('button') && ['criar comportamento reutilizavel', 'salvar versao do comportamento'].includes(fold(item.name))) || fold(item.element.getAttribute('data-voice-alias') || '') === normalized || fold(`${item.name} de ${item.context}`) === normalized || fold(`${item.name} em ${item.context}`) === normalized)
   if (exact.length) return exact
   const aliases = entries.filter(item => fold(item.name.replace(/\s*·\s*v\d+\s*$/i, '').replace(/\s*\(opcional\)/i, '').replace(/\s*\(at[eé]\s+\d+\s+caracteres\)/iu, '').replace(/\s+em anos\b/i, '')) === normalized)
   if (aliases.length) return aliases

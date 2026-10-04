@@ -26,7 +26,7 @@ createRoot(document.getElementById('root')).render(<>
         return 'Cadastrar paciente. Bia Fictância com 9 anos.'
       }
       if (new URLSearchParams(window.location.search).get('voiceTranscript') === 'deferred') {
-        return await new Promise(resolve => { window.__resolveVoiceTranscript = resolve })
+        return await new Promise((resolve, reject) => { window.__resolveVoiceTranscript = resolve; window.__rejectVoiceTranscript = reject })
       }
       return 'Ajendar seçao semanal para Ana Clara toda quinta às 15:00'
     }}

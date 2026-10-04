@@ -1,5 +1,15 @@
 # Melhoria contínua de voz
 
+## Entrega0.2.60 —04/10/2026
+
+[Instalador Windows x64](../src-tauri/target/release/bundle/nsis/Círculo_0.2.60_x64-setup.exe): 135.891.421 bytes, SHA-256 `781781cd0ae6f910c3941763a14543895e091557605aac83aa394d707b5cf246`. Build NSIS offline/locked exit0; auditoria PE60/x64 e hash conferidos. Conteúdo interno não extraído; sem assinatura Authenticode/updater, instalação60 ou Release. Instalado permanece59. Nenhum dado real utilizado.
+
+## Incremento0.2.60 — reconhecimento do papel administrativo nos vínculos
+
+NativeSAPI/Rust encontrou “Marcar contrato administrativo” em vez de Contato administrativo. Saída preservada sem editar a palavra. Avaliador1aprovado/2nãoavaliados; o replay de interface falhou0/1 no papel, demonstrando que transcrição não vazia/exit0 do harness não bastam. Corrigido alias exato no match, só checkbox Contato administrativo em `form[data-voice-record^="party:"]`. Duplicatas continuam competindo, negados/desabilitados/ocultos são recusados e identidade/revisão é revalidada na confirmação. Nenhum nome/valor textual reparado.
+
+Replay e caso literal/negativo2/2 em21,6s; abrir Ana e marcar papel exige4áudios, nenhum dado salvo. Revisão estática independente sem achados, nodecheck aprovado; não executou DOM/browser. Teste novo de erro antigo durante captura preserva proposta nova, painel13/13 em25,2s. JS258/258 após versionamento. Regressão final95/95 em4,7min, exit0; mais5/5 probes DOM em22,7s: alias fora de vínculos, duplicatas, desabilitado, concorrência de rótulo literal e revisão alterada. Os testes focados estão incluídos na regressão, não são somados novamente. Lint sem erros/cinco avisos anteriores. Fonte funcional Rust/captura/persistência não mudou; não foi repetida a suíte Rust completa. Reconhecedor Rust foi exercitado no harness sintético. Sem microfone físico ou interface instalada nova nesta rodada. Instalado59; meta ativa. [Detalhes](voz-audio-sintetico-20261003.md).
+
 ## Consolidação instalada0.2.59 —04/10/2026
 
 [Registro nativo e limites](validacao-voz-0.2.59.md). Instalaçãoexit0, ProductVersion59, quatro arquivos do perfil preservados por hash/cópia local e18recursos de voz conferidos. Aplicativo reaberto, entrada lida por acessibilidade; comando de teste limpo sem aplicar ação. Referências anteriores a não instalado/instalado52 são históricas. Cliques/captura falharam: sem geometria, FrameArrived timeout e retry window capture timeout. Nenhuma senha, permissão ou dado real automatizado. Não comprova microfone/jornada clínica instalada nem publica atualização. Sem fonte funcional/build novos nesta rodada; meta ativa.

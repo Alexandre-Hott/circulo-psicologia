@@ -133,3 +133,14 @@ test('dias da semana transcritos exigem prova na interface e não aprovação ce
   const duplicate = structuredClone(cases); duplicate[1].Index = 0
   assert.throws(() => evaluateSyntheticVoice(duplicate, { scenario: 'interface-weekday' }))
 })
+
+test('vínculos nativos conferem paciente e destino sem aprovar checkbox ou confirmação', () => {
+  const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-party-20261004.json', import.meta.url), 'utf8'))
+  const result = evaluateSyntheticVoice(cases, { scenario: 'interface-party' })
+  assert.equal(result.Passed, 1)
+  assert.equal(result.Failed, 0)
+  assert.equal(result.NotEvaluated, 2)
+  const wrong = structuredClone(cases); wrong[0].Transcript = 'Abrir registros de Ana Clara'
+  assert.equal(evaluateSyntheticVoice(wrong, { scenario: 'interface-party' }).Failed, 1)
+  assert.throws(() => evaluateSyntheticVoice(cases.slice(1), { scenario: 'interface-party' }))
+})

@@ -1,6 +1,6 @@
 ﻿param(
     [string]$VoiceDirectory,
-    [ValidateSet('core', 'behavior-save', 'occurrence-date', 'analytics-range', 'interface-fields', 'interface-weekday')][string]$Scenario = 'core'
+    [ValidateSet('core', 'behavior-save', 'occurrence-date', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party')][string]$Scenario = 'core'
 )
 
 # Keep the UTF-8 BOM: Windows PowerShell 5.1 otherwise reads Portuguese text as ANSI.
@@ -92,6 +92,13 @@ try {
         $commands = @(
             'Selecionar Dia da semana como quinta-feira.',
             'Selecionar Dia da semana como terça-feira.',
+            'Confirmar comando.'
+        )
+    }
+    if ($Scenario -eq 'interface-party') {
+        $commands = @(
+            'Abrir vínculos de Ana Clara.',
+            'Marcar Contato administrativo.',
             'Confirmar comando.'
         )
     }

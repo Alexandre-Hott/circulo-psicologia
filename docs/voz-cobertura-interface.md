@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Complemento0.2.60 — papel administrativo nos vínculos
+
+Transcrição Rust/SAPI real produziu “contrato administrativo”; alias exato só para o checkbox Contato administrativo em formulário de vínculos. Nenhum texto livre é corrigido. Replay red0/1 e green2/2; regressão95/95 e unidade258/258. Probes DOM adicionais5/5 recusam alias fora do formulário, duplicatas, desabilitado, rótulo literal concorrente e revisão alterada. Erro tardio de áudio preserva proposta nova digitada. Mídia/RPC simulados nos testes de interface: não provam microfone físico nem gravação instalada. Instalador60 local gerado/auditado, não instalado/publicado; instalado59. [Detalhes](melhoria-continua-voz.md).
+
 ## Consolidação nativa instalada0.2.59
 
 [Provas e limites](validacao-voz-0.2.59.md): instalaçãoexit0/versão59, quatro arquivos preservados,18recursos de voz conferidos, entrada lida por acessibilidade. Não é homologação dos comandos instalados: captura/clique falharam, senha manual e nenhum comando clínico aplicado. Substitui somente os estados históricos “não instalado/instalado52”; testes simulados continuam simulados e microfone/jornada instalada permanecem sem prova.
