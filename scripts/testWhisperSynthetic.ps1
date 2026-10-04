@@ -1,6 +1,6 @@
 ﻿param(
     [string]$VoiceDirectory,
-    [ValidateSet('core', 'behavior-save', 'behavior-remove', 'occurrence-date', 'occurrence-minutes', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer', 'interface-series', 'interface-details', 'interface-draft-resume', 'interface-draft-continue', 'interface-draft-choice')][string]$Scenario = 'core',
+    [ValidateSet('core', 'behavior-save', 'behavior-remove', 'indicator-value', 'occurrence-date', 'occurrence-minutes', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer', 'interface-series', 'interface-details', 'interface-draft-resume', 'interface-draft-continue', 'interface-draft-choice')][string]$Scenario = 'core',
     [switch]$KeepArtifacts
 )
 
@@ -152,6 +152,14 @@ try {
             'Remarcar sessão de Ana Clara hoje às quinze horas e quarenta e cinco minutos.',
             'Cancelar sessão de Ana Clara hoje às quinze horas e quarenta e cinco minutos.',
             'Abrir adendo da sessão de Ana Clara em três de outubro de 2026 às quinze horas e quarenta e cinco minutos.',
+            'Confirmar comando.'
+        )
+    }
+    if ($Scenario -eq 'indicator-value') {
+        $voice.Rate = 0
+        $commands = @(
+            'Registrar indicador Regulação emocional como Com algum apoio na sessão de Ana Clara.',
+            'Registrar indicador Regulação emocional como Com autonomia na sessão de Ana Clara.',
             'Confirmar comando.'
         )
     }

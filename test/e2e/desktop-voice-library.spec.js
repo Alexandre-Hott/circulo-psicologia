@@ -179,7 +179,7 @@ test('proposta de comportamento não atravessa a troca de rascunho', async ({ pa
   await command(page, 'Clicar em Outros rascunhos do paciente')
   await propose(page, 'Marcar Pede ajuda · v1 · opção 2')
   await expect(page.locator('.voice-command-preview')).toBeVisible()
-  await page.getByRole('button', { name: 'Retomar rascunho 2026-10-04', exact: true }).click()
+  await page.getByRole('button', { name: 'Retomar rascunho 2026-10-04 · opção 2', exact: true }).click()
   await propose(page, 'confirmar')
   await expect(page.getByText('A tela mudou. Prepare o comando novamente antes de aplicar.')).toBeVisible()
   await expect(page.getByLabel('Pede ajuda · v1 · opção 2', { exact: true })).not.toBeChecked()

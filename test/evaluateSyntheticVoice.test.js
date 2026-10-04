@@ -3,6 +3,82 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { evaluateSyntheticVoice } from '../scripts/evaluateSyntheticVoice.js'
 
+test('indicador sintético nativo preserva transcrições reais e aplica somente valores exatos da escala', () => {
+  const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-indicator-value-20261004.json', import.meta.url), 'utf8'))
+  assert.deepEqual(cases.map(item => item.Transcript), [
+    'Registrar indicador regulação emocional como com algum apoio na seção de Ana Clara.',
+    'Registrar indicador regulação emocional como com autonomia na seção de Ana Clara.',
+    'Confirmar comando.',
+  ])
+  const result = evaluateSyntheticVoice(cases, { scenario: 'indicator-value' })
+  assert.equal(result.Passed, 2, JSON.stringify(result.Results))
+  assert.equal(result.Failed, 0)
+  assert.equal(result.NotEvaluated, 1)
+  assert.deepEqual(result.Results.map(item => item.Status), ['passed', 'passed', 'not-evaluated'])
+  assert.deepEqual(result.Results.slice(0, 2).map(item => item.ActualIntent), ['Com algum apoio', 'Com autonomia'].map((label, index) => ({
+    type: 'session.draft.update',
+    target: { patientId: 'ana', patientName: 'Ana Clara', sessionDraftId: 'synthetic-draft', sessionDate: null },
+    patch: { field: 'indicators', operation: 'set', value: { id: 'indicator-regulation', value: index + 2, label } },
+  })))
+  assert.deepEqual(result.Results.map(item => item.Transcript), cases.map(item => item.Transcript))
+})
+
+test('indicador sintético confere escala, valores 2/3 e alvo completo sem aprovar confirmação', () => {
+  const cases = [
+    'Registrar indicador Regulação emocional como Com algum apoio na sessão de Ana Clara.',
+    'Registrar indicador Regulação emocional como Com autonomia na sessão de Ana Clara.',
+    'Confirmar comando.',
+  ].map((Transcript, Index) => ({ Index, Transcript }))
+  const result = evaluateSyntheticVoice(cases, { scenario: 'indicator-value' })
+  assert.equal(result.Passed, 2)
+  assert.equal(result.Failed, 0)
+  assert.equal(result.NotEvaluated, 1)
+  assert.deepEqual(result.Results.slice(0, 2).map(item => item.ActualIntent), ['Com algum apoio', 'Com autonomia'].map((label, index) => ({
+    type: 'session.draft.update',
+    target: { patientId: 'ana', patientName: 'Ana Clara', sessionDraftId: 'synthetic-draft', sessionDate: null },
+    patch: { field: 'indicators', operation: 'set', value: { id: 'indicator-regulation', value: index + 2, label } },
+  })))
+  assert.equal(result.Results[2].Status, 'not-evaluated')
+  for (const label of ['Com autonomia', 'Com muito apoio', 'Ainda não observado', 'Com algum apoio desconhecido', 'Com apoio']) {
+    const changed = structuredClone(cases)
+    changed[0].Transcript = `Registrar indicador Regulação emocional como ${label} na sessão de Ana Clara.`
+    assert.equal(evaluateSyntheticVoice(changed, { scenario: 'indicator-value' }).Results[0].Status, 'failed', label)
+  }
+  const otherPatient = structuredClone(cases)
+  otherPatient[0].Transcript = otherPatient[0].Transcript.replace('Ana Clara', 'Ana')
+  assert.equal(evaluateSyntheticVoice(otherPatient, { scenario: 'indicator-value' }).Results[0].Status, 'failed')
+  // Calling the scenario must not mutate the original context used by core.
+  const coreCases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-20261003.json', import.meta.url), 'utf8'))
+  coreCases[2].Transcript = cases[0].Transcript
+  const coreResult = evaluateSyntheticVoice(coreCases)
+  assert.equal(coreResult.Results[2].ActualIntent, null)
+})
+
+test('indicador sintético exige exatamente três índices únicos e transcrições não vazias', () => {
+  const cases = [
+    'Registrar indicador Regulação emocional como Com algum apoio na sessão de Ana Clara.',
+    'Registrar indicador Regulação emocional como Com autonomia na sessão de Ana Clara.',
+    'Confirmar comando.',
+  ].map((Transcript, Index) => ({ Index, Transcript }))
+  for (const invalidCorpus of [null, [], cases.slice(1), [...cases, cases[0]]]) {
+    assert.throws(() => evaluateSyntheticVoice(invalidCorpus, { scenario: 'indicator-value' }))
+  }
+  for (const invalid of [
+    { Index: 0, Transcript: '' }, { Index: 0, Transcript: '   ' },
+    { Index: 0, Transcript: null }, { Index: 0, Transcript: 42 },
+    { Index: 1, Transcript: 'Confirmar comando.' },
+    { Index: -1, Transcript: 'Confirmar comando.' }, { Index: 3, Transcript: 'Confirmar comando.' },
+    { Index: 0.5, Transcript: 'Confirmar comando.' }, { Index: '0', Transcript: 'Confirmar comando.' },
+    { Transcript: 'Confirmar comando.' },
+  ]) {
+    assert.throws(() => evaluateSyntheticVoice([invalid, ...cases.slice(1)], { scenario: 'indicator-value' }))
+  }
+  const reordered = evaluateSyntheticVoice([...cases].reverse(), { scenario: 'indicator-value' })
+  assert.equal(reordered.Passed, 2)
+  assert.equal(reordered.Failed, 0)
+  assert.equal(reordered.NotEvaluated, 1)
+})
+
 test('minutos SAPI normal preservam saídas Rust exatas e quatro intents às 15:45', () => {
   const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-occurrence-minutes-normal-20261004.json', import.meta.url), 'utf8'))
   assert.deepEqual(cases.map(item => item.Transcript), [

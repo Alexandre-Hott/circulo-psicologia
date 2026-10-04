@@ -39,10 +39,15 @@ function matches(actual, desired, key = '') {
 }
 
 export function evaluateSyntheticVoice(cases, { scenario = 'core' } = {}) {
-  if (!['core', 'behavior-save', 'behavior-remove', 'occurrence-date', 'occurrence-minutes', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer', 'interface-series', 'interface-details', 'interface-draft-resume', 'interface-draft-continue', 'interface-draft-choice'].includes(scenario)) throw new Error('Cenário de áudio desconhecido.')
+  if (!['core', 'behavior-save', 'behavior-remove', 'indicator-value', 'occurrence-date', 'occurrence-minutes', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer', 'interface-series', 'interface-details', 'interface-draft-resume', 'interface-draft-continue', 'interface-draft-choice'].includes(scenario)) throw new Error('Cenário de áudio desconhecido.')
+  const scenarioContext = scenario === 'indicator-value' ? {
+    ...context,
+    indicators: [{ id: 'indicator-regulation', name: 'Regulação emocional', archivedAt: null, labels: ['Ainda não observado', 'Com muito apoio', 'Com algum apoio', 'Com autonomia'] }],
+  } : context
   const expectations = scenario === 'core' ? expected : ['behavior-save', 'interface-fields', 'interface-weekday', 'interface-drawer', 'interface-series', 'interface-details', 'interface-draft-resume', 'interface-draft-continue', 'interface-draft-choice'].includes(scenario) ? [null, null, null]
     : scenario === 'interface-party' ? [{ type: 'patient.workspace.open', target: { patientId: 'ana', space: 'links' } }, null, null]
     : scenario === 'behavior-remove' ? [0, 1].map(() => ({ type: 'session.draft.update', target: { patientId: 'ana', patientName: 'Ana Clara', sessionDraftId: 'synthetic-draft', sessionDate: null }, patch: { field: 'behaviorIds', operation: 'remove', value: 'help', label: 'Pede ajuda' } })).concat(null)
+    : scenario === 'indicator-value' ? ['Com algum apoio', 'Com autonomia'].map((label, index) => ({ type: 'session.draft.update', target: { patientId: 'ana', patientName: 'Ana Clara', sessionDraftId: 'synthetic-draft', sessionDate: null }, patch: { field: 'indicators', operation: 'set', value: { id: 'indicator-regulation', value: index + 2, label } } })).concat(null)
     : scenario === 'analytics-range' ? ['ana', ''].map(patientId => ({ type: 'analytics.view', target: { patientId, from: '2026-09-01', to: '2026-09-30', view: 'custom' } }))
     : scenario === 'occurrence-minutes' ? ['start', 'remarcar', 'cancelar'].map(action => ({ type: 'agenda.occurrence.action', target: { patientId: 'ana', date: '2026-10-03', start: '15:45', action } })).concat(
       { type: 'session.addendum.open', target: { patientId: 'ana', date: '2026-10-03', start: '15:45' } }, null)
@@ -54,7 +59,7 @@ export function evaluateSyntheticVoice(cases, { scenario = 'core' } = {}) {
     seen.add(item.Index)
     const desired = expectations[item.Index]
     if (!desired) return { ...item, Status: 'not-evaluated', Reason: 'Exige interface visível ou proposta pendente; não avaliado pelo parser central.' }
-    const parsed = parseCentralCommand({ text: item.Transcript, context, referenceDate: '2026-10-03' })
+    const parsed = parseCentralCommand({ text: item.Transcript, context: scenarioContext, referenceDate: '2026-10-03' })
     const passed = parsed.status === 'draft' && matches(parsed.intent, desired)
     return { ...item, Status: passed ? 'passed' : 'failed', ExpectedIntent: desired, ActualIntent: parsed.intent ?? null, Reason: passed ? 'Intent completo correspondente, com tolerância explícita de grafia em nomes/títulos.' : parsed.message || 'Ação ou campos divergentes.' }
   })
