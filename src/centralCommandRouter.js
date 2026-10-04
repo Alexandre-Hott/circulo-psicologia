@@ -279,7 +279,7 @@ const parsePatientManagement = (text, context) => {
 }
 
 const parseBehaviorManagement = (text, context) => {
-  const match = /^(criar|crie|cria|cadastrar|cadastre|cadastra|adicionar|adicione|adiciona|editar|edite|edita|atualizar|atualize|atualiza)\s+(?:um\s+|o\s+)?comportamento\s+(.+)$/iu.exec(text)
+  const match = /^(criar|crie|cria|cadastrar|cadastre|cadastra|adicionar|adicione|adiciona|editar|edite|edita|atualizar|atualize|atualiza)\s+(?:um\s+|o\s+)?comportamento[.,]?\s+(.+)$/iu.exec(text)
   if (!match) return null
   const editing = /^(?:edit|atualiz)/iu.test(match[1])
   const description = /\s+com\s+descri[çc][ãa]o\s+(.+)$/iu.exec(match[2])
