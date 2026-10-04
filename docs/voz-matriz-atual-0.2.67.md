@@ -1,6 +1,10 @@
 # Matriz de voz do Círculo
 
-## Entrega local 0.2.81
+## Entrega local 0.2.82
+
+A [entrega82](validacao-voz-0.2.82.md) integra o ajuste beam8 após comparação fresca e rodada pelo backend Rust real:7 pedidos corretos,0 falhos e1 confirmação apenas textual nos oito WAVs conferidos. Os quatro corpos clínicos ficaram exatos. UI fresca8/8 e regressão selecionada14/14 passaram em rodadas separadas sem retries; metadados82 com JS1884/1884 e Rust138 aprovados/1 ignorado, com opt-in executado separadamente antes da atualização mecânica. Instalador x64 gerado e auditado por metadados, não instalado, extraído, assinado ou publicado. A amostra não comprova microfone físico nem reconhecimento de toda fala. Senhas, arquivos e início de captura continuam manuais. Meta ativa; próximo teste proposto: edição por áudio de opção exata na biblioteca homônima, ainda não executado.
+
+## Referência 0.2.81
 
 A [entrega81](validacao-voz-0.2.81.md) invalida proposta antiga de descarte depois de salvar um cadastro e começar outro. JS1882/1882, Rust138 aprovados/1 ignorado; UI15/15 focal e59/59 regressão em rodadas separadas sem retries. Inclui captura sintética para os cinco atalhos internos do rascunho e recusa de alvos indisponíveis ou de outro paciente. O pacote local foi gerado e auditado por metadados, não instalado, extraído, assinado ou publicado.
 

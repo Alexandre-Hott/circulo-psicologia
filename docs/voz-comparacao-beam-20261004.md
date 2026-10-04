@@ -52,7 +52,7 @@ Mediana A:4,4715s; B:4,846s, cerca de8,4% maior. Máximo A:4,608s; B:5,097s. Os 
 
 Os oito pares estão ordenados e têm16 resultados únicos. A conserva os13 argumentos atuais; B acrescenta apenas `--beam-size 8`. A conferência do principal aprovou os130 hashes de artefatos e os139 registros de integridade iguais antes e depois. Os resultados estão em `ab-results` na mesma pasta temporária do corpus novo. Runner: SHA-256 `ADFCCC0A8F513085B17F66DC34DBC10B035876379DA9375652BD89DFD96BC1FD`; manifesto: `B0355840F2D07C630DA942899D83310B6DEDC015BC99E60EA70827A2147E12A9`.
 
-A amostra pequena é sintética e não estima precisão geral ou de microfone físico. Na rodada A/B acima, ainda não havia integração do argumento candidato no backend ou aplicação na interface. A etapa seguinte está registrada abaixo; a versão entregue permanece0.2.81.
+A amostra pequena é sintética e não estima precisão geral ou de microfone físico. Na rodada A/B acima, ainda não havia integração do argumento candidato no backend ou aplicação na interface, e a versão entregue era0.2.81. As etapas seguintes estão registradas abaixo.
 
 ## Integração mínima e contratos
 
@@ -60,4 +60,10 @@ Depois das revisões independentes do corpus fresco, foram alteradas somente dua
 
 Os contratos que falhavam antes da integração passaram: JS focal9/9 e Rust focal19/19. O principal repetiu ambos no código congelado e depois executou as suítes completas: JS1884/1884 e Rust138 aprovados/1 ignorado, sem falhas. O teste opt-in de reconhecimento nativo permaneceu ignorado nessa suíte. A tentativa Rust debug do autor falhou no OpenSSL antes dos testes; as rodadas release/offline/locked passaram, mantendo os avisos anteriores de PDB ausente.
 
-Ainda faltam a rodada limitada pelo backend Rust real com esses mesmos áudios, o replay dos textos na interface e o pacote atualizado. Os testes de contratos não executaram reconhecimento. Não houve alteração de versão, instalador, assinatura, publicação ou perfil instalado nesta integração.
+Ao concluir esses contratos, ainda faltavam a rodada limitada pelo backend Rust real com os mesmos áudios, o replay dos textos na interface e o pacote atualizado. Os testes de contratos não executaram reconhecimento. Não houve alteração de versão, instalador, assinatura, publicação ou perfil instalado nessa etapa.
+
+## Backend real e entrega local82
+
+Depois dos contratos, a rodada Rust limitada aos oito WAVs novos confirmou7 intents completos corretos, quatro corpos clínicos exatos e1 confirmação apenas textual, sem retries. Os oito textos coincidiram exatamente com o braço CLI beam8. Cargo terminou com código0 em40,421s; o teste durou39,60s e a compilação0,69s. O harness não oferece latência por caso ou logs internos Whisper. A verificação anterior usou os pins; o registro posterior `freeze-before` informa explicitamente que foi reconstruído desses pins, não gravado contemporaneamente no início.
+
+Separadamente, o replay fresco na interface passou8/8 em55,8s na conferência do principal; a regressão selecionada passou14/14 em2,3min, sem retries. O [pacote0.2.82](validacao-voz-0.2.82.md) foi gerado e auditado por metadados, sem instalação, extração, assinatura ou publicação. Essas provas não homologam microfone físico ou cobertura universal de comandos.
