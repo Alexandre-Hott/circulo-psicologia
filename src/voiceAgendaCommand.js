@@ -1,4 +1,5 @@
 import { isCivilDate } from './calendarDate.js'
+import { normalizeVoiceFieldValue } from './voiceFieldValue.js'
 
 const fold = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
 const pad = value => String(value).padStart(2, '0')
@@ -21,36 +22,31 @@ const parseDate = (normalized, referenceDate) => {
 }
 
 const parseTime = normalized => {
-  const numericClock = /\b\d{1,2}(?::|h)\d+\b/.exec(normalized)
-  if (numericClock && !/^\d{1,2}(?::\d{2}|h\d{2})$/.test(numericClock[0])) return { invalid: true }
-  const qualified = /\b(?:as\s+)?(\d{1,2})(?::(\d{2}))?h?\s+da\s+(manha|tarde|noite)\b/.exec(normalized)
-  const spokenQualified = /\b(?:as\s+)?([a-z]+)\s+da\s+(manha|tarde|noite)\b/.exec(normalized)
-  let match = qualified || /\b(?:as\s+)(\d{1,2})(?::(\d{2}))?h?\b/.exec(normalized)
-  if (!match) match = /\b(\d{1,2})(?::(\d{2})|h(?:(\d{2}))?)\b/.exec(normalized)
-  let hour
-  let minute = 0
-  let part = qualified?.[3]
-  if (match) {
-    hour = Number(match[1])
-    minute = Number(match[2] || (match === qualified ? 0 : match[3]) || 0)
-  } else {
-    match = spokenQualified || /\b(?:as\s+)?([a-z]+)\s+horas?\b/.exec(normalized)
-    if (match && Object.hasOwn(spokenHours, match[1])) {
-      hour = spokenHours[match[1]]
-      part = spokenQualified?.[2]
-    }
+  const marked = /\bas\s+(.+)$/u.exec(normalized)
+  const numericStart = /\b\d{1,2}(?::\d+h?|h(?:\d+)?|(?=\s+(?:horas?\b|da\s+(?:manha|tarde|noite)\b)))/u.exec(normalized)
+  const spokenPattern = new RegExp('\\b(?:' + Object.keys(spokenHours).join('|') + ')(?:\\s+e\\s+(?:uma|um|duas|dois|tres))?\\s+(?:horas?\\b|da\\s+(?:manha|tarde|noite)\\b)', 'u')
+  const unmarked = numericStart || spokenPattern.exec(normalized)
+  if (!marked && !unmarked) return null
+  const phrase = (marked ? marked[1] : normalized.slice(unmarked.index)).trim().replace(/[.!?]+$/u, '')
+  let value = phrase.replace(/^(\d{1,2})\s*(?:h|horas?)(?=\s|$)/u, '$1 horas')
+    .replace(/^(\d{1,2})h([0-5]\d)$/u, '$1:$2')
+    .replace(/^(\d{1,2}):([0-5]\d)\s*(?:h|horas?)?(?:\s+da\s+(manha|tarde|noite))?$/u,
+      (_, hour, minute, period) => period ? `${hour} horas e ${minute} minutos da ${period}` : `${pad(hour)}:${minute}`)
+  // Preserve the local parser's explicitly qualified early-night hours.
+  const night = /^(\d{1,2}|[a-z]+)(?: horas?)?(?: e .+)? da noite$/u.exec(value)
+  const nightHour = night && (/^\d+$/u.test(night[1]) ? Number(night[1]) : spokenHours[night[1]])
+  if (nightHour >= 1 && nightHour < 6) value = value.replace(/ da noite$/u, ' da manha')
+  const start = normalizeVoiceFieldValue('time', value)
+  if (start === null) {
+    const bareHour = value.replace(/(?: horas?)?(?: e meia)?$/u, '')
+    const hour = /^\d{1,2}$/u.test(bareHour) ? Number(bareHour) : spokenHours[bareHour]
+    return hour >= 1 && hour <= 12 ? { ambiguous: true } : { invalid: true }
   }
-  if (hour == null) return null
-  if (hour > 23 || minute > 59) return { invalid: true }
-  if (part) {
-    if (hour > 12 || hour === 0) return { invalid: true }
-    if (part === 'tarde' && hour < 12) hour += 12
-    if (part === 'noite') hour = hour === 12 ? 0 : hour >= 6 ? hour + 12 : hour
-    if (part === 'manha' && hour === 12) hour = 0
-  } else if (hour >= 1 && hour <= 12) return { ambiguous: true }
+  if (!/^\d{2}:\d{2}$/u.test(start)) return { invalid: true }
+  const [hour, minute] = start.split(':').map(Number)
   const endMinutes = hour * 60 + minute + 50
   if (endMinutes >= 24 * 60) return { invalid: true }
-  return { start: pad(hour) + ':' + pad(minute), end: pad(Math.floor(endMinutes / 60)) + ':' + pad(endMinutes % 60) }
+  return { start, end: pad(Math.floor(endMinutes / 60)) + ':' + pad(endMinutes % 60) }
 }
 
 export function parseVoiceAgendaCommand({ text, patients = [], referenceDate } = {}) {

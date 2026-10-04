@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Minutos completos no agendamento —0.2.63
+
+Pedidos naturais recorrentes e avulsos agora preservam15:45 e21:30, usando a normalização existente de horários, sem consumo parcial da hora. A correção inclui o parser central e o atalho interno da Agenda. Formatos antigos explícitos restaurados por revisão; horários ambíguos, conteúdo extra, alternativas e duração chegando à meia-noite recusados. JS329/329,145unidades dos parsers; nove probes finais independentes aprovados. Regresso FINAL59/59 em3,7min, exit0, aprovou formulário/payload e dois áudios simulados, não captura física. Limpeza date/time já funcionava e ganhou provas sem alterar produção, incluindoendDate:null e obrigatórios isolados. [Pacote, resultados e pendências](melhoria-continua-voz.md). Sem novo reconhecimentoRust/microfone físico/banco nativo ou instalação63; instalado61 mantido.
+
 ## Desmarcar comportamento na sessão —0.2.62
 
 Retirar/Retire, Remover/Remova e Desmarcar/Desmarque comportamento pelo título completo da/na sessão de paciente exato. Usa a alteração existente do rascunho; proposta e confirmação, depois Salvar rascunho explícito. Não exclui biblioteca, paciente ou registro finalizado. Seis verbos testados, recusas para alvos ausentes/ambíguos/negados e descarte após troca de paciente/rascunho. Dez E2E focados10/10; duas saídas Rust de WAV sintético preservadas e replays aprovados na regressão final125/125 em12,7min, exit0. Reconhecimento offline2Passed/0Failed/1NotEvaluated; JS263/263. Não é homologação de microfone físico nem de persistência instalada; pacote62 gerado/auditado e instalado61 mantido. [Resultados e limites](melhoria-continua-voz.md).

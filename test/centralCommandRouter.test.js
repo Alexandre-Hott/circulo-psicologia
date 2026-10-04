@@ -355,6 +355,62 @@ test('prepara uma série semanal exata para paciente existente e explicita os pa
   assert.match(result.notes.join(' '), /padrão atual do formulário/u)
 })
 
+for (const [kind, qualifier, type, date] of [
+  ['recorrente', 'semanal para Ana Clara na quinta', 'appointment.recurring.create', '2026-10-04'],
+  ['avulsa', 'avulsa para Ana Clara amanhã', 'appointment.single.create', '2026-10-05'],
+]) {
+  test(`agendamento ${kind} preserva quinze e quarenta e cinco completos`, () => {
+    const result = parseCentralCommand({ text: `Agendar sessão ${qualifier} às quinze e quarenta e cinco`, context, referenceDate: '2026-10-04' })
+    assert.equal(result.status, 'draft')
+    assert.equal(result.intent.type, type)
+    assert.equal(result.intent.draft.start, '15:45')
+    assert.equal(result.intent.draft.end, '16:35')
+    assert.equal(result.intent.draft.patientId, 'patient-ana')
+    assert.equal(result.intent.draft.startDate, date)
+  })
+
+  test(`agendamento ${kind} mantém horários completos antigos e minutos falados`, () => {
+    for (const [time, start, end] of [
+      ['15:45 horas', '15:45', '16:35'], ['15:45h', '15:45', '16:35'],
+      ['3:45h da tarde', '15:45', '16:35'], ['3h da tarde', '15:00', '15:50'],
+      ['meia-noite e meia', '00:30', '01:20'], ['três da tarde', '15:00', '15:50'],
+      ['três e meia da tarde', '15:30', '16:20'], ['quinze horas e meia', '15:30', '16:20'],
+      ['15h e meia', '15:30', '16:20'], ['15 h e meia', '15:30', '16:20'],
+      ['15horas e meia', '15:30', '16:20'], ['3h e meia da tarde', '15:30', '16:20'],
+      ['9h e meia da manhã', '09:30', '10:20'],
+      ['vinte e uma horas e trinta minutos', '21:30', '22:20'], ['21h30', '21:30', '22:20'],
+      ['23:09', '23:09', '23:59'], ['vinte e três horas e nove minutos', '23:09', '23:59'],
+      ['9:45 da manhã', '09:45', '10:35'], ['nove e quarenta e cinco da manhã', '09:45', '10:35'],
+    ]) {
+      const result = parseCentralCommand({ text: `Agendar sessão ${qualifier} às ${time}`, context, referenceDate: '2026-10-04' })
+      assert.equal(result.status, 'draft', time)
+      assert.equal(result.intent.draft.start, start, time)
+      assert.equal(result.intent.draft.end, end, time)
+      assert.equal(result.intent.draft.patientId, 'patient-ana', time)
+      assert.equal(result.intent.draft.startDate, date, time)
+    }
+  })
+
+  test(`agendamento ${kind} recusa horário inválido, ambíguo, alternativo ou sufixo extra`, () => {
+    for (const time of [
+      'três', 'três e quarenta e cinco', 'três da noite', 'quinze e sessenta', '15:99', '25 horas',
+      '23h10', '23:10', 'vinte e três horas e dez minutos', '23:30', '24:00', '23:59',
+      'quinze e quarenta e cinco bananas', 'quinze bananas', '15:45 horas extras',
+      'quinze e quarenta e cinco na outra sala', 'quinze e quarenta e cinco online texto extra',
+      'quinze e quarenta e cinco ou dezesseis', 'entre quinze e dezesseis', 'por volta de quinze horas',
+      'quinze e quarenta e cinco e às dezesseis', 'quinze e quarenta e cinco e abrir agenda',
+      '15h e meia bananas', '3h e meia da tarde texto extra', '15h e meia ou dezesseis',
+      'vinte e uma horas e trinta minutos depois abrir agenda', '15:45 e meia', '15:45:30',
+    ]) {
+      const text = `Agendar sessão ${qualifier} às ${time}`
+      const result = parseCentralCommand({ text, context, referenceDate: '2026-10-04' })
+      assert.equal(result.status, 'clarification', text)
+      assert.equal(result.intent, undefined, text)
+    }
+    assert.equal(parseCentralCommand({ text: `Não agendar sessão ${qualifier} às quinze e quarenta e cinco`, context, referenceDate: '2026-10-04' }).status, 'clarification')
+  })
+}
+
 test('série aceita modalidade após horário numérico e recusa modalidades conflitantes', () => {
   for (const [time, start] of [['15 horas', '15:00'], ['15:30', '15:30'], ['quinze horas', '15:00']]) {
     for (const modality of ['online', 'presencial']) {
@@ -366,6 +422,30 @@ test('série aceita modalidade após horário numérico e recusa modalidades con
     }
   }
   assert.equal(parseCentralCommand({ text: 'Agendar sessão quinzenal para Ana Clara na segunda às 15 horas online presencial', context, referenceDate: '2026-10-03' }).status, 'clarification')
+})
+
+test('série valida o sufixo inteiro sem perder minutos ou qualificadores existentes', () => {
+  for (const text of [
+    'Agendar sessão semanal para Ana Clara às quinze e quarenta e cinco na quinta a partir de 05/10/2026 online',
+    'Adiciona uma sessão toda quinta às quinze e quarenta e cinco online para Ana Clara com início em 2026-10-05',
+    'Agendar sessão para Ana Clara às quinze e quarenta e cinco toda quinta semanal início em 05/10/2026 com modalidade online',
+  ]) {
+    const result = parseCentralCommand({ text, context, referenceDate: '2026-10-04' })
+    assert.equal(result.status, 'draft', text)
+    assert.equal(result.intent.draft.start, '15:45', text)
+    assert.equal(result.intent.draft.end, '16:35', text)
+    assert.equal(result.intent.draft.startDate, '2026-10-05', text)
+    assert.equal(result.intent.draft.patientId, 'patient-ana', text)
+    assert.equal(result.intent.draft.modality, 'Online', text)
+  }
+  for (const suffix of ['na quinta texto extra', 'para Ana Clara desconhecida', 'a partir de 05/10/2026 texto extra', 'online para Ana Clara e às dezesseis']) {
+    const result = parseCentralCommand({ text: `Agendar sessão semanal para Ana Clara na quinta às quinze e quarenta e cinco ${suffix}`, context, referenceDate: '2026-10-04' })
+    assert.equal(result.status, 'clarification', suffix)
+    assert.equal(result.intent, undefined, suffix)
+  }
+  for (const qualifier of ['semanal para Ana na quinta', 'avulsa para Ana amanhã', 'avulsa para Ana Clara dia 31/02/2026']) {
+    assert.equal(parseCentralCommand({ text: `Agendar sessão ${qualifier} às quinze e quarenta e cinco`, context, referenceDate: '2026-10-04' }).status, 'clarification', qualifier)
+  }
 })
 
 test('aceita formulação curta natural, data válida e modalidade explícita', () => {

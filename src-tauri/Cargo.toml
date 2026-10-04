@@ -1,6 +1,6 @@
 [package]
 name = "circulo"
-version = "0.2.62"
+version = "0.2.63"
 description = "Acompanhamento psicológico local"
 edition = "2021"
 

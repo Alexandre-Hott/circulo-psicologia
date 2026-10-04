@@ -111,37 +111,46 @@ const parseWeekday = text => {
   return indices.length === 1 ? { index: indices[0], label: matches.find(item => item.index === indices[0]).name } : null
 }
 
-const parseTime = text => {
-  const marker = /\b(?:as|pelas?)\s+(.+?)(?=\s+(?:na|no|para|toda|todo|semanal|quinzenal|a partir|com inicio|inicio em|com modalidade|online|presencial)\b|$)/u.exec(text)
-  if (!marker) return null
-  const phrase = marker[1].trim()
-  const period = /\b(?:da|de|pela)\s+(manha|tarde|noite)\b/u.exec(phrase)?.[1]
-  const numeric = /^(\d{1,2})(?::([0-5]\d))?\s*(?:h(?:oras?)?)?(?:\s+e\s+meia)?(?:\s+(?:da|de|pela)\s+(?:manha|tarde|noite))?$/u.exec(phrase)
-  const spoken = !numeric && [...spokenHours.keys()].sort((a, b) => b.length - a.length)
-    .find(hour => phrase === hour || phrase.startsWith(`${hour} `))
-  let hour
-  let minute = 0
-  if (numeric) {
-    hour = Number(numeric[1])
-    minute = numeric[2] == null ? (/\be\s+meia\b/u.test(phrase) ? 30 : 0) : Number(numeric[2])
-  } else if (spoken) {
-    hour = spokenHours.get(spoken)
-    if (/\be\s+meia\b/u.test(phrase)) minute = 30
-  } else return null
-
-  if (period) {
-    if (hour < 1 || hour > 12) return null
-    if (period === 'tarde' && hour < 12) hour += 12
-    if (period === 'noite' && hour < 12) hour += 12
-    if (period === 'manha' && hour === 12) hour = 0
-  } else if (hour >= 1 && hour <= 12) {
-    return { ambiguous: true }
+const parseTime = phrase => {
+  // Adapt only complete legacy clock/period spellings. The shared normalizer
+  // must consume every minute and reject extra words or an ambiguous period.
+  const value = phrase.trim().replace(/\s+(?:de|pela)\s+(manha|tarde|noite)$/u, ' da $1')
+    .replace(/\bdezassete\b/gu, 'dezessete')
+    .replace(/^(\d{1,2})\s*(?:h|horas?)(?=\s|$)/u, '$1 horas')
+    .replace(/^(\d{1,2})h([0-5]\d)$/u, '$1:$2')
+    .replace(/^(\d{1,2}):([0-5]\d)\s*(?:h|horas?)?(?:\s+da\s+(manha|tarde|noite))?$/u,
+      (_, hour, minute, period) => period ? `${hour} horas e ${minute} minutos da ${period}` : `${hour.padStart(2, '0')}:${minute}`)
+    .replace(/^meia[- ]noite e meia$/u, '00:30')
+  const start = normalizeVoiceFieldValue('time', value)
+  if (start === null) {
+    const bareHour = value.replace(/(?: horas?)?(?: e meia)?$/u, '')
+    const hour = /^\d{1,2}$/u.test(bareHour) ? Number(bareHour) : spokenHours.get(bareHour)
+    return hour >= 1 && hour <= 12 ? { ambiguous: true } : null
   }
-  if (hour > 23 || (hour === 23 && minute > 9)) return null
-  const start = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+  if (!/^\d{2}:\d{2}$/u.test(start)) return null
+  const [hour, minute] = start.split(':').map(Number)
   const endMinutes = hour * 60 + minute + 50
+  if (endMinutes >= 24 * 60) return null
   const end = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`
   return { start, end }
+}
+
+const parseRecurringTime = (text, patientName) => {
+  const marker = /\b(?:as|pelas?)\s+(.+)$/u.exec(text)
+  if (!marker) return null
+  const weekday = '(?:domingo|segunda|terca|quarta|quinta|sexta|sabado)(?:-feira)?'
+  const date = '(?:\\d{4}-\\d{2}-\\d{2}|\\d{2}/\\d{2}/\\d{4})'
+  const qualifier = `(?:para\\s+${escapeRegExp(normalize(patientName))}|(?:na|no|toda|todo)\\s+${weekday}|semanal|quinzenal|toda semana|toda quinzena|(?:a partir de|com inicio em|inicio em)\\s+${date}|(?:(?:com|na|em)\\s+modalidade\\s+)?(?:online|presencial))`
+  const suffix = new RegExp(`^(?:${qualifier})(?:\\s+${qualifier})*$`, 'u')
+  const payload = marker[1]
+  const candidates = [parseTime(payload)]
+  for (const separator of payload.matchAll(/\s+/gu)) {
+    if (suffix.test(payload.slice(separator.index + separator[0].length))) {
+      candidates.push(parseTime(payload.slice(0, separator.index)))
+    }
+  }
+  const valid = candidates.filter(Boolean)
+  return valid.length === 1 ? valid[0] : null
 }
 
 const parseStartDate = text => {
@@ -532,7 +541,7 @@ const parseRecurringAppointment = ({ text, context, referenceDate }) => {
   const weekday = parseWeekday(text)
   const frequencyMatch = /\b(quinzenal|semanal|toda semana|toda quinzena)\b/u.exec(text)
     || (weekday && /\btoda\s+/u.test(text) ? ['', 'semanal'] : null)
-  const time = parseTime(text)
+  const time = parseRecurringTime(text, patientResult.entity.name)
   if (!frequencyMatch || !weekday || !time) {
     const missing = [!frequencyMatch && 'frequência semanal ou quinzenal', !weekday && 'dia da semana', !time && 'horário explícito (por exemplo, 15:00 ou três da tarde)'].filter(Boolean)
     return refuse(`Para preparar a série, preciso de: ${missing.join(', ')}.`)
@@ -578,10 +587,7 @@ const parseSingleAppointment = ({ text, context, referenceDate }) => {
   // Validate the complete time clause, rather than silently ignoring another command.
   if (!/^(?:as|pelas?)\s+/u.test(timeText)) return refuse('Informe um horário explícito para a sessão avulsa.')
   const timePhrase = timeText.replace(/^(?:as|pelas?)\s+/u, '')
-  const validSpoken = [...spokenHours.keys()].some(hour => new RegExp(`^${escapeRegExp(hour)}(?:\\s+horas?)?(?:\\s+e\\s+meia)?(?:\\s+(?:da|de|pela)\\s+(?:manha|tarde|noite))?$`, 'u').test(timePhrase))
-  const validNumeric = /^\d{1,2}(?::[0-5]\d)?\s*(?:h(?:oras?)?)?(?:\s+e\s+meia)?(?:\s+(?:da|de|pela)\s+(?:manha|tarde|noite))?$/u.test(timePhrase)
-  if (!validSpoken && !validNumeric) return refuse('Informe apenas um horário e uma modalidade para a sessão avulsa.')
-  const time = parseTime(timeText)
+  const time = parseTime(timePhrase)
   if (!time) return refuse('Informe um horário explícito válido (por exemplo, 15:00 ou três da tarde).')
   if (time.ambiguous) return refuse('O horário pode significar manhã ou noite. Diga, por exemplo, “9 da manhã” ou “21 horas”.')
   if (/\bonline\b/u.test(match[3]) && /\bpresencial\b/u.test(match[3])) return refuse('Informe uma única modalidade: Online ou Presencial.')
