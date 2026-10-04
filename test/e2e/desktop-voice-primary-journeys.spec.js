@@ -259,6 +259,105 @@ test('áudio: cadastrar e editar paciente, prévias sem writes e Save com ID/rev
   expect((await state(page)).drafts).toEqual(original.drafts)
 })
 
+test('áudio: paciente NOVO → Salvar → agenda → Iniciar sessão → registro → finalizar conserva o novo ID', async ({ page }) => {
+  await openApp(page)
+  const original = await state(page)
+  const patientInput = { name: 'Mara Fictícia', age: 8, lifeCycle: 'Criança', selfRequester: 'yes', preferredModality: 'Presencial' }
+  const patient = { ...patientInput, id: 'patient-created', revision: 1, birthDate: null, archivedAt: null }
+  await command(page, 'Cadastrar paciente Mara Fictícia com 8 anos presencial', [], 'Mara Fictícia')
+  await expect(page.getByRole('form', { name: 'Novo cadastro', exact: true })).toBeVisible()
+  await command(page, 'Selecionar O próprio paciente solicitou o atendimento? como Sim')
+  const createPatient = { command: 'patient_create', args: { input: patientInput } }
+  await command(page, 'Salvar paciente', [createPatient])
+  expect((await state(page)).patients).toEqual([...original.patients, patient])
+  expect(original.patients.map(item => item.id)).not.toContain(patient.id)
+
+  await command(page, 'Abrir Agenda')
+  await command(page, 'Clicar em Novo compromisso')
+  const appointment = page.getByRole('form', { name: 'Novo compromisso', exact: true })
+  await command(page, 'Selecionar Paciente como Mara Fictícia')
+  await expect(appointment.getByLabel('Paciente', { exact: true })).toHaveValue(patient.id)
+  const date = '2026-10-03'
+  await command(page, `Preencher Data do compromisso com ${date}`)
+  await command(page, 'Preencher Horário inicial com quinze horas')
+  await command(page, 'Preencher Horário final com quinze horas e cinquenta minutos')
+  const agendaInput = { patientId: patient.id, weekday: 6, frequency: 'Avulsa', startDate: date, endDate: date, start: '15:00', end: '15:50', modality: 'Presencial', meetingLink: null }
+  const createSeries = { command: 'agenda_create_series', args: { input: agendaInput } }
+  await command(page, 'Clicar em Criar compromisso avulso', [createSeries])
+  const series = { ...agendaInput, id: 'series-created', revision: 1, timeZone: 'America/Sao_Paulo' }
+  expect((await state(page)).series).toEqual([...original.series, series])
+  await command(page, 'Mostrar agenda do dia 03/10/2026')
+  await command(page, `Abrir detalhes de Mara Fictícia em ${date} às quinze horas`)
+  const focused = page.locator('[data-voice-focused-occurrence]')
+  await expect(focused).toHaveAttribute('data-voice-focused-occurrence', `series-created:${date}`)
+  await expect(focused).toHaveAttribute('data-voice-focused-patient', patient.id)
+  const startDraft = { command: 'session_draft_start', args: { seriesId: series.id, originalDate: date } }
+  await command(page, 'Clicar em Iniciar sessão', [startDraft], 'Mara Fictícia')
+  await expect(draftForm(page)).toHaveAttribute('data-voice-record', 'draft-created')
+  const emptyDraft = { id: 'draft-created', patientId: patient.id, seriesId: series.id, originalDate: date, observation: '', procedures: '', outcomeDecision: '', referralClosure: null, behaviorIds: [], indicators: [] }
+  expect((await state(page)).drafts).toEqual([...original.drafts, emptyDraft])
+
+  // Return through this new patient's records, not a pre-existing patient's
+  // workspace, and require the real resume control before recording content.
+  await command(page, 'Abrir registros de Bia Fictícia')
+  await command(page, 'Abrir registros de Mara Fictícia')
+  await expect(page.getByRole('button', { name: `Retomar sessão de ${date}`, exact: true })).toBeVisible()
+  await command(page, `Clicar em Retomar sessão de ${date}`)
+  await expect(draftForm(page)).toHaveAttribute('data-voice-record', emptyDraft.id)
+  const beforeClinical = await state(page)
+  const beforeWrites = await writes(page)
+  await audio(page, 'Ditar neste campo')
+  for (const [key, label, body] of fields) {
+    await expect(draftForm(page)).toHaveAttribute('data-voice-record', emptyDraft.id)
+    expect((await state(page)).drafts).toEqual([...original.drafts, emptyDraft])
+    await audio(page, `Selecionar campo ${key === 'referralClosure' ? 'Encaminhamento ou encerramento' : label}`)
+    await expect(assistant(page).getByLabel('Campo do rascunho')).toHaveValue(key)
+    await audio(page, body, 'Ouvir trecho')
+    await expect(assistant(page).getByLabel('Trecho a acrescentar')).toHaveValue(body)
+    await expect(draftForm(page).getByLabel(label, { exact: true })).toHaveValue('')
+    expect(await state(page)).toEqual(beforeClinical)
+    expect(await writes(page)).toEqual(beforeWrites)
+    await audio(page, 'Preparar trecho')
+    await expect(preview(page)).toContainText('Confira a proposta')
+    await expect(preview(page)).toContainText(body)
+    await expect(preview(page)).toContainText(patient.name)
+    await expect(draftForm(page).getByLabel(label, { exact: true })).toHaveValue('')
+    expect(await state(page)).toEqual(beforeClinical)
+    expect(await writes(page)).toEqual(beforeWrites)
+    await audio(page, 'Confirmar acréscimo')
+    await expect(preview(page)).toHaveCount(0)
+    await expect(draftForm(page).getByLabel(label, { exact: true })).toHaveValue(body)
+    expect(await state(page)).toEqual(beforeClinical)
+    expect(await writes(page)).toEqual(beforeWrites)
+  }
+  await audio(page, 'Usar comandos')
+  const payload = { ...Object.fromEntries(fields.map(([key, , body]) => [key, body])), behaviorIds: [], indicators: [] }
+  const saveDraft = { command: 'session_draft_save', args: { id: emptyDraft.id, input: payload } }
+  await command(page, 'Salvar rascunho', [saveDraft])
+  const savedDraft = { ...emptyDraft, ...payload }
+  expect((await state(page)).drafts).toEqual([...original.drafts, savedDraft])
+  const beforeFinalize = await state(page)
+  await command(page, 'Finalizar sessão')
+  await expect(page.getByRole('alertdialog', { name: 'Confirmar ação' })).toBeVisible()
+  expect(await state(page)).toEqual(beforeFinalize)
+  expect(await writes(page)).toEqual([createPatient, createSeries, startDraft, saveDraft])
+  await audio(page, 'Confirmar')
+  await expect(page.getByRole('alertdialog')).toHaveCount(0)
+  const finalize = { command: 'session_finalize', args: { id: emptyDraft.id } }
+  await expect.poll(() => writes(page)).toEqual([createPatient, createSeries, startDraft, saveDraft, saveDraft, finalize])
+  await expect(draftForm(page)).toHaveCount(0)
+  expect(await state(page)).toEqual({
+    ...original,
+    patients: [...original.patients, patient],
+    series: [...original.series, series],
+    sessions: [{
+      ...savedDraft, sessionDate: date, start: '15:00', end: '15:50', modality: 'Presencial', wasRescheduled: false,
+      recordedAt: '2026-10-03T15:00:00Z', behaviors: [],
+      indicators: [{ id: 'participacao', name: 'Participação sintética', version: 1, definition: 'Escala exclusivamente fictícia.', labels: ['Sem participação', 'Com apoio', 'Autônoma'], value: null, note: null }],
+    }],
+  })
+})
+
 async function createBehavior(page) {
   await command(page, 'Abrir registros de Ana Fictícia')
   await command(page, 'Clicar em Biblioteca de comportamentos reutilizáveis')
