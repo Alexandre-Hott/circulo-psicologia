@@ -181,6 +181,31 @@ test('análises usam o contrato exato para filtros globais e de paciente', () =>
   }
 })
 
+test('análises aceitam intervalo falado completo sem inferir ano ou trocar paciente', () => {
+  for (const [prefix, patientId] of [['', ''], ['de Ana Clara ', 'patient-ana'], ['para todos os pacientes ', '']]) {
+    const result = parseCentralCommand({ text: `Mostrar análises ${prefix}de primeiro de setembro de dois mil e vinte e seis até trinta de setembro de dois mil e vinte e seis`, context })
+    assert.deepEqual(result.intent, { type: 'analytics.view', target: { patientId, from: '2026-09-01', to: '2026-09-30', view: 'custom' } })
+  }
+  for (const interval of [
+    'primeiro de setembro até trinta de setembro',
+    'primeiro de setembro de 2026 até trinta e um de setembro de 2026',
+    'trinta de setembro de 2026 até primeiro de setembro de 2026',
+    'primeiro de setembro de 2020 até trinta de setembro de 2026',
+    'primeiro de setembro de 2026 até trinta de setembro de 2026 ou outubro',
+  ]) assert.equal(parseCentralCommand({ text: `Mostrar análises de Ana Clara de ${interval}`, context }).status, 'clarification', interval)
+})
+
+test('análises preservam até no nome e recusam colisão real com intervalo', () => {
+  const range = 'de primeiro de setembro de dois mil e vinte e seis até trinta de setembro de dois mil e vinte e seis'
+  const special = { ...context, patients: [...patients,
+    { id: 'literal', name: 'Ana Até Silva' },
+    { id: 'collision', name: `Ana Clara ${range}` },
+  ] }
+  const result = parseCentralCommand({ text: 'Mostrar análises de Ana Até Silva', context: special, referenceDate: '2026-10-03' })
+  assert.deepEqual(result.intent, { type: 'analytics.view', target: { patientId: 'literal', from: '2026-10-01', to: '2026-10-31', view: 'month' } })
+  assert.equal(parseCentralCommand({ text: `Mostrar análises de Ana Clara ${range}`, context: special }).status, 'clarification')
+})
+
 test('novas navegações exigem um único nome exato e ativo', () => {
   for (const command of ['Abrir registros de', 'Abrir sessões de', 'Abrir evolução de', 'Abrir vínculos de', 'Mostrar análises de']) {
     for (const name of ['Ana', 'Clara', 'Outra Pessoa', 'Ana Clara e Caio Fictício', 'Ana Clara por favor']) {

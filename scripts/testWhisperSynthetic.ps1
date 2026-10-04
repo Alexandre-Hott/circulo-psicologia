@@ -1,6 +1,6 @@
 ﻿param(
     [string]$VoiceDirectory,
-    [ValidateSet('core', 'behavior-save', 'occurrence-date')][string]$Scenario = 'core'
+    [ValidateSet('core', 'behavior-save', 'occurrence-date', 'analytics-range')][string]$Scenario = 'core'
 )
 
 # Keep the UTF-8 BOM: Windows PowerShell 5.1 otherwise reads Portuguese text as ANSI.
@@ -70,6 +70,15 @@ try {
             'Iniciar sessão de Ana Clara em três de outubro de dois mil e vinte e seis às quinze horas.',
             'Remarcar sessão de Ana Clara no dia três de outubro de dois mil e vinte e seis às quinze horas.',
             'Cancelar sessão de Ana Clara em três de outubro de dois mil e vinte e seis às quinze horas.'
+        )
+    }
+    if ($Scenario -eq 'analytics-range') {
+        # These longer ranges must fit the app's existing 12-second audio limit.
+        # Normal SAPI speed, not the deliberately slow core corpus (-2).
+        $voice.Rate = 0
+        $commands = @(
+            'Mostrar análises de Ana Clara de um de setembro de 2026 até trinta de setembro de 2026.',
+            'Mostrar análises de um de setembro de 2026 até trinta de setembro de 2026.'
         )
     }
     $results = foreach ($index in 0..($commands.Count - 1)) {

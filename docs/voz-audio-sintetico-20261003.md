@@ -1,5 +1,9 @@
 # Áudio sintético offline — 03/10/2026
 
+## Intervalo de análises — 04/10/2026 UTC
+
+`-Scenario analytics-range` gera dois WAVs fictícios de pedido global/por paciente, com recursos de voz da instalação52. Primeira tentativa SAPI rate-2 com frase extensa foi recusada pelo backend: excedia12s. Segunda tentativa usa frases mais curtas, SAPI rate0, preservando limite12s da produção. Resultado **Passed2/Failed0/NotEvaluated0**, exit0. As transcrições reais e não editadas estão em `test/fixtures/native-voice-analytics-20261004.json`; avaliam paciente e datas exatos, sem inferir ano. Fluxo Rust opt-in real de áudio, mas sem microfone físico, execução de consulta instalada ou consentimento/confirmar nativo. Comandos maiores precisam ser divididos; nenhuma captura ambiente feita.
+
 ## Cenário de data verbal na ocorrência — 04/10/2026 UTC
 
 Mesmo harness com `-Scenario occurrence-date`:3WAVs SAPI Microsoft Maria Portuguese(Brazil), iniciar/remarcar/cancelar sessão de Ana Clara em/no dia três de outubro de dois mil e vinte e seis às quinze horas. Recursos da instalação52, backend Rust opt-in, exit0. Corpus em `test/fixtures/native-voice-occurrence-20261004.json`: dia transcrito como3; remarcação/cancelamento transcritos “seção”. Parser normaliza a variante já existente e converte a data completa. Avaliador exige ação/paciente/data/horário exatos: **Passed3/Failed0/NotEvaluated0**.

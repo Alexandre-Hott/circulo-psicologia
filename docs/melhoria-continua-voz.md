@@ -1,5 +1,19 @@
 # Melhoria contínua de voz
 
+## Entrega local 0.2.54 — intervalo de análises falado
+
+Pacote `Círculo_0.2.54_x64-setup.exe`, **135.880.128 bytes**, SHA-256 `d6ab8038b3bf848ba348c1d516289165d8853750332f68cbbbe02c1213006ea3`. Build NSIS offline/locked exit0, release Rust46,24s; aviso anterior OpenSSL/PDB LNK4099. Primeira invocação de build recusou flags fora do separador; corrigida para argumentos Cargo após `--`, compilação/pacote concluídos. Override temporário de updater removido ao final, configuração oficial preservada. Manifest `%TEMP%\\circulo-0254-audit-20261004.json`: PE0.2.54/x64/NotSigned, sem extração interna/instalação/execução. Instalado permanece52. Sem alteração do perfil, `.sig`, Authenticode, Release ou oferta automática pelo GitHub. Arquivo local disponível para teste.
+
+## Incremento 0.2.54 — intervalo de análises por fala
+
+“Mostrar análises de Ana Clara de um de setembro de 2026 até trinta de setembro de 2026” prepara os filtros existentes de paciente e período; sem paciente, mostra todos. Aceita datas completas por extenso ou intervalo misto verbal/numérico, sem inferir o ano. Exige confirmar antes da consulta; intervalo inválido, invertido ou superior a cinco anos é recusado. Preservada navegação de paciente cujo nome contém “até”; colisão real entre nome e intervalo exige seleção separada. Revisão encontrou essa regressão, corrigida e coberta por teste.
+
+JS final **253/253**, build web/guard/diff aprovados; lint sem erros, cinco avisos anteriores. E2E de análises com IPC sintético: quatro casos, incluindo prévia sem consulta, confirmação com filtros exatos, consulta global, datas inválidas e recarga. Primeira execução4/4; repetição final após correção do nome **4/4 em30,5s**, exit0. Não é validação do host instalado nem do microfone físico.
+
+Harness `analytics-range`: primeira tentativa com fala SAPI lenta (-2) falhou no backend Rust, que recusou áudio acima de12s. Limite do aplicativo não alterado. Segunda tentativa com frases menores e velocidade SAPI normal(0), recursos de voz instalados52: **2/2 intents completos**, nenhum não-avaliado, exit0. Corpus real salvo em `test/fixtures/native-voice-analytics-20261004.json`, com paciente/datas comparados exatamente. Comandos longos ainda devem ser divididos em preenchimentos separados de De/Até; não confundir sintético com microfone humano.
+
+Backend Rust funcional não alterado. Instalação local permanece52; nenhuma senha ou perfil alterado. Meta ativa, sem ampliação de recovery/backup legado.
+
 ## Entrega local 0.2.53 — data verbal nas ações de ocorrência
 
 Pacote `Círculo_0.2.53_x64-setup.exe`, **135.881.152 bytes**, SHA-256 `54ac9e18825eb40749202a899153a5207c8f98d625b3e66cc951b1bcf8d18949`. Build NSIS offline/locked exit0; Rust release compilado em1m15s, aviso anterior LNK4099/PDB OpenSSL. Override temporário de updater removido após término, configuração oficial preservada. Auditoria `%TEMP%\\circulo-0253-audit-20261004.json`: PE0.2.53/x64/NotSigned. Sem extração interna, instalação, abertura ou microfone físico nesta rodada; instalado permanece52. Nenhum perfil alterado. Sem `.sig`, Authenticode, Release ou atualização publicada pelo GitHub.

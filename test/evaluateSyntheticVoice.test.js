@@ -92,6 +92,18 @@ test('atributos introduzidos, nomes excedentes, negação e ações compostas n�
   }
 })
 
+test('intervalo realmente transcrito mantém paciente e duas datas exatas', () => {
+  const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-analytics-20261004.json', import.meta.url), 'utf8'))
+  const result = evaluateSyntheticVoice(cases, { scenario: 'analytics-range' })
+  assert.equal(result.Passed, 2)
+  assert.equal(result.Failed, 0)
+  assert.equal(result.NotEvaluated, 0)
+  const wrongDate = structuredClone(cases)
+  wrongDate[0].Transcript = wrongDate[0].Transcript.replace('trinta de setembro', 'vinte de setembro')
+  assert.equal(evaluateSyntheticVoice(wrongDate, { scenario: 'analytics-range' }).Failed, 1)
+  assert.throws(() => evaluateSyntheticVoice(cases.slice(1), { scenario: 'analytics-range' }))
+})
+
 test('recusa corpus incompleto, índice duplicado e transcrição vazia', () => {
   assert.throws(() => evaluateSyntheticVoice(corpus().slice(1)))
   const duplicate = corpus(); duplicate[1].Index = 0

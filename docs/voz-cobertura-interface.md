@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Intervalos de análises por fala — 0.2.54
+
+Novo pedido natural com duas datas completas aplica paciente/De/Até somente após confirmar. Conversor existente reutilizado; sem ano inferido ou alteração dos gráficos. JS253/253; corpus2WAVs transcrito via Rust/recursos instalados52 com2intents exatos. Primeiro áudio lento acima12s falhou; frases curtas em velocidade normal passaram sem ampliar limite. E2E de análises4/4 na primeira execução e **4/4 final em30,5s**, IPC sintético. Não comprova microfone físico ou host instalado. Instalado permanece52. [Tentativas e limites](melhoria-continua-voz.md).
+
 ## Complemento após 0.2.52: datas faladas de ocorrência
 
 Iniciar/remarcar/cancelar aceitam data verbal completa com ano após “em/no dia”, sem adivinhar data ou paciente. Corpus3WAVs do backend Rust com recursos instalados resultou3/3intents completos, e replay inicial3/3E2E aprovou prévia/confirmar/alvo correto, sem cancelamento/remarcação automática. Asserções de alvo fortalecidas após revisão; regressão final60/60 em4,3min. JS250/250 final; review79tests/234probes/36comparações aprovado, limite conservador de nome com `as` documentado. Incluído no pacote53 PE/x64/hash auditado; não instalado/publicado, instalado permanece52. Sem prova de microfone físico. [Tentativas e limites](melhoria-continua-voz.md).

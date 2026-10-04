@@ -68,6 +68,28 @@ const year = { from: '2025-11-01', to: '2026-10-31', patientId: null }
 // main.jsx uses React StrictMode: mounting analytics invokes its read effect twice.
 const initialRequests = [month, month]
 
+test('intervalo falado aplica datas e paciente somente após confirmação', async ({ page, baseURL }) => {
+  const analytics = await openAnalytics(page, baseURL)
+  const september = { from: '2026-09-01', to: '2026-09-30', patientId: 'synthetic-active' }
+  const range = 'de primeiro de setembro de dois mil e vinte e seis até trinta de setembro de dois mil e vinte e seis'
+  await propose(page, `Mostrar análises de Paciente Ativo Fictício ${range}`)
+  await expect(page.locator('.voice-command-preview')).toContainText('01/09/2026 a 30/09/2026')
+  expect(await requests(page)).toEqual(initialRequests)
+  await propose(page, 'confirmar')
+  await page.clock.runFor(32)
+  await expect.poll(() => requests(page)).toEqual([...initialRequests, september])
+  await expect(analytics.getByLabel('Paciente', { exact: true })).toHaveValue(september.patientId)
+  await expect(analytics.getByLabel('De', { exact: true })).toHaveValue(september.from)
+  await expect(analytics.getByLabel('Até', { exact: true })).toHaveValue(september.to)
+  await command(page, `Mostrar análises para todos os pacientes ${range}`)
+  await expect.poll(() => requests(page)).toEqual([...initialRequests, september, { ...september, patientId: null }])
+  await expect(analytics.getByLabel('Paciente', { exact: true })).toHaveValue('')
+  await propose(page, 'Mostrar análises de Paciente Ativo Fictício de primeiro de setembro até trinta de setembro')
+  await expect(page.locator('.voice-command-error')).toBeVisible()
+  await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+  expect(await requests(page)).toEqual([...initialRequests, september, { ...september, patientId: null }])
+})
+
 test.afterEach(async ({ page }) => {
   expect(await page.evaluate(() => window.analyticsControlsFixture?.unexpected || [])).toEqual([])
 })

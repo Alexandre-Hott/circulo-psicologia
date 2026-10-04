@@ -444,6 +444,32 @@ const parseAnalyticsNavigation = (text, context, referenceDate) => {
   let argument = command[1] || ''
   const period = /(?:^|\s+)(hoje|deste mes|neste mes|dos ultimos 12 meses|nos ultimos 12 meses|de (\d{2}\/\d{2}\/\d{4}) ate (\d{2}\/\d{2}\/\d{4}))$/u.exec(argument)
   if (period) argument = argument.slice(0, period.index).trim()
+  let explicitRange = period?.[2] ? {
+    from: period[2].split('/').reverse().join('-'),
+    to: period[3].split('/').reverse().join('-'),
+  } : null
+  if (!period && /\sate\s/u.test(argument)) {
+    const wholeName = /^(?:de|do|da)\s+(.+)$/u.exec(argument)?.[1]
+    const matchesWholePatient = wholeName && (context.patients || []).some(patient => patient.archivedAt == null && normalize(patient.name) === wholeName)
+    const completeDate = value => /^(?:\d{2}\/\d{2}\/\d{4}|.+ de [a-z]+ de .+)$/u.test(value)
+      ? normalizeVoiceFieldValue('date', value) : null
+    const candidates = []
+    for (const end of argument.matchAll(/\s+ate\s+/gu)) {
+      const to = completeDate(argument.slice(end.index + end[0].length))
+      if (!to) continue
+      const before = argument.slice(0, end.index)
+      for (const start of before.matchAll(/(?:^|\s+)de\s+/gu)) {
+        const from = completeDate(before.slice(start.index + start[0].length))
+        if (from) candidates.push({ from, to, prefix: before.slice(0, start.index).trim() })
+      }
+    }
+    if (candidates.length && matchesWholePatient) return refuse('O nome e o período são ambíguos. Abra as análises e selecione o paciente e as datas separadamente.')
+    if (!matchesWholePatient) {
+      if (candidates.length !== 1) return refuse('Informe um único intervalo com duas datas completas, incluindo o ano.')
+      explicitRange = candidates[0]
+      argument = explicitRange.prefix
+    }
+  }
   let patientId = ''
   let label = 'todos os pacientes'
   if (argument && !/^(?:(?:de|para)\s+)?todos os pacientes$/u.test(argument)) {
@@ -457,9 +483,9 @@ const parseAnalyticsNavigation = (text, context, referenceDate) => {
   let from
   let to
   let view
-  if (period?.[2]) {
-    from = period[2].split('/').reverse().join('-')
-    to = period[3].split('/').reverse().join('-')
+  if (explicitRange) {
+    from = explicitRange.from
+    to = explicitRange.to
     view = 'custom'
   } else {
     const reference = parseCivilDate(referenceDate)
