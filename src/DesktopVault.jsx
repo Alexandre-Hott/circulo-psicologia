@@ -184,7 +184,18 @@ export default function DesktopVault() {
     if (busyRef.current) { setVoiceNotice('Aguarde a operação atual antes de aplicar o comando.'); return }
     if (confirmationRef.current) { setVoiceNotice('Responda à confirmação aberta antes de continuar.'); return }
     if (intent.type === 'interface.control') {
-      try { applyVoiceInterfaceCommand(intent) } catch (reason) { setVoiceNotice(reason.message) }
+      try {
+        applyVoiceInterfaceCommand(intent)
+        // A confirmed close supersedes earlier navigation into this same panel.
+        if (intent.operation === 'close' && (
+          (intent.target.drawerId === 'session-evolution' && sessionVoiceDraft?.type === 'session.addendum.open') ||
+          (intent.target.name === 'Contexto do caso' && sessionVoiceDraft?.type === 'session.section.open' && sessionVoiceDraft.target?.section === 'context') ||
+          (intent.target.drawerId === 'session-behaviors' && sessionVoiceDraft?.type === 'session.section.open' && sessionVoiceDraft.target?.section === 'library')
+        )) {
+          sessionsRef.current?.cancelPendingSectionNavigation()
+          setSessionVoiceDraft(null)
+        }
+      } catch (reason) { setVoiceNotice(reason.message) }
       return
     }
     if (!vaultUnlocked.current) { setVoiceNotice('Desbloqueie o cofre antes de acessar pacientes e agenda.'); return }

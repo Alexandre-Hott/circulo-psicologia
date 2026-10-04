@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Incremento0.2.61 — abrir/recolher gavetas sem alternância involuntária
+
+Pedidos naturais Abrir/Abra, Fechar/Feche e Recolher/Recolha, com “a gaveta” opcional, usam apenas drawers visíveis e rótulos exatos. Summary de details ou botão aria-expanded/aria-controls; botões comuns não viram gavetas. Prévia seguida de confirmação; destino, identidade e revisão revalidados. Fechamento confirmado do contexto/evolução cancela somente a navegação pendente correspondente, não edições ou persistência. Agenda mantém campos e aceita mudança manual de estado entre proposta e confirmação. Regresso111:110passaram/1seletor ambíguo; após corrigir somente o seletor, gavetas3/3, incluindo áudio simulado, sem nova rodada integral. JS258/258. [Entrega, testes e limites](melhoria-continua-voz.md). Pacote61 gerado/auditado, instalado59; sem nova validação física de voz.
+
 ## Complemento0.2.60 — papel administrativo nos vínculos
 
 Transcrição Rust/SAPI real produziu “contrato administrativo”; alias exato só para o checkbox Contato administrativo em formulário de vínculos. Nenhum texto livre é corrigido. Replay red0/1 e green2/2; regressão95/95 e unidade258/258. Probes DOM adicionais5/5 recusam alias fora do formulário, duplicatas, desabilitado, rótulo literal concorrente e revisão alterada. Erro tardio de áudio preserva proposta nova digitada. Mídia/RPC simulados nos testes de interface: não provam microfone físico nem gravação instalada. Instalador60 local gerado/auditado, não instalado/publicado; instalado59. [Detalhes](melhoria-continua-voz.md).

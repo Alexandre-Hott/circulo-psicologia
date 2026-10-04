@@ -276,6 +276,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   }
 
   useImperativeHandle(ref, () => ({
+    cancelPendingSectionNavigation: () => { sectionRequestEpochRef.current++ },
     savePending: async () => {
       if (voiceConfirmationPendingRef.current) throw new Error('Há uma alteração de voz não salva. Revise e clique em “Salvar rascunho” ou cancele o rascunho antes de sair.')
       if (!activeDraft || (!dirtyRef.current && !savePromiseRef.current)) return

@@ -76,8 +76,13 @@ function matches(query, entries) {
   return entries.filter(item => item.context && [fold(`${item.name} de ${item.context}`), fold(`${item.name} em ${item.context}`)].some(label => label.startsWith(normalized) && normalized.startsWith(fold(item.name) + ' ')))
 }
 
-function fingerprint(item) {
-  return { id: item.element.id || null, tag: item.element.tagName, inputType: item.element.type || null, valueType: item.element.getAttribute('data-voice-value-type') || null, name: item.name, context: item.context, action: item.element.getAttribute('data-voice-action') || null, record: item.element.closest('[data-voice-record]')?.getAttribute('data-voice-record') || null, epoch: item.element.closest('[data-voice-epoch]')?.getAttribute('data-voice-epoch') || null }
+function fingerprint(item, drawer = false) {
+  return { id: item.element.id || null, tag: item.element.tagName, inputType: item.element.type || null, valueType: item.element.getAttribute('data-voice-value-type') || null, name: drawer ? textContent(item.element) : item.name, context: item.context, action: item.element.getAttribute('data-voice-action') || null, record: item.element.closest('[data-voice-record]')?.getAttribute('data-voice-record') || null, epoch: item.element.closest('[data-voice-epoch]')?.getAttribute('data-voice-epoch') || null }
+}
+
+function isDrawer(element) {
+  return element.matches('summary') && element.parentElement?.matches('details') ||
+    element.matches('button[aria-controls]') && ['true', 'false'].includes(element.getAttribute('aria-expanded'))
 }
 
 export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
@@ -100,19 +105,27 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   const clearField = /^(?:limpar|limpe|esvaziar|esvazie)\s+(?:o campo |o |a )?(.+)$/iu.exec(raw)
   const check = /^(marcar|marque|desmarcar|desmarque)\s+(?:a op[cç][aã]o |o |a )?(.+)$/iu.exec(raw)
   const click = /^(?:clicar|clique|clica|acionar|acione|apertar|aperte)\s+(?:no bot[aã]o |na opc[aã]o |no |na |em )?(.+)$/iu.exec(raw)
+  const drawer = /^(abrir|abra|fechar|feche|recolher|recolha)\s+(?:a gaveta |gaveta )?(.+)$/iu.exec(raw)
   if (fields.length) { operation = 'fill'; query = fields[0].query; value = fields[0].value }
   else if (clearField) { operation = 'fill'; query = clearField[1]; value = '' }
   else if (check) { operation = /^des/i.test(check[1]) ? 'uncheck' : 'check'; query = check[2] }
   else if (click) { operation = 'click'; query = click[1] }
+  else if (drawer) { operation = /^abr/iu.test(drawer[1]) ? 'open' : 'close'; query = drawer[2] }
   else if (/^(?:salvar|salve)(?: o)? comportamento$/.test(normalized)) { operation = 'click'; query = 'Salvar comportamento' }
   else if (/^(?:confirmar|confirma|confirmar acao|confirmar ação)$/.test(normalized)) { operation = 'click'; query = 'Confirmar ação' }
   else if (/^(?:salvar paciente|salvar alteracoes|salvar rascunho|finalizar sessao|cancelar rascunho|novo cadastro|novo compromisso|criar comportamento reutilizavel|criar compromisso|criar serie|atualizar lista|bloquear|voltar|confirmar cancelamento|confirmar remarcacao individual|confirmar encerramento)$/.test(normalized)) { operation = 'click'; query = raw }
   else return null
   const candidates = inventory(root).filter(item => operation === 'fill'
     ? ['INPUT', 'TEXTAREA', 'SELECT'].includes(item.element.tagName) && !['checkbox', 'radio', 'password', 'file'].includes(item.element.type) && !item.element.readOnly
+    : ['open', 'close'].includes(operation) ? isDrawer(item.element)
     : ['check', 'uncheck'].includes(operation) ? item.element.type === 'checkbox' || item.element.type === 'radio'
       : item.element.matches('button, summary, a[href^="#"], input[type="radio"], input[type="checkbox"]'))
   let found = matches(query, candidates)
+  if (['open', 'close'].includes(operation)) {
+    // Toggle buttons may describe the current action instead of the drawer name.
+    // Only their exact visible caption is an additional label; no fuzzy target.
+    found = candidates.filter(item => fold(item.name) === fold(query) || fold(textContent(item.element)) === fold(query))
+  }
   if (fields.length) {
     const viable = fields.map(item => ({ ...item, found: matches(item.query, candidates) })).filter(item => item.found.length)
     if (viable.length > 1) return refusal('O pedido pode preencher campos diferentes. Diga um campo e um valor por comando.')
@@ -149,9 +162,9 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   }
   return {
     status: 'draft',
-    intent: { type: 'interface.control', operation, target: fingerprint(item), ...(operation === 'fill' ? { value } : {}), ...(optionLabel !== undefined ? { optionLabel } : {}) },
+    intent: { type: 'interface.control', operation, target: { ...fingerprint(item, ['open', 'close'].includes(operation)), ...(['open', 'close'].includes(operation) ? { drawerId: item.element.matches('summary') ? item.element.parentElement.id : item.element.getAttribute('aria-controls') } : {}) }, ...(operation === 'fill' ? { value } : {}), ...(optionLabel !== undefined ? { optionLabel } : {}) },
     preview: clearField ? `Limpar ${item.name}.` : operation === 'fill' ? `${item.name}: ${item.element.tagName === 'SELECT' ? [...item.element.options].find(option => option.value === value)?.textContent : value}`
-      : `${operation === 'click' ? 'Acionar' : operation === 'check' ? 'Marcar' : 'Desmarcar'} ${item.name}${item.context ? ` · ${item.context}` : ''}.`,
+      : `${operation === 'open' ? 'Abrir' : operation === 'close' ? 'Recolher' : operation === 'click' ? 'Acionar' : operation === 'check' ? 'Marcar' : 'Desmarcar'} ${['open', 'close'].includes(operation) ? textContent(item.element) : item.name}${item.context ? ` · ${item.context}` : ''}.`,
     notes: [],
   }
 }
@@ -159,7 +172,8 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
 export function applyVoiceInterfaceCommand(intent, root = globalThis.document) {
   if (intent?.type !== 'interface.control') throw new Error('Comando de interface inválido.')
   const found = inventory(root).filter(item => {
-    const current = fingerprint(item), target = intent.target
+    const current = fingerprint(item, ['open', 'close'].includes(intent.operation)), target = intent.target
+    if (['open', 'close'].includes(intent.operation) && (!isDrawer(item.element) || target.drawerId !== (item.element.matches('summary') ? item.element.parentElement.id : item.element.getAttribute('aria-controls')))) return false
     return current.id === target.id && current.tag === target.tag && current.inputType === target.inputType && current.valueType === target.valueType && current.name === target.name && current.context === target.context && current.action === target.action && current.record === target.record && current.epoch === target.epoch
   })
   if (found.length !== 1) throw new Error('A tela mudou. Prepare o comando novamente antes de aplicar.')
@@ -172,7 +186,12 @@ export function applyVoiceInterfaceCommand(intent, root = globalThis.document) {
   }
   element.scrollIntoView({ block: 'center', behavior: 'smooth' })
   element.focus({ preventScroll: true })
-  if (intent.operation === 'click') element.click()
+  if (['open', 'close'].includes(intent.operation)) {
+    if (!isDrawer(element)) throw new Error('A gaveta mudou. Prepare o comando novamente.')
+    const open = element.matches('summary') ? element.parentElement.open : element.getAttribute('aria-expanded') === 'true'
+    if (open !== (intent.operation === 'open')) element.click()
+  }
+  else if (intent.operation === 'click') element.click()
   else if (intent.operation === 'check' || intent.operation === 'uncheck') {
     if (element.checked !== (intent.operation === 'check')) element.click()
   } else if (intent.operation === 'fill') {
