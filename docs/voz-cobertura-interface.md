@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Consolidação local 0.2.51
+
+Retry nativo e proteção de continuações antigas abaixo estão incluídos no instalador 0.2.51, compilado offline/locked e auditado PE/x64/hash. 243/243 testes JS reexecutados após versionamento; regressão funcional final anterior: 59/59 E2E e 86 testes Rust aprovados, um áudio opt-in ignorado. Não instalado nem validado com microfone físico; instalado permanece 0.2.47. Controle nativo conectou e listou janelas, sem Círculo aberto: isso não comprova operação da aplicação. Sem Release ou assinatura updater. [Artefato e limites](melhoria-continua-voz.md). Meta ativa.
+
 ## Complemento após0.2.50: operações antigas após bloqueio
 
 P2 anterior reproduzido por comando nos componentes (0/2 antes): aguardar refresh da criação, bloquear/desbloquear e liberar consulta antiga abria Sessões. Geração de montagem e geração do Vault agora invalidam continuações/resultados/erros; busy antigo não libera unlock novo, inclusive no chamador natural. Restauração preserva seu busy durante confirmação/carregamento. **243JS e59/59E2E em2,5min** finais aprovados (calendário12, transições7, shell40); focused4/4 em21,7s e revisão independente final sem achados nos dois pontos adicionais. Backend/captura simulados, nenhuma prova de microfone/janela instalada. Mudanças posteriores ao instalador50; instalado47 preservado. Consolidar com o retry nativo no próximo pacote. [Histórico das tentativas e limites](melhoria-continua-voz.md). Meta ativa.

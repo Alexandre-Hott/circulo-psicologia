@@ -1,5 +1,13 @@
 # Melhoria contínua de voz
 
+## Entrega local 0.2.51 — retomada e bloqueio
+
+Pacote `Círculo_0.2.51_x64-setup.exe`, **135.872.833 bytes**, SHA-256 `41a28cbfa5e30a5622e9135c933e97316fe9e5dd4ae00ffbc1f27d5b810f08a5`. Build NSIS offline/locked exit0; override temporário de updater removido após término e configuração oficial preservada. Auditoria `%TEMP%\\circulo-0251-audit-20261004.json`: PE0.2.51/x64/NotSigned. Conteúdo interno não extraído, pacote não instalado nem aberto nesta rodada; instalado permanece 0.2.47. Sem `.sig`, assinatura Authenticode, Release ou atualização publicada pelo GitHub.
+
+Inclui os dois incrementos descritos abaixo: reutilização nativa do rascunho de uma ocorrência e invalidação das continuações antigas após bloqueio. **243/243 testes JS** e guard aprovados após mudança de versão. Regressão funcional final anterior: **59/59 E2E** e **86 Rust aprovados/1 áudio opt-in ignorado**; não reexecutados como jornada do instalador. Build Vite/Rust/NSIS aprovado, com avisos anteriores de chunk>500KiB e PDB OpenSSL LNK4099. Nenhum perfil alterado.
+
+A habilidade de controle do Windows foi usada para verificar disponibilidade: importação de `@oai/sky` e listagem de janelas funcionaram; o Círculo não estava aberto. Não houve entrada de senha, controle de formulários ou captura física de áudio. Esta conexão não substitui validação do aplicativo instalado. Limitações de recovery/legados mantidas fora do escopo. Meta de melhoria contínua permanece ativa.
+
 ## Incremento após0.2.50 — continuação invalidada por bloqueio
 
 P2 de lifecycle reproduzido com componentes reais/RPC fictício: Registrar sessão cria compromisso e aguarda refresh; backend informa bloqueado pelo evento focus; usuário desbloqueia manualmente; resolver ou rejeitar a consulta antiga fazia abrir Sessões e iniciar um rascunho sem nova confirmação. Testes integrados **0/2 antes**, ambos na asserção de manter Início após liberar consulta antiga.
