@@ -16,36 +16,44 @@ async function openApp(page, { simulatedAudio = false } = {}) {
     if (simulatedAudio) {
       window.voiceTranscript = ''
       window.minuteVoiceCalls = []
-      // Same capture pattern as desktop-voice-interface.spec.js. These samples
-      // and fixed transcripts do not demonstrate real Rust recognition or a microphone.
+      const media = window.minuteMedia = { mediaRequests: 0, trackStops: 0, contextCloses: 0, sourceDisconnects: 0, processorDisconnects: 0, captureRefs: [] }
+      // Short synthetic speech then >1100 ms of trailing silence. Continuous
+      // speech reaches the 12-second cap and requires manual preparation.
+      // Fixed transcripts are not a native corpus or Rust/ASR accuracy evidence.
       class SyntheticAudioContext {
         constructor() { this.sampleRate = 8_000; this.state = 'running'; this.destination = {} }
-        createMediaStreamSource() { return { connect() {}, disconnect() {} } }
+        createMediaStreamSource() { return { connect() {}, disconnect() { media.sourceDisconnects++ } } }
         createScriptProcessor() {
-          const processor = { onaudioprocess: null, disconnect() {} }
+          const processor = { onaudioprocess: null, disconnect() { media.processorDisconnects++ } }
           processor.connect = () => queueMicrotask(() => {
+            let frames = 0
             const emit = () => {
               if (!processor.onaudioprocess) return
+              const amplitude = frames++ < 2 ? 0.1 : 0
               processor.onaudioprocess({
-                inputBuffer: { getChannelData: () => new Float32Array(4096).fill(0.1) },
+                inputBuffer: { getChannelData: () => new Float32Array(4096).fill(amplitude) },
                 outputBuffer: { getChannelData: () => new Float32Array(4096) },
               })
-              if (processor.onaudioprocess) setTimeout(emit, 0)
+              if (processor.onaudioprocess) setTimeout(emit, 200)
             }
             emit()
           })
           return processor
         }
         resume() { return Promise.resolve() }
-        close() { this.state = 'closed'; return Promise.resolve() }
+        close() { this.state = 'closed'; media.contextCloses++; return Promise.resolve() }
       }
       Object.defineProperty(window, 'AudioContext', { configurable: true, value: SyntheticAudioContext })
       Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
-        getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }),
+        getUserMedia: async () => {
+          media.mediaRequests++
+          return { getTracks: () => [{ stop() { media.trackStops++ } }] }
+        },
       } })
     }
     window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
       if (command === 'voice_transcribe' && simulatedAudio) {
+        window.minuteMedia.captureRefs.push(args)
         // Snapshot evidence before transcribeLocalVoice clears the sample array.
         window.minuteVoiceCalls.push({
           command, sampleRate: args.sampleRate, sampleCount: args.samples.length,
@@ -111,8 +119,10 @@ test('áudio simulado: segundo áudio confirma 15:45–16:35 e criação exige s
     // Fixed, simulated transcripts: no native harness/corpus or Rust recognition claim.
     await page.evaluate(value => { window.voiceTranscript = value }, text)
     await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
-    await page.clock.runFor(1000)
+    await page.clock.runFor(1600)
     await expect(assistant.getByRole('button', { name: 'Ouvir e transcrever' })).toBeEnabled()
+    await expect(assistant.getByLabel('Seu comando')).toHaveValue(text)
+    await expect(assistant.getByText(/A captura atingiu .*segundos e pode estar incompleta/u)).toHaveCount(0)
   }
   await expect(form).toHaveCount(0)
   await expect(agenda).toBeHidden()
@@ -139,9 +149,18 @@ test('áudio simulado: segundo áudio confirma 15:45–16:35 e criação exige s
   const calls = await page.evaluate(() => window.minuteVoiceCalls)
   expect(calls).toHaveLength(2)
   expect(calls.map(call => call.transcript)).toEqual(transcripts)
+  expect(await page.evaluate(() => {
+    const media = window.minuteMedia
+    return [media.mediaRequests, media.trackStops, media.contextCloses, media.sourceDisconnects, media.processorDisconnects]
+  })).toEqual([2, 2, 2, 2, 2])
+  expect(await page.evaluate(() => {
+    const refs = window.minuteMedia.captureRefs
+    return refs.length === 2 && refs.every(args => args.samples.every(sample => sample === 0) && args.patientNames.every(name => name === ''))
+  })).toBe(true)
   for (const call of calls) {
     expect(call).toMatchObject({ command: 'voice_transcribe', sampleRate: 8_000, hasSignal: true })
     expect(call.sampleCount).toBeGreaterThan(0)
+    expect(call.sampleCount / call.sampleRate).toBeLessThan(12)
     expect(call.patientNames).toEqual(['Caio Fictício', 'Ana Clara'])
   }
 

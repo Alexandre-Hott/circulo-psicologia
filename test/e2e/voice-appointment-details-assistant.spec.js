@@ -32,6 +32,7 @@ async function openApp(page, { week = false } = {}) {
     const fixture = window.appointmentDetails = {
       state: { patients, series, occurrences, history, drafts, sessions },
       calls: [], writes: [], unexpected: [], catalogReady: false, transcript: '',
+      mediaRequests: 0, trackStops: 0, contextCloses: 0, sourceDisconnects: 0, processorDisconnects: 0, captureRefs: [],
     }
     const catalogReads = new Set()
     const catalog = (command, result) => {
@@ -40,29 +41,35 @@ async function openApp(page, { week = false } = {}) {
       return clone(result)
     }
 
-    // Exact media helper from the old desktop-voice-interface spec and the
-    // series assistant spec. Replay uses captured native transcripts with
-    // simulated media/IPC; it does not execute Rust or use a real microphone.
+    // Short synthetic speech followed by >1100 ms of trailing silence matches
+    // the current replay fixtures. Continuous nonzero frames instead hit the
+    // 12-second cap and correctly require manual preparation.
+    // Preserved corpus replay is not Rust/ASR execution or a real microphone.
     class SyntheticAudioContext {
       constructor() { this.sampleRate = 8_000; this.state = 'running'; this.destination = {} }
-      createMediaStreamSource() { return { connect() {}, disconnect() {} } }
+      createMediaStreamSource() { return { connect() {}, disconnect() { fixture.sourceDisconnects++ } } }
       createScriptProcessor() {
-        const processor = { onaudioprocess: null, disconnect() {} }
+        const processor = { onaudioprocess: null, disconnect() { fixture.processorDisconnects++ } }
         processor.connect = () => queueMicrotask(() => {
+          let frames = 0
           const emit = () => {
             if (!processor.onaudioprocess) return
-            processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(0.1) }, outputBuffer: { getChannelData: () => new Float32Array(4096) } })
-            if (processor.onaudioprocess) setTimeout(emit, 0)
+            const amplitude = frames++ < 2 ? 0.1 : 0
+            processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(amplitude) }, outputBuffer: { getChannelData: () => new Float32Array(4096) } })
+            if (processor.onaudioprocess) setTimeout(emit, 200)
           }
           emit()
         })
         return processor
       }
       resume() { return Promise.resolve() }
-      close() { this.state = 'closed'; return Promise.resolve() }
+      close() { this.state = 'closed'; fixture.contextCloses++; return Promise.resolve() }
     }
     Object.defineProperty(window, 'AudioContext', { configurable: true, value: SyntheticAudioContext })
-    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } })
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => {
+      fixture.mediaRequests++
+      return { getTracks: () => [{ stop() { fixture.trackStops++ } }] }
+    } } })
     window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
       fixture.calls.push(clone({ command, args }))
       if (command === 'vault_status') return { initialized: true, unlocked: true, profileState: 'ready' }
@@ -76,7 +83,7 @@ async function openApp(page, { week = false } = {}) {
       if (command === 'agenda_occurrences') return clone(occurrences.filter(item => item.date >= args.from && item.date <= args.to))
       if (command === 'session_draft_list') return clone(drafts)
       if (command === 'session_timeline') return clone(sessions)
-      if (command === 'voice_transcribe') return fixture.transcript
+      if (command === 'voice_transcribe') { fixture.captureRefs.push(args); return fixture.transcript }
       fixture.unexpected.push(command)
       // No mutation is authorized by a details request. Record an attempted
       // write as well as rejecting every command outside the explicit fixture.
@@ -161,8 +168,21 @@ async function replayAudio(page, corpus, index) {
   await page.evaluate(text => { window.appointmentDetails.transcript = text }, recording.Transcript)
   const listen = assistant(page).getByRole('button', { name: 'Ouvir e transcrever' })
   await listen.click()
-  await page.clock.runFor(1000)
+  await page.clock.runFor(1600)
   await expect(listen).toBeEnabled()
+  await expect(assistant(page).getByLabel('Seu comando')).toHaveValue(recording.Transcript)
+  await expect(assistant(page).getByText(/A captura atingiu .*segundos e pode estar incompleta/u)).toHaveCount(0)
+}
+
+async function expectReplayCleanup(page) {
+  expect(await page.evaluate(() => {
+    const fixture = window.appointmentDetails
+    return [fixture.mediaRequests, fixture.trackStops, fixture.contextCloses, fixture.sourceDisconnects, fixture.processorDisconnects]
+  })).toEqual([2, 2, 2, 2, 2])
+  expect(await page.evaluate(() => {
+    const refs = window.appointmentDetails.captureRefs
+    return refs.length === 2 && refs.every(args => args.samples.every(sample => sample === 0) && args.patientNames.every(name => name === ''))
+  })).toBe(true)
 }
 
 test.beforeEach(async ({ page, baseURL }) => {
@@ -247,9 +267,11 @@ test('REPLAY nativo detalhes índices 0 e 2: proposta real no primeiro áudio, d
   await expectUnchanged(page, before)
   const captures = await page.evaluate(() => window.appointmentDetails.calls.filter(call => call.command === 'voice_transcribe'))
   expect(captures).toHaveLength(2)
+  await expectReplayCleanup(page)
   for (const { args } of captures) {
     expect(args.sampleRate).toBe(8000)
     expect(args.samples.length).toBeGreaterThan(0)
+    expect(args.samples.length / args.sampleRate).toBeLessThan(12)
     expect(args.samples.some(sample => sample !== 0)).toBe(true)
     expect(args.patientNames).toContain('Ana Clara')
   }
@@ -278,9 +300,11 @@ test('REPLAY nativo detalhes índices 1 e 2: Verdetales com data/hora escolhe en
   await expectUnchanged(page, before)
   const captures = await page.evaluate(() => window.appointmentDetails.calls.filter(call => call.command === 'voice_transcribe'))
   expect(captures).toHaveLength(2)
+  await expectReplayCleanup(page)
   for (const { args } of captures) {
     expect(args.sampleRate).toBe(8000)
     expect(args.samples.length).toBeGreaterThan(0)
+    expect(args.samples.length / args.sampleRate).toBeLessThan(12)
     expect(args.samples.some(sample => sample !== 0)).toBe(true)
     expect(args.patientNames).toContain('Ana Clara')
   }

@@ -2,7 +2,9 @@
 
 ## Estado atual — 04/10/2026
 
-A [entrega 0.2.75](validacao-voz-0.2.75.md) permite selecionar séries recorrentes por opção visível, inclusive com pacientes homônimos, sem ditar UUID. Prévia mostra nome, opção, dia e horário; confirmar abre o formulário e não grava sozinho. JS865/865, Rust135 aprovados/1 ignorado; UI23/23 e regressão selecionada47/47 em rodadas separadas, após correções documentadas de expectativas e fixture. Instalador local auditado, não instalado/publicado nem assinado; perfil e instalado61 não alterados. Não houve nova ASR nem comprovação de precisão do microfone. Meta ativa: próximas lacunas serão avaliadas na matriz de ações, sem alegação de cobertura universal. Os registros abaixo são históricos.
+A [entrega 0.2.76](validacao-voz-0.2.76.md) permite abrir detalhes de um compromisso pela opção visível no calendário, inclusive com pacientes homônimos e mesmo dia/horário. Prévia identifica nome, data efetiva, intervalo e opção; confirmar só abre detalhes. JS960/960, Rust135 aprovados/1 ignorado; UI19/19 e regressão selecionada69/69 em rodadas separadas, após alinhar duas fixtures antigas de mídia ao encerramento por silêncio, mantendo transcrições e destinos. Instalador local auditado, não instalado/publicado nem assinado; perfil e instalado61 não alterados. Não houve nova ASR nem prova do microfone físico. Meta ativa: ainda falta comprovar cobertura universal das ações; a matriz será reavaliada pelo código atual. Os registros abaixo são históricos.
+
+Entrega anterior 0.2.75: selecionar séries recorrentes por opção visível, inclusive com homônimos, sem ditar UUID. Seus resultados e limites permanecem no [registro da 0.2.75](validacao-voz-0.2.75.md).
 
 Entrega anterior 0.2.74: ditado do conteúdo dos quatro campos de sessão, com destino explícito, acréscimo literal, revisão e confirmação. Seus resultados e limites permanecem no [registro da 0.2.74](validacao-voz-0.2.74.md).
 
