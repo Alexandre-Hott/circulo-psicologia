@@ -81,7 +81,7 @@ export default function DesktopVault() {
   const voiceScopeRef = useRef(null)
   useLayoutEffect(() => {
     voiceScopeRef.current?.setAttribute('data-voice-lifecycle', nextVoiceLifecycle())
-  }, [space, status?.unlocked, sessionPatientId, activeDraft?.id, editing?.id, partyPatientId, agendaOpen, sessionsOpen])
+  }, [space, status?.unlocked, sessionPatientId, activeDraft?.id, editing?.id, patientFormOpen, partyPatientId, agendaOpen, sessionsOpen])
   const [voiceBehaviors, setVoiceBehaviors] = useState([])
   const [voiceIndicators, setVoiceIndicators] = useState([])
   const [voiceIntent, setVoiceIntent] = useState(null)
@@ -628,6 +628,9 @@ export default function DesktopVault() {
       const saved = editing
         ? await invoke('patient_update', { id: editing.id, revision: editing.revision, input })
         : await invoke('patient_create', { input })
+      // A successful Save starts a new editor even when editing stays null.
+      // Invalidate global discard proposals before resetting the open form.
+      voiceScopeRef.current?.setAttribute('data-voice-lifecycle', nextVoiceLifecycle())
       setPatients(current => editing ? current.map(patient => patient.id === saved.id ? saved : patient) : [...current, saved])
       setEditing(null)
       setForm(emptyPatientForm())

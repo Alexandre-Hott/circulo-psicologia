@@ -8,7 +8,7 @@ const versionB = '0.2.91'
 const warning = page => page.getByRole('alertdialog', { name: 'Confirmar ação', exact: true })
 const calls = (page, command) => page.evaluate(name => window.voiceUpdater.calls.filter(item => item.command === name).map(item => item.args), command)
 
-async function openApp(page, baseURL, { checkError = false, installError = false } = {}) {
+async function openApp(page, baseURL, { checkError = false, installError = false, patientScenario = null } = {}) {
   const external = [], dialogs = []
   page.on('dialog', async dialog => { dialogs.push(dialog.message()); await dialog.dismiss() })
   await page.route('**/*', route => {
@@ -18,11 +18,15 @@ async function openApp(page, baseURL, { checkError = false, installError = false
   })
   await page.clock.install({ time: new Date('2026-10-03T15:00:00Z') })
   await page.clock.pauseAt(new Date('2026-10-03T15:00:00Z'))
-  await page.addInitScript(({ checkError, installError, versionA }) => {
+  await page.addInitScript(({ checkError, installError, versionA, patientScenario }) => {
     const fixture = window.voiceUpdater = {
       calls: [], unexpected: [], transcript: '', checkError, installError, deferCheck: false,
       version: versionA, resources: [], callbackIds: [], captures: [], captureRefs: [],
       mediaRequests: 0, trackStops: 0, contextCloses: 0, sourceDisconnects: 0, processorDisconnects: 0,
+      writes: [], patients: patientScenario === 'existing-editors' ? [
+        { id: 'existing-a', name: 'Paciente A Fictício', age: 8, revision: 1, archivedAt: null },
+        { id: 'existing-b', name: 'Paciente B Fictício', age: 9, revision: 1, archivedAt: null },
+      ] : [{ id: 'synthetic', name: 'Paciente Fictício', age: 8, revision: 1, archivedAt: null }],
     }
     const callbacks = new Map()
     let nextCallback = 1, nextResource = 101
@@ -106,13 +110,25 @@ async function openApp(page, baseURL, { checkError = false, installError = false
         }
         if (command === 'vault_status') return { initialized: true, unlocked: true, profileState: 'ready' }
         if (command === 'auto_backup_status') return { available: false, dirty: false }
-        if (command === 'patient_list') return [{ id: 'synthetic', name: 'Paciente Fictício', age: 8, revision: 1, archivedAt: null }]
+        if (command === 'patient_list') return structuredClone(fixture.patients.filter(patient => args.includeArchived || !patient.archivedAt))
+        if (command === 'patient_create') {
+          // Only the explicitly authorized manual Save A in the real new-form
+          // ABA case may write. Every other create/update remains forbidden.
+          const expected = { name: 'Novo A sintético', age: null, selfRequester: null, preferredModality: '', lifeCycle: 'Não informado' }
+          if (patientScenario !== 'new-save-a' || fixture.writes.length || Object.keys(args).join(',') !== 'input'
+            || !args.input || Object.keys(args.input).length !== Object.keys(expected).length
+            || !Object.entries(expected).every(([key, value]) => args.input[key] === value)) return reject(command, snapshot)
+          fixture.writes.push({ command, args: snapshot })
+          const saved = { id: 'created-a', revision: 1, archivedAt: null, ...args.input }
+          fixture.patients.push(saved)
+          return structuredClone(saved)
+        }
         if (['agenda_occurrences', 'agenda_list_series', 'agenda_history', 'related_party_list', 'behavior_list',
           'indicator_catalog', 'session_draft_list', 'session_timeline', 'session_addendum_list', 'case_context_list'].includes(command)) return []
-        return reject(command, snapshot) // No clinical write, restart or other plugin IPC allowed.
+        return reject(command, snapshot) // No other clinical write, restart or plugin IPC allowed.
       },
     }
-  }, { checkError, installError, versionA })
+  }, { checkError, installError, versionA, patientScenario })
   await page.goto('/')
   await expect(page.getByRole('region', { name: 'Comando do Círculo' })).toBeVisible()
   return { external, dialogs }
@@ -311,5 +327,120 @@ test('updater por áudio: ABA mesma versão com novo RID invalida proposta antig
   expect(await activeRid(page)).toBe(newRid)
   expect(await calls(page, 'plugin:updater|download_and_install')).toEqual(downloads)
   expect(await calls(page, 'plugin:updater|download_and_install')).not.toContainEqual({ rid: newRid, onEvent: { id: expect.any(Number) } })
+  await boundaries(page, state)
+})
+
+const discardRequest = 'Clicar em Descartar edições e fechar formulários'
+const discardMessage = 'Fechar cadastro, vínculo e Agenda e descartar contexto, adendo ou comportamento não salvos em Sessões?'
+async function formsBlocked(page) {
+  await command(page, 'Clicar em Baixar e instalar')
+  await expect(page.getByText(`Feche os formulários antes de instalar Círculo ${versionA}.`, { exact: true })).toBeVisible()
+  await expect(warning(page)).toHaveCount(0)
+  expect(await calls(page, 'plugin:updater|download_and_install')).toEqual([])
+}
+async function noDiscardWrites(page, creates = []) {
+  expect(await calls(page, 'patient_create')).toEqual(creates)
+  expect(await calls(page, 'patient_update')).toEqual([])
+  expect(await calls(page, 'plugin:updater|download_and_install')).toEqual([])
+  expect(await page.evaluate(() => window.voiceUpdater.writes)).toEqual(creates.map(args => ({ command: 'patient_create', args })))
+}
+
+test('updater descarte por áudio: cancelar editor existente A e editar B invalida proposta', async ({ page, baseURL }) => {
+  const state = await openApp(page, baseURL, { patientScenario: 'existing-editors' })
+  await available(page)
+  const patients = await page.evaluate(() => window.voiceUpdater.patients)
+  await command(page, 'Editar paciente Paciente A Fictício')
+  const form = page.getByRole('form', { name: 'Editar cadastro', exact: true })
+  await expect(form).toHaveAttribute('data-voice-record', 'existing-a')
+  await formsBlocked(page)
+  await prepare(page, discardRequest)
+  await expect(page.locator('.voice-command-preview')).toContainText('Descartar edições e fechar formulários')
+  await expect(warning(page)).toHaveCount(0)
+  await noDiscardWrites(page)
+  // Cancel is real only for an existing editor, never fabricated for a new form.
+  await form.getByRole('button', { name: 'Cancelar edição', exact: true }).click()
+  await page.locator('[data-voice-record="patient:existing-b"]').getByRole('button', { name: 'Editar', exact: true }).click()
+  await expect(form).toHaveAttribute('data-voice-record', 'existing-b')
+  await form.getByLabel('Nome', { exact: true }).fill('Edição B sintética pendente')
+  await audio(page, 'Confirmar')
+  await expect(warning(page)).toHaveCount(0)
+  await expect(form).toBeVisible()
+  await expect(form).toHaveAttribute('data-voice-record', 'existing-b')
+  await expect(form.getByLabel('Nome', { exact: true })).toHaveValue('Edição B sintética pendente')
+  expect(await page.evaluate(() => window.voiceUpdater.patients)).toEqual(patients)
+  await noDiscardWrites(page)
+  await boundaries(page, state)
+})
+
+test('updater descarte por áudio: novo A salvo e novo B no mesmo form recusa proposta A', async ({ page, baseURL }) => {
+  const state = await openApp(page, baseURL, { patientScenario: 'new-save-a' })
+  await available(page)
+  await command(page, 'Abrir pacientes')
+  await command(page, 'Clicar em Novo cadastro')
+  const form = page.getByRole('form', { name: 'Novo cadastro', exact: true })
+  await command(page, 'Preencher Nome com Novo A sintético')
+  await expect(form.getByLabel('Nome', { exact: true })).toHaveValue('Novo A sintético')
+  await formsBlocked(page)
+  await prepare(page, discardRequest)
+  await expect(warning(page)).toHaveCount(0)
+  await noDiscardWrites(page)
+  // Keep the old voice proposal: manually submit the EXISTING Save A handler.
+  // Saving leaves the new form open and editing=null; no invented Cancel/reopen.
+  await form.getByRole('button', { name: 'Salvar paciente', exact: true }).click()
+  const savedA = { input: { name: 'Novo A sintético', age: null, selfRequester: null, preferredModality: '', lifeCycle: 'Não informado' } }
+  await expect.poll(() => calls(page, 'patient_create')).toEqual([savedA])
+  await expect(form.getByRole('button', { name: 'Salvar paciente', exact: true })).toBeEnabled()
+  await expect(form.getByLabel('Nome', { exact: true })).toHaveValue('')
+  const patientsAfterSave = await page.evaluate(() => window.voiceUpdater.patients)
+  await form.getByLabel('Nome', { exact: true }).fill('Novo B sintético pendente')
+  await form.getByLabel('Idade em anos (opcional)').fill('11')
+  await form.getByLabel('Modalidade', { exact: true }).selectOption('Online')
+  await audio(page, 'Confirmar')
+  await expect(warning(page)).toHaveCount(0)
+  await expect(form).toBeVisible()
+  await expect(form.getByLabel('Nome', { exact: true })).toHaveValue('Novo B sintético pendente')
+  await expect(form.getByLabel('Idade em anos (opcional)')).toHaveValue('11')
+  await expect(form.getByLabel('Modalidade', { exact: true })).toHaveValue('Online')
+  expect(await page.evaluate(() => window.voiceUpdater.patients)).toEqual(patientsAfterSave)
+  await noDiscardWrites(page, [savedA])
+  await boundaries(page, state)
+})
+
+test('updater descarte por áudio: proposta fresca B exige duas confirmações e respeita Voltar', async ({ page, baseURL }) => {
+  const state = await openApp(page, baseURL)
+  await available(page)
+  const patients = await page.evaluate(() => window.voiceUpdater.patients)
+  await command(page, 'Abrir pacientes')
+  await command(page, 'Clicar em Novo cadastro')
+  // The existing warning makes the workspace inert, but its unchanged fields
+  // must still be inspectable without granting any input/action permission.
+  const form = page.getByRole('form', { name: 'Novo cadastro', exact: true, includeHidden: true })
+  await expect(form).toBeVisible()
+  await command(page, 'Preencher Nome com Novo B sintético pendente')
+  await formsBlocked(page)
+  await prepare(page, discardRequest)
+  await expect(warning(page)).toHaveCount(0)
+  await expect(form.getByLabel('Nome', { exact: true })).toHaveValue('Novo B sintético pendente')
+  await noDiscardWrites(page)
+  await audio(page, 'Confirmar')
+  await expect(warning(page)).toContainText(discardMessage)
+  await expect(form.getByLabel('Nome', { exact: true })).toHaveValue('Novo B sintético pendente')
+  await noDiscardWrites(page)
+  await audio(page, 'Voltar')
+  await expect(warning(page)).toHaveCount(0)
+  await expect(form).toBeVisible()
+  await expect(form.getByLabel('Nome', { exact: true })).toHaveValue('Novo B sintético pendente')
+  await prepare(page, discardRequest)
+  await expect(form.getByLabel('Nome', { exact: true })).toHaveValue('Novo B sintético pendente')
+  await audio(page, 'Confirmar')
+  await expect(warning(page)).toContainText(discardMessage)
+  await expect(form.getByLabel('Nome', { exact: true })).toHaveValue('Novo B sintético pendente')
+  await noDiscardWrites(page)
+  await audio(page, 'Confirmar')
+  await expect(warning(page)).toHaveCount(0)
+  await expect(form).toHaveCount(0)
+  await available(page)
+  expect(await page.evaluate(() => window.voiceUpdater.patients)).toEqual(patients)
+  await noDiscardWrites(page)
   await boundaries(page, state)
 })
