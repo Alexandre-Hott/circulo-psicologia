@@ -1,5 +1,9 @@
 # Melhoria contínua de voz
 
+## Consolidação instalada0.2.59 —04/10/2026
+
+[Registro nativo e limites](validacao-voz-0.2.59.md). Instalaçãoexit0, ProductVersion59, quatro arquivos do perfil preservados por hash/cópia local e18recursos de voz conferidos. Aplicativo reaberto, entrada lida por acessibilidade; comando de teste limpo sem aplicar ação. Referências anteriores a não instalado/instalado52 são históricas. Cliques/captura falharam: sem geometria, FrameArrived timeout e retry window capture timeout. Nenhuma senha, permissão ou dado real automatizado. Não comprova microfone/jornada clínica instalada nem publica atualização. Sem fonte funcional/build novos nesta rodada; meta ativa.
+
 ## Entrega local0.2.59 — limpeza da proposta após erro de voz
 
 Pacote `Círculo_0.2.59_x64-setup.exe`, **135.879.789 bytes**, SHA-256 `3ee3f5dd104ad277dbe0900b387b4dac571f10e96fc9089dd3de1f34b8a0ce09`. Build NSIS offline/locked exit0, release Rust55,51s; aviso anterior OpenSSL/PDB LNK4099. Override temporário updater removido após término, configuração oficial intacta. Manifest `%TEMP%\\circulo-0259-audit-20261004.json`: PE0.2.59/x64/NotSigned. Consistência de versão/tamanho/hash/docs aprovada. Conteúdo interno não extraído; não instalado/aberto, perfil/instalado52 não alterados. Sem `.sig`, Authenticode, Release ou oferta automática no GitHub. Regressão86/86 em3,8min; sem microfone físico ou nova transcrição real nesta rodada. Meta ativa.

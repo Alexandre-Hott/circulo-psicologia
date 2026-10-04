@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Consolidação nativa instalada0.2.59
+
+[Provas e limites](validacao-voz-0.2.59.md): instalaçãoexit0/versão59, quatro arquivos preservados,18recursos de voz conferidos, entrada lida por acessibilidade. Não é homologação dos comandos instalados: captura/clique falharam, senha manual e nenhum comando clínico aplicado. Substitui somente os estados históricos “não instalado/instalado52”; testes simulados continuam simulados e microfone/jornada instalada permanecem sem prova.
+
 ## Correção0.2.59 — proposta antiga após áudio vazio/erro
 
 Falha reproduzida0/3 no painel: intenção antiga permanecia no host enquanto a mensagem de transcrição/erro substituía a proposta. Corrigido descarte nos caminhos de vazio/erro e sucesso sem interpretação automática, preservando guarda de geração. Green3/3 em20,3s; integração nativa simulada confirma remoção da prévia/botões, zero escrita, “confirmar” antigo sem efeito e retry abrindo Ana correta. Regressão final86/86 em3,8min, incluindo confirmações por segundo áudio, bloqueio e autosave; JS257/257. Instalador59 gerado/auditado, não instalado ou publicado. Captura física e persistência instalada seguem não comprovadas. [Detalhes](melhoria-continua-voz.md).
