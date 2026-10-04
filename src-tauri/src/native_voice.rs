@@ -67,7 +67,7 @@ pub fn transcribe(
 fn whisper_response_arguments(prompt: &str) -> Vec<&str> {
     vec![
         "-m", "ggml-small-q5_1.bin", "-f", "../input.wav", "-l", "pt", "--prompt", prompt,
-        "-ng", "-nt", "-otxt", "-of", "../transcription",
+        "-ng", "-nt", "-otxt", "-of", "../transcription", "--beam-size", "8",
     ]
 }
 

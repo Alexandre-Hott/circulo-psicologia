@@ -198,7 +198,7 @@ try {
         # Only the response filename reaches argv; all file arguments stay relative ASCII.
         $responseName = "args-$index.txt"
         $responsePath = Join-Path $voiceDirectory $responseName
-        $arguments = @('-m', [IO.Path]::GetFileName($model), '-f', "../synthetic-command-$index.wav", '-l', 'pt', '--prompt', $prompt, '-ng', '-nt', '-otxt', '-of', "../transcription-$index")
+        $arguments = @('-m', [IO.Path]::GetFileName($model), '-f', "../synthetic-command-$index.wav", '-l', 'pt', '--prompt', $prompt, '-ng', '-nt', '-otxt', '-of', "../transcription-$index", '--beam-size', '8')
         foreach ($argument in $arguments) {
             if ($argument -match '[\r\n\x00]') { throw 'Invalid response argument.' }
         }

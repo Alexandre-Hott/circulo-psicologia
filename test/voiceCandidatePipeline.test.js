@@ -21,6 +21,53 @@ function psLiteral(source, variable) {
   return match[1]
 }
 
+const legacyArguments = [
+  '-m', model, '-f', '../input.wav', '-l', 'pt', '--prompt', '<prompt>',
+  '-ng', '-nt', '-otxt', '-of', '../transcription',
+]
+const beamArguments = [...legacyArguments, '--beam-size', '8']
+
+function nativeArguments() {
+  const body = read('src-tauri/src/native_voice.rs').match(/fn whisper_response_arguments\(prompt: &str\) -> Vec<&str>\s*\{\s*vec!\[([\s\S]*?)\]\s*\}/)?.[1]
+  assert.ok(body, 'real response argument vector must remain inspectable')
+  return body.trim().replace(/,\s*$/, '').split(',').map(value => {
+    const token = value.trim()
+    if (token === 'prompt') return '<prompt>'
+    assert.match(token, /^"[^"\\]*"$/, 'unexpected Rust argument expression')
+    return token.slice(1, -1)
+  })
+}
+
+test('candidate native vector adds only one final beam-size 8 pair to the original 13 arguments', () => {
+  const actual = nativeArguments()
+  assert.equal(actual.length, 15)
+  assert.deepEqual(actual.slice(-2), ['--beam-size', '8'])
+  assert.equal(actual.filter(value => value === '--beam-size').length, 1)
+  assert.deepEqual(actual.slice(0, -2), legacyArguments)
+  assert.deepEqual(actual, beamArguments)
+})
+
+test('candidate default synthetic script has the same exact 15-argument beam vector as Rust', () => {
+  const body = read('scripts/testWhisperSynthetic.ps1').match(/^\s*\$arguments\s*=\s*@\(([^\r\n]*)\)\s*$/m)?.[1]
+  assert.ok(body, 'default response argument array must remain inspectable')
+  const dynamic = new Map([
+    ['[IO.Path]::GetFileName($model)', model],
+    ['"../synthetic-command-$index.wav"', '../input.wav'],
+    ['$prompt', '<prompt>'],
+    ['"../transcription-$index"', '../transcription'],
+  ])
+  const actual = body.split(',').map(value => {
+    const token = value.trim()
+    if (dynamic.has(token)) return dynamic.get(token)
+    assert.match(token, /^'[^']*'$/, 'unexpected PowerShell argument expression')
+    return token.slice(1, -1)
+  })
+  assert.equal(actual.length, 15)
+  assert.equal(actual.filter(value => value === '--beam-size').length, 1)
+  assert.deepEqual(actual, beamArguments)
+  assert.deepEqual(actual, nativeArguments(), 'only existing model/input/prompt/output expressions are substituted for parity')
+})
+
 test('candidate preparation pins actual small Q5 source and digest, unchanged CLI release', () => {
   const source = read('scripts/prepareWhisperWindows.ps1')
   assert.equal(psLiteral(source, 'modelUrl'), `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${model}`)

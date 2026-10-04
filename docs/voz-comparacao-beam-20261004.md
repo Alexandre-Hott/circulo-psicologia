@@ -52,4 +52,12 @@ Mediana A:4,4715s; B:4,846s, cerca de8,4% maior. Máximo A:4,608s; B:5,097s. Os 
 
 Os oito pares estão ordenados e têm16 resultados únicos. A conserva os13 argumentos atuais; B acrescenta apenas `--beam-size 8`. A conferência do principal aprovou os130 hashes de artefatos e os139 registros de integridade iguais antes e depois. Os resultados estão em `ab-results` na mesma pasta temporária do corpus novo. Runner: SHA-256 `ADFCCC0A8F513085B17F66DC34DBC10B035876379DA9375652BD89DFD96BC1FD`; manifesto: `B0355840F2D07C630DA942899D83310B6DEDC015BC99E60EA70827A2147E12A9`.
 
-A amostra pequena é sintética e não estima precisão geral ou de microfone físico. Ainda não houve integração do argumento candidato no backend, aplicação desse resultado na interface ou novo instalador. A versão entregue permanece0.2.81.
+A amostra pequena é sintética e não estima precisão geral ou de microfone físico. Na rodada A/B acima, ainda não havia integração do argumento candidato no backend ou aplicação na interface. A etapa seguinte está registrada abaixo; a versão entregue permanece0.2.81.
+
+## Integração mínima e contratos
+
+Depois das revisões independentes do corpus fresco, foram alteradas somente duas linhas funcionais: o vetor Rust e o vetor equivalente do script sintético acrescentam `--beam-size 8`. Remover o par restitui os bytes anteriores. Prompt, modelo, conteúdo clínico, parser, transporte UTF-8 e limites permanecem iguais. A revisão estática aprovou o diff e os testes de vetor exato, paridade e bytes do response file.
+
+Os contratos que falhavam antes da integração passaram: JS focal9/9 e Rust focal19/19. O principal repetiu ambos no código congelado e depois executou as suítes completas: JS1884/1884 e Rust138 aprovados/1 ignorado, sem falhas. O teste opt-in de reconhecimento nativo permaneceu ignorado nessa suíte. A tentativa Rust debug do autor falhou no OpenSSL antes dos testes; as rodadas release/offline/locked passaram, mantendo os avisos anteriores de PDB ausente.
+
+Ainda faltam a rodada limitada pelo backend Rust real com esses mesmos áudios, o replay dos textos na interface e o pacote atualizado. Os testes de contratos não executaram reconhecimento. Não houve alteração de versão, instalador, assinatura, publicação ou perfil instalado nesta integração.

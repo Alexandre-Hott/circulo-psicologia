@@ -14,16 +14,23 @@ use std::{ffi::OsStr, fs, path::Path};
 fn candidate_arguments(prompt: &str) -> Vec<&str> {
     vec![
         "-m", "ggml-small-q5_1.bin", "-f", "../input.wav", "-l", "pt", "--prompt", prompt,
-        "-ng", "-nt", "-otxt", "-of", "../transcription",
+        "-ng", "-nt", "-otxt", "-of", "../transcription", "--beam-size", "8",
     ]
 }
 
 #[test]
-fn candidate_small_q5_response_uses_explicit_filename_and_changes_no_other_setting() {
+fn candidate_small_q5_response_adds_only_final_beam_size_8_pair() {
     let prompt = build_initial_prompt(&["Ana Clara".into(), "Bia Fictícia".into()]);
     assert_eq!(prompt, format!("{INITIAL_PROMPT} Ana Clara. Bia Fictícia."));
     let actual = whisper_response_arguments(&prompt);
     assert_eq!(actual[1], "ggml-small-q5_1.bin", "actual production model argument");
+    assert_eq!(actual.len(), 15);
+    assert_eq!(&actual[13..], &["--beam-size", "8"]);
+    assert_eq!(actual.iter().filter(|arg| **arg == "--beam-size").count(), 1);
+    assert_eq!(&actual[..13], &[
+        "-m", "ggml-small-q5_1.bin", "-f", "../input.wav", "-l", "pt", "--prompt", &prompt,
+        "-ng", "-nt", "-otxt", "-of", "../transcription",
+    ], "removing only the final beam pair restores the complete original vector");
     assert_eq!(actual, candidate_arguments(&prompt));
 }
 
@@ -65,10 +72,10 @@ fn candidate_small_q5_staging_keeps_explicit_model_bytes_and_historical_base_unt
 }
 
 fn expected_arguments(prompt: &str) -> Vec<&str> {
-    // Preserve the existing flag order/settings; change only transport/paths.
+    // Preserve the original 13 arguments; append only the approved beam pair.
     vec![
         "-m", "ggml-small-q5_1.bin", "-f", "../input.wav", "-l", "pt", "--prompt", prompt,
-        "-ng", "-nt", "-otxt", "-of", "../transcription",
+        "-ng", "-nt", "-otxt", "-of", "../transcription", "--beam-size", "8",
     ]
 }
 
@@ -96,7 +103,7 @@ fn response_writer_emits_exact_utf8_order_without_bom_with_lf_and_final_lf() {
     write_response_arguments(&path, &whisper_response_arguments(prompt)).unwrap();
     let bytes = fs::read(&path).unwrap();
     let expected = format!(
-        "-m\nggml-small-q5_1.bin\n-f\n../input.wav\n-l\npt\n--prompt\n{prompt}\n-ng\n-nt\n-otxt\n-of\n../transcription\n"
+        "-m\nggml-small-q5_1.bin\n-f\n../input.wav\n-l\npt\n--prompt\n{prompt}\n-ng\n-nt\n-otxt\n-of\n../transcription\n--beam-size\n8\n"
     );
     assert_eq!(bytes, expected.as_bytes());
     assert!(!bytes.starts_with(&[0xef, 0xbb, 0xbf]));
