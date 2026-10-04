@@ -1,6 +1,6 @@
 ﻿param(
     [string]$VoiceDirectory,
-    [ValidateSet('core', 'behavior-save', 'occurrence-date', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer')][string]$Scenario = 'core'
+    [ValidateSet('core', 'behavior-save', 'behavior-remove', 'occurrence-date', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer')][string]$Scenario = 'core'
 )
 
 # Keep the UTF-8 BOM: Windows PowerShell 5.1 otherwise reads Portuguese text as ANSI.
@@ -64,6 +64,9 @@ try {
     )
     if ($Scenario -eq 'behavior-save') {
         $commands = @('Salvar comportamento.', 'Salve o comportamento.', 'Confirmar comando.')
+    }
+    if ($Scenario -eq 'behavior-remove') {
+        $commands = @('Retirar comportamento Pede ajuda da sessão de Ana Clara.', 'Remover comportamento Pede ajuda da sessão de Ana Clara.', 'Confirmar comando.')
     }
     if ($Scenario -eq 'occurrence-date') {
         $commands = @(

@@ -1,5 +1,7 @@
 # Círculo — MVP de acompanhamento psicológico
 
+> **Assistente de voz 0.2.62 (04/10/2026):** desmarcar comportamento na sessão indicada, com confirmação e salvamento explícito. [Instalador Windows x64](src-tauri/target/release/bundle/nsis/Círculo_0.2.62_x64-setup.exe), 135.879.345 bytes, SHA-256 `218b8ab39cc9f28b35dc60d5b0063df7674fe115a39a1f3097e12519ce5ff74d`. [Testes e limites](docs/melhoria-continua-voz.md). Pacote local gerado/auditado; instalado permanece0.2.61. Não publicado como Release, sem assinatura updater/Authenticode. Microfone físico e jornada instalada desta versão não validados. As versões abaixo são histórico.
+
 > **Instalação local0.2.61 (04/10/2026):** NSIS exit0, versão61 e primeira tela observada; quatro arquivos do perfil preservados e18recursos de voz conferidos por hash. [Registro e limites](docs/validacao-voz-0.2.61.md). Aplicativo reaberto; teste de teclado falhou na ativação da janela. Sem prova nova de microfone físico/jornada instalada. As referências abaixo a instalado59 são históricas.
 
 > **Validação complementar de voz 04/10/2026 (pacote0.2.61):** gavetas reconhecidas em3WAVs sintéticos no backend Rust real; regressão113/113, replay reforçado1/1, JS259/259 e Rust86aprovados/1ignorado. [Evidências e limites](docs/voz-audio-sintetico-20261003.md). Sem nova versão/instalação, captura física ou persistência instalada comprovada.

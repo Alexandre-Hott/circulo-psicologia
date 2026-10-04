@@ -39,9 +39,10 @@ function matches(actual, desired, key = '') {
 }
 
 export function evaluateSyntheticVoice(cases, { scenario = 'core' } = {}) {
-  if (!['core', 'behavior-save', 'occurrence-date', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer'].includes(scenario)) throw new Error('Cenário de áudio desconhecido.')
+  if (!['core', 'behavior-save', 'behavior-remove', 'occurrence-date', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer'].includes(scenario)) throw new Error('Cenário de áudio desconhecido.')
   const expectations = scenario === 'core' ? expected : ['behavior-save', 'interface-fields', 'interface-weekday', 'interface-drawer'].includes(scenario) ? [null, null, null]
     : scenario === 'interface-party' ? [{ type: 'patient.workspace.open', target: { patientId: 'ana', space: 'links' } }, null, null]
+    : scenario === 'behavior-remove' ? [0, 1].map(() => ({ type: 'session.draft.update', target: { patientId: 'ana', patientName: 'Ana Clara', sessionDraftId: 'synthetic-draft', sessionDate: null }, patch: { field: 'behaviorIds', operation: 'remove', value: 'help', label: 'Pede ajuda' } })).concat(null)
     : scenario === 'analytics-range' ? ['ana', ''].map(patientId => ({ type: 'analytics.view', target: { patientId, from: '2026-09-01', to: '2026-09-30', view: 'custom' } }))
     : ['start', 'remarcar', 'cancelar'].map(action => ({ type: 'agenda.occurrence.action', target: { patientId: 'ana', date: '2026-10-03', start: '15:00', action } }))
   if (!Array.isArray(cases) || cases.length !== expectations.length) throw new Error(`Corpus nativo deve conter exatamente${expectations.length} casos.`)

@@ -22,6 +22,19 @@ const phrases = [
   'Abrir biblioteca de comportamentos reutilizáveis.', 'Abrir contexto do caso de Ana Clara.', 'Editar comportamento Pede ajuda.',
   'Adicionar adendo à sessão de Ana Clara de três de outubro de dois mil e vinte e seis às quinze horas.', 'Mostrar agenda de hoje.',
 ]
+
+test('remoção nativa confere operação e alvo sem aprovar confirmação isolada', () => {
+  const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-remove-20261004.json', import.meta.url), 'utf8'))
+  const result = evaluateSyntheticVoice(cases, { scenario: 'behavior-remove' })
+  assert.equal(result.Passed, 2)
+  assert.equal(result.Failed, 0)
+  assert.equal(result.NotEvaluated, 1)
+  const added = structuredClone(cases); added[0].Transcript = 'Registrar comportamento Pede ajuda para Ana Clara na sessão'
+  assert.equal(evaluateSyntheticVoice(added, { scenario: 'behavior-remove' }).Failed, 1)
+  const other = structuredClone(cases); other[0].Transcript = 'Retirar comportamento Espera a vez da sessão de Ana Clara'
+  assert.equal(evaluateSyntheticVoice(other, { scenario: 'behavior-remove' }).Failed, 1)
+  assert.throws(() => evaluateSyntheticVoice(cases.slice(1), { scenario: 'behavior-remove' }))
+})
 const corpus = () => phrases.map((Transcript, Index) => ({ Index, IntendedCommand: Transcript, Transcript }))
 
 test('corpus de data falada exige ação, paciente, data e horário completos', () => {

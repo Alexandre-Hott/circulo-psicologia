@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Desmarcar comportamento na sessão —0.2.62
+
+Retirar/Retire, Remover/Remova e Desmarcar/Desmarque comportamento pelo título completo da/na sessão de paciente exato. Usa a alteração existente do rascunho; proposta e confirmação, depois Salvar rascunho explícito. Não exclui biblioteca, paciente ou registro finalizado. Seis verbos testados, recusas para alvos ausentes/ambíguos/negados e descarte após troca de paciente/rascunho. Dez E2E focados10/10; duas saídas Rust de WAV sintético preservadas e replays aprovados na regressão final125/125 em12,7min, exit0. Reconhecimento offline2Passed/0Failed/1NotEvaluated; JS263/263. Não é homologação de microfone físico nem de persistência instalada; pacote62 gerado/auditado e instalado61 mantido. [Resultados e limites](melhoria-continua-voz.md).
+
 ## Consolidação instalada0.2.61
 
 [Instalação e limites](validacao-voz-0.2.61.md): pacote61 instalado exit0, versão61, quatro arquivos preservados e18recursos de voz conferidos; primeira tela bloqueada observada. Comparação binária só difere nos3bytes do marcador NSIS documentado pelo Tauri. Não homologar os comandos instalados: duas tentativas de teclado falharam na ativação, senha manual/microfone físico permanecem sem prova nova. Substitui apenas os estados históricos de instalado59, não transforma testes simulados em nativos.

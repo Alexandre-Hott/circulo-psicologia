@@ -164,6 +164,7 @@ export function VoiceCommandCenter({
       <li>“Limpar Nome” ou “Limpar Busca”</li>
       <li>“Selecionar Modalidade como Online”</li>
       <li>“Marcar Pede ajuda” ou “Desmarcar Pede ajuda” na sessão</li>
+      <li>“Retirar comportamento Pede ajuda da sessão de Ana Clara”</li>
       <li>“Preencher Nota contextual de Regulação emocional com Participou com apoio” na sessão</li>
       <li>“Clicar em Salvar rascunho” ou “Finalizar sessão”</li>
     </ul><small>Use o texto do botão ou campo. Se houver opções iguais, acrescente o paciente. Senhas e escolhas de arquivos continuam nas janelas próprias.</small></>}</details>

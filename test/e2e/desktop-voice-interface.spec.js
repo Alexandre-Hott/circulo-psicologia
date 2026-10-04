@@ -8,6 +8,7 @@ const nativeFieldsCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-v
 const nativeWeekdayCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-weekday-20261004.json', import.meta.url), 'utf8'))
 const nativePartyCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-party-20261004.json', import.meta.url), 'utf8'))
 const nativeDrawerCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-drawer-20261004.json', import.meta.url), 'utf8'))
+const nativeRemoveCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-remove-20261004.json', import.meta.url), 'utf8'))
 
 async function openApp(page, { emptyLibrary = false, archivedPatient = false, specialCatalog = false, nativeCatalog = false } = {}) {
   await page.clock.install({ time: new Date('2026-10-03T15:00:00Z') })
@@ -240,6 +241,177 @@ test('registro natural preserva modelo completo e texto literal após confirmaç
   await command(page, 'Registrar indicador Participação em grupo como apoio como Com apoio em grupo na sessão de Ana Clara')
   await expect(form.getByRole('combobox', { name: /^Participação em grupo como apoio · v1$/ })).toHaveValue('0')
 })
+
+async function openBehaviorRemovalDraft(page) {
+  await openApp(page, { specialCatalog: true })
+  await command(page, 'Mostrar agenda de hoje')
+  await command(page, 'Clicar em Detalhes e ações')
+  await command(page, 'Clicar em Iniciar sessão de Ana Clara em 2026-10-03 às 15:00–15:50')
+  const form = page.getByRole('form', { name: 'Rascunho de sessão' })
+  await expect(form).toHaveAttribute('data-voice-record', 'draft')
+  await expect(page.getByLabel('Paciente para evolução e sessões')).toHaveValue('ana')
+  await command(page, 'Registrar comportamento Pede ajuda na sessão de Ana Clara')
+  await command(page, 'Registrar comportamento Pede ajuda para o adulto para Ana Clara na sessão')
+  const literal = 'Caio Fictício disse "Retire comportamento Pede ajuda para o adulto da sessão de Ana Clara"'
+  await command(page, `Preencher observação da sessão de Ana Clara com ${literal}`)
+  await expect(form.getByRole('checkbox', { name: /^Pede ajuda · v1$/ })).toBeChecked()
+  await expect(form.getByRole('checkbox', { name: /^Pede ajuda para o adulto · v1$/ })).toBeChecked()
+  await expect(form.getByLabel('Observações descritivas')).toHaveValue(literal)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  return { form, literal }
+}
+
+for (const [verb, preposition] of [
+  ['Retirar', 'da'], ['Retire', 'na'], ['Remover', 'da'],
+  ['Remova', 'na'], ['Desmarcar', 'da'], ['Desmarque', 'na'],
+]) {
+  test(`remoção natural: ${verb} comportamento ${preposition} sessão exige confirmação e Salvar rascunho`, async ({ page }) => {
+    const { form, literal } = await openBehaviorRemovalDraft(page)
+    const help = form.getByRole('checkbox', { name: /^Pede ajuda · v1$/ })
+    const longTitle = form.getByRole('checkbox', { name: /^Pede ajuda para o adulto · v1$/ })
+    await propose(page, `${verb} comportamento Pede ajuda para o adulto ${preposition} sessão de Ana Clara`)
+    await expect(page.locator('.voice-command-preview')).toContainText('Pede ajuda para o adulto')
+    await expect(page.locator('.voice-command-preview')).toContainText('Ana Clara')
+    await expect(longTitle).toBeChecked()
+    await expect(help).toBeChecked()
+    await expect(form.getByLabel('Observações descritivas')).toHaveValue(literal)
+    await page.clock.runFor(5000)
+    expect(await page.evaluate(() => window.writes)).toEqual([])
+    await propose(page, 'confirmar')
+    await expect(longTitle).not.toBeChecked()
+    await expect(help).toBeChecked()
+    await expect(form.getByLabel('Observações descritivas')).toHaveValue(literal)
+    await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+    await page.clock.runFor(5000)
+    expect(await page.evaluate(() => window.writes)).toEqual([])
+    await form.getByRole('button', { name: 'Salvar rascunho', exact: true }).click()
+    await expect.poll(() => page.evaluate(() => window.writes)).toEqual([
+      { command: 'session_draft_save', args: { id: 'draft', input: {
+        observation: literal,
+        procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: ['help'], indicators: [],
+      } } },
+    ])
+    expect(await page.evaluate(() => window.voiceNativeCalls.filter(call => ['behavior_delete', 'behavior_update', 'session_finalize'].includes(call.command)))).toEqual([])
+  })
+}
+
+test('remoção natural: mídia e transcrições fixas simuladas exigem segundo áudio sem gravar', async ({ page }) => {
+  const { form, literal } = await openBehaviorRemovalDraft(page)
+  const help = form.getByRole('checkbox', { name: /^Pede ajuda · v1$/ })
+  const longTitle = form.getByRole('checkbox', { name: /^Pede ajuda para o adulto · v1$/ })
+  const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
+  async function audio(text) {
+    // Fixed synthetic transcripts, media and IPC; this is not native recognition or microphone evidence.
+    await page.evaluate(value => { window.voiceTranscript = value }, text)
+    await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+    await page.clock.runFor(1000)
+    await expect(assistant.getByRole('button', { name: 'Ouvir e transcrever' })).toBeEnabled()
+  }
+  await audio('Retire comportamento Pede ajuda para o adulto da sessão de Ana Clara')
+  await expect(page.locator('.voice-command-preview')).toContainText('Pede ajuda para o adulto')
+  await expect(longTitle).toBeChecked()
+  await expect(help).toBeChecked()
+  await expect(form.getByLabel('Observações descritivas')).toHaveValue(literal)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await audio('Confirmar comando')
+  await expect(longTitle).not.toBeChecked()
+  await expect(help).toBeChecked()
+  await expect(form.getByLabel('Observações descritivas')).toHaveValue(literal)
+  await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+  await page.clock.runFor(5000)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  expect(await page.evaluate(() => window.voiceNativeCalls.filter(call => call.command === 'voice_transcribe').length)).toBe(2)
+  expect(await page.evaluate(() => window.voiceNativeCalls.filter(call => ['session_draft_save', 'behavior_delete', 'behavior_update', 'session_finalize'].includes(call.command)))).toEqual([])
+})
+
+for (const index of [0, 1]) test(`remoção nativa: replay ${index} desmarca somente Pede ajuda após segundo áudio`, async ({ page }) => {
+  const { form, literal } = await openBehaviorRemovalDraft(page)
+  const help = form.getByRole('checkbox', { name: /^Pede ajuda · v1$/ })
+  const other = form.getByRole('checkbox', { name: /^Pede ajuda para o adulto · v1$/ })
+  const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
+  async function audio(caseIndex) {
+    // Unedited SAPI/Rust transcripts; capture and IPC simulated, not physical microphone.
+    await page.evaluate(value => { window.voiceTranscript = value }, nativeRemoveCorpus.find(item => item.Index === caseIndex).Transcript)
+    await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+    await page.clock.runFor(1000)
+    await expect(assistant.getByRole('button', { name: 'Ouvir e transcrever' })).toBeEnabled()
+  }
+  await audio(index)
+  await expect(page.locator('.voice-command-preview')).toContainText('Desmarcar “Pede ajuda”')
+  await expect(help).toBeChecked()
+  await expect(other).toBeChecked()
+  await expect(form.getByLabel('Observações descritivas')).toHaveValue(literal)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await audio(2)
+  await expect(help).not.toBeChecked()
+  await expect(other).toBeChecked()
+  await expect(form.getByLabel('Observações descritivas')).toHaveValue(literal)
+  await page.clock.runFor(5000)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  expect(await page.evaluate(() => window.voiceNativeCalls.filter(call => call.command === 'voice_transcribe').length)).toBe(2)
+})
+
+test('remoção natural recusa negação, outro paciente e títulos desconhecido ou truncado', async ({ page }) => {
+  const { form, literal } = await openBehaviorRemovalDraft(page)
+  for (const invalid of [
+    'Não retirar comportamento Pede ajuda para o adulto da sessão de Ana Clara',
+    'Retire comportamento Pede ajuda para o adulto da sessão de Caio Fictício',
+    'Remover comportamento Modelo inexistente na sessão de Ana Clara',
+    'Desmarque comportamento Pede ajuda para o da sessão de Ana Clara',
+  ]) {
+    await propose(page, invalid)
+    await expect(page.locator('.voice-command-error')).toBeVisible()
+    await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+    // A rejected request must not leave a removable action available to confirmation.
+    await propose(page, 'confirmar')
+    await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+    await expect(form.getByRole('checkbox', { name: /^Pede ajuda · v1$/ })).toBeChecked()
+    await expect(form.getByRole('checkbox', { name: /^Pede ajuda para o adulto · v1$/ })).toBeChecked()
+    await expect(form.getByLabel('Observações descritivas')).toHaveValue(literal)
+    await page.clock.runFor(5000)
+    expect(await page.evaluate(() => window.writes)).toEqual([])
+  }
+  expect(await page.evaluate(() => window.voiceNativeCalls.filter(call => ['session_draft_save', 'behavior_delete', 'behavior_update', 'session_finalize'].includes(call.command)))).toEqual([])
+})
+
+for (const change of ['rascunho', 'paciente']) {
+  test(`remoção natural preparada é descartada após trocar de ${change}`, async ({ page }) => {
+    await openApp(page, { specialCatalog: true })
+    await page.evaluate(change => {
+      window.voiceDrafts = [
+        { id: 'remove-old', patientId: 'ana', originalDate: '2026-10-02' },
+        { id: 'remove-next', patientId: change === 'paciente' ? 'caio' : 'ana', originalDate: '2026-10-01' },
+      ].map(draft => ({ ...draft, observation: `Texto literal de ${draft.id}`, procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: ['help', 'long-title'], indicators: [] }))
+    }, change)
+    await command(page, 'Mostrar agenda de hoje')
+    await command(page, 'Clicar em Detalhes e ações')
+    await command(page, 'Clicar em Iniciar sessão de Ana Clara em 2026-10-03 às 15:00–15:50')
+    const form = page.getByRole('form', { name: 'Rascunho de sessão' })
+    await page.locator('#session-other-drafts > summary').click()
+    await page.getByRole('button', { name: 'Retomar rascunho 2026-10-02', exact: true }).click()
+    await expect(form).toHaveAttribute('data-voice-record', 'remove-old')
+    await propose(page, 'Retirar comportamento Pede ajuda para o adulto da sessão de Ana Clara')
+    await expect(page.locator('.voice-command-preview')).toContainText('Pede ajuda para o adulto')
+    await expect(form.getByRole('checkbox', { name: /^Pede ajuda para o adulto · v1$/ })).toBeChecked()
+    if (change === 'paciente') {
+      await page.getByLabel('Paciente para evolução e sessões').selectOption('caio')
+      await expect(form).toHaveCount(0)
+    }
+    await page.locator('#session-other-drafts > summary').click()
+    await page.getByRole('button', { name: 'Retomar rascunho 2026-10-01', exact: true }).click()
+    await expect(form).toHaveAttribute('data-voice-record', 'remove-next')
+    await propose(page, 'confirmar')
+    await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+    await expect(form.getByRole('checkbox', { name: /^Pede ajuda · v1$/ })).toBeChecked()
+    await expect(form.getByRole('checkbox', { name: /^Pede ajuda para o adulto · v1$/ })).toBeChecked()
+    await expect(form.getByLabel('Observações descritivas')).toHaveValue('Texto literal de remove-next')
+    await expect(page.getByLabel('Paciente para evolução e sessões')).toHaveValue(change === 'paciente' ? 'caio' : 'ana')
+    await page.clock.runFor(5000)
+    expect(await page.evaluate(() => window.writes)).toEqual([])
+    expect(await page.evaluate(() => window.voiceDrafts.find(draft => draft.id === 'remove-old').behaviorIds)).toEqual(['help', 'long-title'])
+    expect(await page.evaluate(() => window.voiceNativeCalls.filter(call => ['session_draft_save', 'behavior_delete', 'behavior_update', 'session_finalize'].includes(call.command)))).toEqual([])
+  })
+}
 
 test('evolução por voz sem rascunho abre Agenda para o paciente sem criar dados', async ({ page }) => {
   await openApp(page)

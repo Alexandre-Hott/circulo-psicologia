@@ -637,11 +637,14 @@ const catalogPattern = name => `(?:["“])?${escapeRegExp(normalize(name, true))
 
 const parseSessionDraft = ({ text, rawText, context }) => {
   if (!/\b(?:sessao|rascunho)\b/u.test(text) || !/\b(?:comportamento|indicador|observacao|evolucao|procedimento|resultado|encaminhamento|fechamento|decisao)\b/u.test(text)) return null
-  const behaviorCommand = /^(?:selecionar|marcar|adicionar|registrar)\s+(?:o\s+)?comportamento\s+(.+)$/u.exec(text)
+  const removeBehavior = /^(?:retirar|retire|remover|remova|desmarcar|desmarque)\s+(?:o\s+)?comportamento\s+(.+)$/u.exec(text)
+  const behaviorCommand = removeBehavior || /^(?:selecionar|marcar|adicionar|registrar)\s+(?:o\s+)?comportamento\s+(.+)$/u.exec(text)
   if (behaviorCommand) {
     const candidates = (context.behaviors || []).filter(item => item.archivedAt == null).flatMap(behavior => {
       const title = catalogPattern(behavior.title)
-      const matches = [
+      const matches = removeBehavior ? [
+        new RegExp(`^${title}\\s+(?:da|na) sessao (?:de|do|da)\\s+(.+)$`, 'u').exec(behaviorCommand[1]),
+      ] : [
         new RegExp(`^${title}\\s+(?:para|na sessao de|na sessao do|na sessao da)\\s+(.+)\\s+na sessao$`, 'u').exec(behaviorCommand[1]),
         new RegExp(`^${title}\\s+na sessao de\\s+(.+)$`, 'u').exec(behaviorCommand[1]),
       ]
@@ -652,9 +655,9 @@ const parseSessionDraft = ({ text, rawText, context }) => {
     const { target, behavior } = result
     const sessionTarget = sessionTargetFrom(target)
     return draft(
-      { type: 'session.draft.update', target: sessionTarget, patch: { field: 'behaviorIds', operation: 'add', value: behavior.id, label: behavior.title } },
-      `Rascunho: selecionar “${behavior.title}” como comportamento observado na sessão de ${target.patient.name}${sessionTarget.sessionDate ? ` (${sessionTarget.sessionDate})` : ''}.`,
-      ['Isto registra uma observação apenas nesta sessão; não define o paciente nem infere um traço.'],
+      { type: 'session.draft.update', target: sessionTarget, patch: { field: 'behaviorIds', operation: removeBehavior ? 'remove' : 'add', value: behavior.id, label: behavior.title } },
+      removeBehavior ? `Desmarcar “${behavior.title}” no rascunho da sessão de ${target.patient.name}${sessionTarget.sessionDate ? ` (${sessionTarget.sessionDate})` : ''}.` : `Rascunho: selecionar “${behavior.title}” como comportamento observado na sessão de ${target.patient.name}${sessionTarget.sessionDate ? ` (${sessionTarget.sessionDate})` : ''}.`,
+      [removeBehavior ? 'Isto desmarca o comportamento apenas nesta sessão; não apaga o modelo da biblioteca nem altera sessões finalizadas.' : 'Isto registra uma observação apenas nesta sessão; não define o paciente nem infere um traço.'],
     )
   }
 
@@ -735,6 +738,12 @@ export function parseCentralCommand({ text, context = {}, referenceDate } = {}) 
   if (addendum) return addendum
   const occurrence = parseOccurrenceAction(normalized, context, referenceDate)
   if (occurrence?.status === 'draft') return occurrence
+  // Removing a selection from the exact open draft is not deleting a model or
+  // a finalized record. Only a fully resolved session patch may cross this guard.
+  if (/^(?:retirar|retire|remover|remova|desmarcar|desmarque)\s+(?:o\s+)?comportamento\b/u.test(normalized)) {
+    const removal = parseSessionDraft({ text: normalized, rawText, context })
+    if (removal?.status === 'draft') return removal
+  }
   if (/^(?:apague|apagar|exclua|excluir|delete|deletar|remova|remover|finalize|finalizar|cancele|cancelar)\b/u.test(normalized)) {
     return refuse('Este comando não é suportado pelo parser. Use a ação explícita na tela correspondente.')
   }

@@ -17,6 +17,34 @@ const indicators = [
 const session = { id: 'session-draft-ana-001', patientId: 'patient-ana', patientName: 'Ana Clara', originalDate: '2026-09-30' }
 const context = { patients, behaviors, indicators, activeSessionDraft: session }
 
+test('retirar comportamento prepara somente remoção do rascunho exato', () => {
+  for (const verb of ['Retirar', 'Retire', 'Remover', 'Remova', 'Desmarcar', 'Desmarque']) {
+    for (const relation of ['da sessão de', 'na sessão de']) {
+      const result = parseCentralCommand({ text: `${verb} comportamento Pede ajuda ${relation} Ana Clara`, context })
+      assert.equal(result.status, 'draft')
+      assert.equal(result.intent.type, 'session.draft.update')
+      assert.deepEqual(result.intent.patch, { field: 'behaviorIds', operation: 'remove', value: 'behavior-regulation', label: 'Pede ajuda' })
+      assert.equal(result.intent.target.patientId, session.patientId)
+      assert.equal(result.intent.target.sessionDraftId, session.id)
+      assert.match(result.preview, /Desmarcar/)
+    }
+  }
+})
+
+test('retirar comportamento recusa negação, nomes parciais e sessão incompatível', () => {
+  for (const text of ['Não retirar comportamento Pede ajuda da sessão de Ana Clara', 'Remover comportamento Pede da sessão de Ana Clara', 'Retirar comportamento Pede ajuda da sessão de Ana', 'Retirar comportamento Pede ajuda da sessão de Caio Fictício', 'Retirar comportamento Pede ajuda para Ana Clara', 'Excluir comportamento Pede ajuda da sessão de Ana Clara']) assert.equal(parseCentralCommand({ text, context }).status, 'clarification', text)
+  const text = 'Retirar comportamento Pede ajuda da sessão de Ana Clara'
+  for (const changed of [{ ...context, activeSessionDraft: null }, { ...context, behaviors: [...behaviors, { ...behaviors[0], id: 'duplicate' }] }, { ...context, patients: [...patients, { ...patients[0], id: 'duplicate' }] }, { ...context, behaviors: behaviors.map(item => ({ ...item, archivedAt: '2026-10-01' })) }]) assert.equal(parseCentralCommand({ text, context: changed }).status, 'clarification')
+})
+
+test('retirar comportamento respeita título completo que contém delimitador de sessão', () => {
+  const special = { ...context, behaviors: [...behaviors, { id: 'long', title: 'Pede ajuda na sessão de grupo' }] }
+  const result = parseCentralCommand({ text: 'Retirar comportamento Pede ajuda na sessão de grupo da sessão de Ana Clara', context: special })
+  assert.equal(result.status, 'draft')
+  assert.equal(result.intent.patch.value, 'long')
+  assert.equal(result.intent.patch.operation, 'remove')
+})
+
 test('registro respeita títulos com delimitadores e nomes de outros pacientes no texto literal', () => {
   const special = { ...context, behaviors: [...behaviors, { id: 'long-title', title: 'Pede ajuda para o adulto' }], indicators: [{ id: 'group', name: 'Participação em grupo como apoio', labels: ['Com apoio em grupo', 'Sem apoio'] }] }
   const behavior = parseCentralCommand({ text: 'Registrar comportamento Pede ajuda para o adulto para Ana Clara na sessão', context: special })

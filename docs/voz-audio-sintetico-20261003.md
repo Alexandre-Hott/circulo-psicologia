@@ -1,5 +1,11 @@
 # Áudio sintético offline — 03/10/2026
 
+## Desmarcar comportamento —0.2.62
+
+Cenário behavior-remove,3WAVs SAPI Microsoft Maria Desktop Português Brasil,rate-2. Recursos instalados61 e backend Rust real via opt-in, sem rede/áudio ambiente, exit0. Saídas nativas inalteradas em `native-voice-remove-20261004.json`: “Retirar comportamento pede ajuda da seção de Ana Clara.”; “Remover comportamento pede ajuda da seção de Ana Clara.”; “Confirmar comando.”. CLI produziu as mesmas frases em2,05s/2,04s/2,04s, áudios297434/297436/135590bytes. O normalize já existente de seção/sessão aceitou a grafia; não se corrigiu o corpus nem adicionou reparo de palavras.
+
+Evaluator central2Passed/0Failed/1NotEvaluated: exige session.draft.update/behaviorIds/remove, ID help, paciente ana e rascunho synthetic-draft; não aprova a confirmação sem proposta. Unidade recusa se a transcrição seleciona/adiciona em vez de remover ou muda modelo, e corpus incompleto. Isso prova transcrição/roteamento no contexto fictício fixo, não interface, confirmação ou salvamento nativo. Dois replays capturados passaram na regressão125/125 em12,7min, exit0; usam mídia/IPC simulados, outro comportamento e texto literal para conferir preservação. JS263/263. Suíte Rust integral não repetida62; opt-in executado no harness, sem mudança funcional de backend. Nenhum perfil ou senha acessado; instalado61 não alterado nesta rodada.
+
 ## Gavetas — complemento ao pacote0.2.61,04/10/2026
 
 Novo cenário `interface-drawer`:3WAVs SAPI Microsoft Maria Desktop Português Brasil, rate-2. Recursos locais da instalação59; teste opt-in do backend Rust real atual, sem rede, exit0. Transcrições preservadas sem reparar palavras em `test/fixtures/native-voice-drawer-20261004.json`: “Abrir novo compromisso.”, “Recolher detalhes e ações.”, “Confirmar comando.”. CLI produziu as mesmas frases em2,07s/2,04s/2,04s; áudios159290/173396/135590bytes. O evaluator central retorna0Passed/0Failed/3NotEvaluated intencionalmente: não é aprovação de interface/confirmar. Unidade259/259 verifica esse contrato e recusa corpus incompleto/transcrição vazia.
