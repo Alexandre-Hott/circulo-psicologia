@@ -12,6 +12,13 @@ test('horários falados exigem precisão e não adivinham manhã ou tarde', () =
   for (const input of ['três horas', '3', 'três da noite', '25 horas', 'quinze e sessenta', '15:60', 'por volta de três da tarde', 'três ou quatro da tarde', 'quinze da tarde']) assert.equal(normalize('time', input), null, input)
 })
 
+test('idade aceita cardinal completo até120 sem converter texto livre', () => {
+  for (const [input, output] of [['zero', '0'], ['nove', '9'], ['vinte e duas', '22'], ['noventa e nove', '99'], ['cem', '100'], ['cento e uma', '101'], ['cento e dezenove', '119'], ['cento e vinte', '120'], ['120', '120'], ['001', '1'], ['dezassete', '17']]) assert.equal(normalize('age', input), output, input)
+  for (const input of ['121', '-1', 'nove e meio', 'nove ou dez', 'mais ou menos nove', 'cento', 'cento e zero', 'cento e vinte e um', '9 anos', '9.0', 'um dois', 'um milhão']) assert.equal(normalize('age', input), null, input)
+  assert.equal(normalize('age', 'cento e dezassete'), '117')
+  assert.equal(normalize('age', ''), '')
+})
+
 test('textos livres não são convertidos e limpeza continua permitida', () => {
   for (const type of ['text', 'textarea', 'number']) assert.equal(normalize(type, 'três da tarde'), 'três da tarde')
   for (const type of ['date', 'time']) assert.equal(normalize(type, ''), '')

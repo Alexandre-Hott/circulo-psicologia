@@ -124,6 +124,46 @@ test('voz cria pacientes com payload completo e solicitante yes/no/null', async 
   expect(await page.evaluate(() => window.patientWorkflow.patients.filter(item => item.id.startsWith('created-')))).toEqual(cases.map((spec, index) => ({ id: `created-${4 + index}`, revision: 1, birthDate: null, archivedAt: null, name: spec.name, age: spec.age, lifeCycle: spec.lifeCycle, selfRequester: spec.selfRequester, preferredModality: spec.preferredModality })))
 })
 
+test('idade falada vira número antes de salvar, sem alterar texto livre', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Cadastrar paciente Nova Fictícia com 8 anos')
+  await propose(page, 'Preencher Idade com nove')
+  await expect(page.locator('.voice-command-preview')).toContainText(': 9')
+  await expect(page.getByLabel('Idade em anos (opcional)')).toHaveValue('8')
+  expect(await writes(page)).toEqual([])
+  await propose(page, 'confirmar')
+  await page.clock.runFor(32)
+  await expect(page.getByLabel('Idade em anos (opcional)')).toHaveValue('9')
+  await command(page, 'Preencher Idade com cento e dezassete')
+  await expect(page.getByLabel('Idade em anos (opcional)')).toHaveValue('117')
+  await command(page, 'Preencher Idade com nove')
+  await command(page, 'Preencher Nome com Nove Fictício')
+  await expect(page.getByLabel('Nome', { exact: true })).toHaveValue('Nove Fictício')
+  for (const invalid of ['nove ou dez', 'mais ou menos nove', 'cento e vinte e um', 'nove e meio', '-1']) {
+    await propose(page, `Preencher Idade com ${invalid}`)
+    await expect(page.locator('.voice-command-error')).toBeVisible()
+    await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+    await expect(page.getByLabel('Idade em anos (opcional)')).toHaveValue('9')
+    expect(await writes(page)).toEqual([])
+  }
+  await command(page, 'Salvar paciente')
+  await expect.poll(() => writes(page)).toEqual([{ command: 'patient_create', args: { input: {
+    name: 'Nove Fictício', age: 9, lifeCycle: 'Criança', selfRequester: null, preferredModality: '',
+  } } }])
+})
+
+test('marcador de idade alterado invalida proposta antiga', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Cadastrar paciente Nova Fictícia com 8 anos')
+  await propose(page, 'Preencher Idade com nove')
+  await expect(page.locator('.voice-command-preview')).toContainText(': 9')
+  await page.getByLabel('Idade em anos (opcional)').evaluate(element => element.removeAttribute('data-voice-value-type'))
+  await propose(page, 'confirmar')
+  await expect(page.getByRole('alert')).toContainText('A tela mudou')
+  await expect(page.getByLabel('Idade em anos (opcional)')).toHaveValue('8')
+  expect(await writes(page)).toEqual([])
+})
+
 test('voz edita payload completo com revisão e cancelar não grava', async ({ page }) => {
   test.setTimeout(60000)
   await openApp(page)

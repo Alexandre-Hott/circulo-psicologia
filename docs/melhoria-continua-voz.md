@@ -1,5 +1,17 @@
 # Melhoria contínua de voz
 
+## Entrega local 0.2.55 — idade no formulário por fala
+
+Pacote final `Círculo_0.2.55_x64-setup.exe`, **135.881.924 bytes**, SHA-256 `4f26798742181808fed08026f4bd29286c85e84a3ff2b8e47960d8b9e0e90672`. Build NSIS offline/locked exit0, release Rust40,42s; aviso anterior OpenSSL/PDB LNK4099. Build inicial concluído, mas não entregue: regenerado após correção da variante “cento e dezassete”. Override temporário updater removido somente após término; configuração oficial preservada. Manifest `%TEMP%\\circulo-0255-audit-20261004.json`: PE0.2.55/x64/NotSigned. Conteúdo interno não extraído; não instalado/aberto nesta rodada. Nenhum perfil alterado, instalado permanece52. Sem `.sig`, Authenticode, Release ou oferta automática no GitHub. Pacote local para teste, não homologação de microfone.
+
+## Incremento 0.2.55 — idade falada no formulário existente
+
+Falha reproduzida por teste E2E: “Preencher Idade com nove” preparava a palavra `nove`, incompatível com o salvamento do cadastro. Corrigido apenas o campo explicitamente marcado `data-voice-value-type="age"`: número cardinal completo de0a120 vira dígitos na proposta, sem reescrever nomes ou textos livres. Mantidos formulário, confirmação e salvamento separados. Limpar preserva idade opcional vazia; aproximações, alternativas, frações e valores fora do intervalo são recusados antes de aplicar. Fingerprint inclui o marcador de tipo para recusar uma proposta se o campo mudar.
+
+Unidade inicial4/5, E2E específico inicial0/1 (prévia mostrava“nove”). Após correção JS254/254 final, lint sem erro com cinco avisos anteriores, guard/diff aprovados. Regressão interface/pacientes **51/51 em3,1min**. Revisão independente encontrou “cento e dezassete” recusado, embora o parser natural o aceitasse; corrigido, unidade5/5 e E2E de preenchimento/salvamento final1/1. Teste novo de marcador alterado falhou apenas por procurar classe de erro do assistente: snapshot mostrou alerta correto e idade8 preservada, sem escrita; corrigida a asserção para rolealert. Repetição final de pacientes **5/5 em53,9s**, incluindo variante117, prévia9 antes de aplicar, campos livres preservados, rejeição sem escrita e fingerprint alterado. Backend Rust funcional e captura/transcrição não alterados; nenhum novo teste de áudio físico/nativo nesta rodada. Não converter esta prova de comandos digitados em homologação do microfone.
+
+Instalado permanece52, nenhum perfil ou senha alterado. Meta ativa; validação instalada e cobertura final completa continuam pendentes.
+
 ## Entrega local 0.2.54 — intervalo de análises falado
 
 Pacote `Círculo_0.2.54_x64-setup.exe`, **135.880.128 bytes**, SHA-256 `d6ab8038b3bf848ba348c1d516289165d8853750332f68cbbbe02c1213006ea3`. Build NSIS offline/locked exit0, release Rust46,24s; aviso anterior OpenSSL/PDB LNK4099. Primeira invocação de build recusou flags fora do separador; corrigida para argumentos Cargo após `--`, compilação/pacote concluídos. Override temporário de updater removido ao final, configuração oficial preservada. Manifest `%TEMP%\\circulo-0254-audit-20261004.json`: PE0.2.54/x64/NotSigned, sem extração interna/instalação/execução. Instalado permanece52. Sem alteração do perfil, `.sig`, Authenticode, Release ou oferta automática pelo GitHub. Arquivo local disponível para teste.

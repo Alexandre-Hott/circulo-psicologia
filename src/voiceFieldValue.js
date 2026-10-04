@@ -14,11 +14,19 @@ function number(value) {
   return match ? tens[match[1]] + units[match[2]] : null
 }
 
-// Normalize only typed date/time controls. Never rewrite names or free text.
+// Normalize date/time and explicitly marked age controls. Never rewrite free text.
 // No inferred year, relative dates, approximate time or ambiguous AM/PM.
 export function normalizeVoiceFieldValue(type, value) {
-  if (!['date', 'time'].includes(type) || value === '') return value
+  if (!['date', 'time', 'age'].includes(type) || value === '') return value
   const text = fold(value)
+  if (type === 'age') {
+    const hundreds = /^cento e (.+)$/u.exec(text)
+    const suffix = hundreds ? (hundreds[1] === 'dezassete' ? 17 : number(hundreds[1])) : null
+    const age = text === 'cem' ? 100 : text === 'dezassete' ? 17
+      : hundreds ? (suffix !== null && suffix >= 1 && suffix <= 20 ? 100 + suffix : null)
+        : number(text)
+    return age !== null && age >= 0 && age <= 120 ? String(age) : null
+  }
   if (type === 'date') {
     let date = text
     const numeric = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text)

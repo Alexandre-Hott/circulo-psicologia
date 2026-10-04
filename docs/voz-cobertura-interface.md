@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Idade cardinal no cadastro — 0.2.55
+
+Campo de idade explicitamente marcado aceita números falados0a120, com prévia numérica/confirmar; nomes e demais campos livres não são convertidos. Antes, a palavra era aplicada e impedia salvar. Teste reproduziu prévia incorreta antes do patch. Agora unidade254/254; regressãoE2E interface/pacientes51/51 e pacientes5/5 final em53,9s. Revisão detectou variante117, corrigida/testada; mudança de marcador recusa proposta antiga sem escrita. Incluído no pacote55 regenerado/auditado, não instalado/publicado. Mídia/STT/instalação nativa não reexecutadas; perfil instalado52 não alterado. [Evidências e limites](melhoria-continua-voz.md).
+
 ## Intervalos de análises por fala — 0.2.54
 
 Novo pedido natural com duas datas completas aplica paciente/De/Até somente após confirmar. Conversor existente reutilizado; sem ano inferido ou alteração dos gráficos. JS253/253; corpus2WAVs transcrito via Rust/recursos instalados52 com2intents exatos. Primeiro áudio lento acima12s falhou; frases curtas em velocidade normal passaram sem ampliar limite. E2E de análises4/4 na primeira execução e **4/4 final em30,5s**, IPC sintético. Não comprova microfone físico ou host instalado. Instalado permanece52. [Tentativas e limites](melhoria-continua-voz.md).

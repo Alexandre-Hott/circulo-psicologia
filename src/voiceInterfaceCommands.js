@@ -74,7 +74,7 @@ function matches(query, entries) {
 }
 
 function fingerprint(item) {
-  return { id: item.element.id || null, tag: item.element.tagName, inputType: item.element.type || null, name: item.name, context: item.context, action: item.element.getAttribute('data-voice-action') || null, record: item.element.closest('[data-voice-record]')?.getAttribute('data-voice-record') || null, epoch: item.element.closest('[data-voice-epoch]')?.getAttribute('data-voice-epoch') || null }
+  return { id: item.element.id || null, tag: item.element.tagName, inputType: item.element.type || null, valueType: item.element.getAttribute('data-voice-value-type') || null, name: item.name, context: item.context, action: item.element.getAttribute('data-voice-action') || null, record: item.element.closest('[data-voice-record]')?.getAttribute('data-voice-record') || null, epoch: item.element.closest('[data-voice-epoch]')?.getAttribute('data-voice-epoch') || null }
 }
 
 export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
@@ -124,6 +124,9 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
       if (options.length !== 1) return refusal(`Para “${item.name}”, escolha: ${[...item.element.options].filter(option => !option.disabled).map(option => option.textContent).join(', ')}.`)
       value = options[0].value
       optionLabel = options[0].textContent
+    } else if (item.element.getAttribute('data-voice-value-type') === 'age') {
+      value = normalizeVoiceFieldValue('age', value)
+      if (value === null) return refusal(`Valor inválido para “${item.name}”. Diga uma idade inteira entre zero e cento e vinte.`)
     } else if (['date', 'time'].includes(item.element.type)) {
       value = normalizeVoiceFieldValue(item.element.type, value)
       if (value === null) return refusal(`Valor inválido para “${item.name}”. Diga a data completa com ano ou um horário exato com manhã/tarde/noite. Também pode usar AAAA-MM-DD ou HH:MM.`)
@@ -148,7 +151,7 @@ export function applyVoiceInterfaceCommand(intent, root = globalThis.document) {
   if (intent?.type !== 'interface.control') throw new Error('Comando de interface inválido.')
   const found = inventory(root).filter(item => {
     const current = fingerprint(item), target = intent.target
-    return current.id === target.id && current.tag === target.tag && current.inputType === target.inputType && current.name === target.name && current.context === target.context && current.action === target.action && current.record === target.record && current.epoch === target.epoch
+    return current.id === target.id && current.tag === target.tag && current.inputType === target.inputType && current.valueType === target.valueType && current.name === target.name && current.context === target.context && current.action === target.action && current.record === target.record && current.epoch === target.epoch
   })
   if (found.length !== 1) throw new Error('A tela mudou. Prepare o comando novamente antes de aplicar.')
   const element = found[0].element
