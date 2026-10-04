@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs'
 const corpusPath = new URL('../fixtures/native-voice-trusted4-fresh.json', import.meta.url)
 const confirmationCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-beam8-rust8-fresh.json', import.meta.url), 'utf8'))
 const confirmation = confirmationCorpus.Cases.find(item => item.Index === 7).Transcript
+const correctionCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-title-correction-fresh.json', import.meta.url), 'utf8'))
 let corpus
 test.beforeAll(() => {
   corpus = JSON.parse(readFileSync(corpusPath, 'utf8').replace(/^\uFEFF/, ''))
@@ -125,8 +126,8 @@ async function openApp(page) {
   await expect(page.getByRole('button', { name: 'Início', exact: true })).toHaveAttribute('aria-current', 'page')
 }
 
-async function replayAudio(page, index) {
-  const text = index === 'confirmation' ? confirmation : recording(index).Transcript
+async function replayAudio(page, index, rawTranscript) {
+  const text = rawTranscript ?? (index === 'confirmation' ? confirmation : recording(index).Transcript)
   await page.evaluate(transcript => window.freshBeamRustNative.transcripts.push(transcript), text)
   const listen = assistant(page).getByRole('button', { name: 'Ouvir comando', exact: true })
   await expect(listen).toBeEnabled()
@@ -297,5 +298,44 @@ test('RAW Rust4 3: Registrar sessão Home abre apenas formulário rápido', asyn
   await expect(appointment).toBeVisible()
   await expect(appointment.getByLabel('Tipo', { exact: true })).toHaveValue('Avulsa')
   await expect(appointment.getByRole('button', { name: 'Criar e iniciar sessão', exact: true })).toBeVisible()
+  await expectNoWrites(page, before)
+})
+
+test('RAW Rust1: correção por terceiro áudio aplica literal minúsculo, sem Save', async ({ page }) => {
+  await openApp(page)
+  const before = await snapshot(page)
+  await replayAudio(page, 0)
+  await expect(preview(page)).toBeVisible()
+  await expectNoWrites(page, before)
+  await replayAudio(page, 'confirmation')
+  const title = editor(page).getByLabel('Título descritivo', { exact: true })
+  const description = editor(page).getByLabel('Descrição opcional', { exact: true })
+  await expect(title).toHaveValue('Espera a vez.')
+  await expect(description).toHaveValue('')
+  await expectNoWrites(page, before)
+
+  const raw = correctionCorpus.Cases[0]
+  expect(raw.Index).toBe(0)
+  expect(raw.Transcript).toBe('Preencher título descritivo com espera a vez.')
+  await replayAudio(page, null, raw.Transcript)
+  await expect(preview(page)).toBeVisible()
+  const intent = await realPendingIntent(page)
+  expect(intent.type).toBe('interface.control')
+  expect(intent.operation).toBe('fill')
+  expect(intent.target).toMatchObject({ id: 'behavior-title', name: 'Título descritivo', record: 'behavior:new', epoch: '0' })
+  expect(intent.value).toBe('espera a vez')
+  await expect(title).toHaveValue('Espera a vez.')
+  await expect(description).toHaveValue('')
+  await expectNoWrites(page, before)
+  await replayAudio(page, 'confirmation')
+  await expect(preview(page)).toHaveCount(0)
+  await expect(editor(page)).toHaveAttribute('data-voice-record', 'behavior:new')
+  await expect(title).toHaveValue('espera a vez')
+  await expect(description).toHaveValue('')
+  expect(raw.ExpectedValue).toBe('Espera a vez')
+  expect(intent.value).not.toBe(raw.ExpectedValue)
+  expect(raw.StrictLiteralMatch).toBe(false)
+  expect(corpus.TitleComparison).toEqual({ Expected: 'Espera a vez', Actual: 'Espera a vez.', StrictMatch: false })
+  expect(await page.evaluate(() => window.freshBeamRustNative.captures.map(item => item.transcript))).toEqual([recording(0).Transcript, confirmation, raw.Transcript, confirmation])
   await expectNoWrites(page, before)
 })

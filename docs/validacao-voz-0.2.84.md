@@ -36,6 +36,18 @@ O caso focal passou 1/1 no autor em 19,4 s. A conferência independente do princ
 
 ## Testes e pacote
 
+### Comando falado de correção
+
+Uma nova amostra independente disse “Preencher Título descritivo com Espera a vez”. Houve uma síntese Maria/rate0 e uma inferência pelo backend Rust real, sem retries. Texto, codepoints e hash foram conferidos antes de Speak; o WAV PCM22050 mono16 tem 4,584 s e sinal não zero. O processo nativo terminou com código zero em 6,165 s, incluindo compilação de 0,77 s e teste de 5,27 s. Usou release/offline/locked, count1, recursos locais explícitos, captura dos logs por bytes e limite externo de 120 s. Os 26 pins de fontes, recursos e referências permaneceram iguais antes/depois.
+
+A transcrição bruta foi “Preencher título descritivo com espera a vez.”. O comando resolve o campo correto e prepara o valor literal “espera a vez”. A rota funcional passou, mas a fidelidade literal ao valor pretendido “Espera a vez” falhou pela inicial minúscula; não houve reparo ou normalização para declarar acerto. O replay exige que preparar conserve “Espera a vez.” e que um quarto áudio de confirmação altere somente o campo. As confirmações são da referência nativa anterior, não novas inferências. Zero Save ou IPC de escrita, descrição e registros concorrentes preservados.
+
+O novo caso focal passou 1/1 no autor em 18,7 s. O principal conferiu os seis casos do arquivo em 28,4 s, todos aprovados, com um worker e zero retries. Revisão estática aprovada. Fixture nova `D7BF08877009C8B92919437BC10353D9AC76349A3F22B05E9A69CE6B3173AF06`; arquivo de replay após a adição `196ED603099DBFA25574BA536A79A24348D29DD7E7D524DFD32945CAC25A3DE0`. Corpus e relatório originais de quatro pedidos continuam intactos. Sem mudança de produção, novo build, acesso ao perfil instalado ou prova de microfone físico.
+
+Artefatos da amostra em `C:\Users\alexandre\AppData\Local\Temp\circulo-trusted1-title-correction-9adc56aa09f544c1bfba33940a368270`: WAV `4D7FF90FFD4CC750DCA95BF0C0FB7F6F66CF6942E2D74753E2C20CAB2A8691C5`, stdout bruto `E8D2EC8FDB21210EAC1C10AB9BC2D96DF36084642437391C81CFBCE164734B19` e stderr `FE5ABFDB9EDDE6AF265027228E57CA15FAB07BAB03482FD81E0DD080F2D677B1`. A síntese supervisionada terminou com código zero em 2,150 s, sob limite externo de 30 s, sem erro de cleanup.
+
+### Pacote e regressões anteriores
+
 Com metadados 84, JavaScript passou 1891/1891 em 5,47 s; Rust release/offline/locked passou 138 testes e ignorou o opt-in, em 11,57 s. Esse opt-in foi executado separadamente na rodada de quatro áudios descrita acima, antes da atualização mecânica. A confirmação foi previamente conferida em 25/25 de assistente e 26/26 de ditado, em rodadas separadas; o fluxo rápido de sessão passou14/14 no arquivo de calendário. Esses testes usam mídia/IPC simulados, não nova inferência.
 
 Build Tauri/NSIS release/offline/locked terminou com código zero e compilação release em 56,38 s. Usou --no-sign e override temporário externo para desativar somente os artefatos assinados do updater; o override foi removido. A configuração oficial do updater, endpoint e chave pública permanecem iguais; nenhuma chave privada foi acessada. Avisos anteriores de tamanho do bundle e PDB OpenSSL permanecem.
