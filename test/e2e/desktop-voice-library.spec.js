@@ -24,6 +24,10 @@ async function openApp(page, multipleDrafts = false) {
         if (!selected) throw new Error('Rascunho incorreto')
         Object.assign(selected, clone(args.input)); window.libraryFixture.writes.push(clone({ command, args })); return clone(selected)
       }
+      if (command === 'behavior_create') {
+        const item = { id: `created-${behaviors.length}`, title: args.title, description: args.description, version: 1 }
+        behaviors.push(item); window.libraryFixture.writes.push(clone({ command, args })); return clone(item)
+      }
       if (command === 'behavior_update') {
         const item = behaviors.find(item => item.id === args.id)
         if (!item || item.version !== args.version) throw new Error('Conflito de versão')
@@ -54,6 +58,46 @@ async function command(page, text) {
 }
 
 test.afterEach(async ({ page }) => expect(await page.evaluate(() => window.libraryFixture?.unexpected || [])).toEqual([]))
+
+test('criar e editar comportamento por voz atualiza catálogo e exige salvar a seleção', async ({ page }) => {
+  await openApp(page)
+  const originalTimeline = await page.evaluate(() => window.libraryFixture.timeline)
+  await propose(page, 'Criar comportamento Solicita pausa com descrição Pede um intervalo durante a atividade.')
+  await expect(page.locator('.voice-command-preview')).toBeVisible()
+  expect(await page.evaluate(() => window.libraryFixture.writes)).toEqual([])
+  await propose(page, 'confirmar')
+  await expect(page.getByLabel('Título descritivo')).toHaveValue('Solicita pausa')
+  await expect(page.getByLabel('Descrição opcional')).toHaveValue('Pede um intervalo durante a atividade.')
+  expect(await page.evaluate(() => window.libraryFixture.writes)).toEqual([])
+  await command(page, 'Clicar em Criar comportamento reutilizável')
+  expect(await page.evaluate(() => window.libraryFixture.writes)).toEqual([{ command: 'behavior_create', args: { title: 'Solicita pausa', description: 'Pede um intervalo durante a atividade.' } }])
+  await propose(page, 'Editar comportamento Solicita pausa com descrição Pede um intervalo curto durante a atividade.')
+  await expect(page.locator('.voice-command-preview')).toBeVisible()
+  expect(await page.evaluate(() => window.libraryFixture.writes)).toHaveLength(1)
+  await propose(page, 'confirmar')
+  await expect(page.getByLabel('Descrição opcional')).toHaveValue('Pede um intervalo curto durante a atividade.')
+  expect(await page.evaluate(() => window.libraryFixture.writes)).toHaveLength(1)
+  await command(page, 'Clicar em Salvar versão do comportamento')
+  expect(await page.evaluate(() => window.libraryFixture.writes[1])).toEqual({ command: 'behavior_update', args: { id: 'created-2', version: 1, title: 'Solicita pausa', description: 'Pede um intervalo curto durante a atividade.' } })
+  await command(page, 'Clicar em Retomar sessão de 2026-10-03')
+  await propose(page, 'Marcar comportamento Solicita pausa para Ana Clara na sessão')
+  await expect(page.locator('.voice-command-preview')).toBeVisible()
+  await page.clock.runFor(800)
+  expect(await page.evaluate(() => window.libraryFixture.writes.map(item => item.command))).toEqual(['behavior_create', 'behavior_update'])
+  expect(await page.evaluate(() => window.libraryFixture.draft.behaviorIds)).toEqual([])
+  await propose(page, 'confirmar')
+  await expect(page.getByRole('checkbox', { name: 'Solicita pausa · v2', exact: true })).toBeChecked()
+  await page.clock.runFor(800)
+  expect(await page.evaluate(() => window.libraryFixture.writes.filter(item => item.command === 'session_draft_save'))).toEqual([])
+  expect(await page.evaluate(() => window.libraryFixture.draft.behaviorIds)).toEqual([])
+  await command(page, 'Clicar em Salvar rascunho')
+  expect(await page.evaluate(() => window.libraryFixture.draft.behaviorIds)).toEqual(['created-2'])
+  expect(await page.evaluate(() => window.libraryFixture.writes.map(item => item.command))).toEqual(['behavior_create', 'behavior_update', 'session_draft_save'])
+  await command(page, 'Clicar em Evolução e escalas registradas · Adicionar adendo')
+  await expect(page.locator('[data-voice-record="session:finished"]')).toContainText('Pede ajuda · v1 · Descrição second')
+  await expect(page.locator('[data-voice-record="session:finished"]')).not.toContainText('Solicita pausa')
+  expect(await page.evaluate(() => window.libraryFixture.timeline)).toEqual(originalTimeline)
+})
 
 test('biblioteca com títulos iguais: editar opção exata, cancelar e preservar snapshot', async ({ page }) => {
   await openApp(page)

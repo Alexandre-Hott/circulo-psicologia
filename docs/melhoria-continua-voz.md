@@ -1,5 +1,13 @@
 # Melhoria contínua de voz
 
+## Homologação após 0.2.51 — criar, editar e registrar comportamento na mesma jornada
+
+Novo teste integrado atravessa criação natural do comportamento, confirmação da proposta sem escrita, salvamento pelo botão existente via voz, edição natural do item recém-criado, confirmação sem escrita e salvamento de versão. A retomada de sessão carrega v2; marcar pelo título resolve o ID recém-criado. Antes e depois de confirmar a seleção, o relógio avança800ms e exige nenhuma gravação do rascunho; “Clicar em Salvar rascunho” confirmado grava o ID. O histórico renderizado de outra sessão conserva o comportamento anterior e não recebe o novo item.
+
+Não houve alteração funcional de produção nesta rodada. O fixture retorna cópias nas consultas: criação não modifica automaticamente os catálogos React, e a edição natural subsequente exige atualização do catálogo do router. Retomar a sessão remonta o componente e consulta novamente; não prova isoladamente refresh do editor anterior. Histórico fictício é de outro comportamento: não equivale a validar snapshots nativos do mesmo modelo após edição.
+
+Tentativas: novo teste inicial1/1 em19,7s; ampliado com edição5/5 em40,2s. Fortalecimento que pressupunha autosave após confirmar seleção falhou1/5 (esperava1save, recebeu0), expondo expectativa incompatível com `voiceConfirmationPending`: o contrato pede salvamento explícito. Corrigida a expectativa no teste, não a produção. **Resultado final5/5 em40,0s**, revisão independente final sem achado impeditivo; 245/245 testes JS aprovados, guard/diff aprovados. RPC/relógio em memória, sem áudio capturado, instalação, banco nativo ou acesso a perfil. Meta ativa.
+
 ## Incremento após 0.2.51 — data com “em” na ocorrência
 
 Iniciar, remarcar e cancelar uma sessão existente aceitam tanto “em DD/MM/AAAA” quanto “no dia DD/MM/AAAA”. O nome completo permanece exigido; datas incompletas/impossíveis, pacientes homônimos e conteúdo extra são recusados. Nomes cadastrados que incluem literalmente “em DD/MM/AAAA” não são truncados. O pedido continua sendo uma proposta: iniciar exige confirmação; remarcação/cancelamento apenas abrem seus formulários normais, sem salvar antecipadamente.

@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Complemento: jornada de biblioteca para registro em sessão
+
+Teste integrado novo em `desktop-voice-library.spec.js` cria comportamento por voz, salva, edita o item recém-criado por nome, salva v2 e registra na sessão por ID atualizado. Confirmar seleção não grava mesmo após800ms; salvar explicitamente por voz grava. Histórico renderizado de outra sessão é preservado, sem prova de snapshot nativo do mesmo comportamento. Somente homologação de componentes com RPC fictício, sem mudança funcional nem novo instalador. [Tentativas e limites](melhoria-continua-voz.md).
+
 ## Complemento após 0.2.51: ocorrência com “em DD/MM/AAAA”
 
 Iniciar/remarcar/cancelar sessão existente aceitam “em” além de “no dia”. Data completa válida, nome exato e confirmação continuam necessários; nomes literais com datas são preservados. 245/245 testes JS finais aprovados; teste integrado novo verifica que preparar o comando não inicia nem cria compromisso. Calendário13/13 no snapshot intermediário, focado1/1 final após correção de revisão, sem achado novo. Incremento ainda fora do instalador 0.2.51. [Evidências e limites](melhoria-continua-voz.md).
