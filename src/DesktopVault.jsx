@@ -173,6 +173,7 @@ export default function DesktopVault() {
     if (control?.status === 'draft' || /^criar comportamento reutiliz[aá]vel[.!?]*$/iu.test(request.text.trim())) return control
     const specific = parseCentralCommand(request)
     if (specific.status === 'draft') return specific
+    if (specific.status === 'clarification' && specific.code === 'clinical_text_limit') return specific
     return control || specific
   }
   const openVoiceDraftForReview = async (requestedIntent) => {

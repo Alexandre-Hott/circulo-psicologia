@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { formatCentralCommandPreview, parseCentralCommand } from './centralCommandRouter.js'
+import { VOICE_COMMAND_MAX_LENGTH } from './voiceCommandLimits.js'
 import './VoiceCommandCenter.css'
 
 /**
@@ -115,7 +116,7 @@ export function VoiceCommandCenter({
     <textarea
       id="voice-command-text"
       rows={2}
-      maxLength={1200}
+      maxLength={VOICE_COMMAND_MAX_LENGTH}
       value={command}
       onChange={event => {
         transcriptGeneration.current += 1

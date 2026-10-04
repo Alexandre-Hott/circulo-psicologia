@@ -1,5 +1,13 @@
 # Melhoria contínua de voz
 
+## Estado atual — 04/10/2026
+
+A 0.2.68 foi testada e empacotada localmente para alinhar os quatro textos de sessão ao limite de 4000 unidades UTF-16 do formulário. [Entrega, instalador e limites](validacao-voz-0.2.68.md): JS365/365, Rust86 aprovados/1 ignorado, opt-in sintético separado aprovado e regressão selecionada117/117 em12,7min. A instalação local continua na 0.2.61; o novo pacote não foi instalado/publicado como Release nem assinado para updater/Authenticode.
+
+Fontes atuais: [matriz de ações](voz-matriz-atual-0.2.67.md), [regressão ampla](voz-regressao-ampla-0.2.67.md) e [reconhecimento e replay dos valores de indicador](voz-indicador-nativo-20261004.md). Regressão 0.2.67: 319/322 na rodada integral; depois de corrigir três seletores antigos, 3/3 na repetição focal. Replay de escala: 2/2. Não é uma única execução de 322 verdes nem homologação do microfone físico.
+
+As seções antigas abaixo preservam a cronologia. Menções a “pendência atual”, “em execução” ou “sem instalador” dentro delas descrevem aquela etapa, não prevalecem sobre este estado ou os registros finais mais recentes.
+
 ## Entrega0.2.67 — minutos em ações de sessão e adendo
 
 Fechamento FINAL:26/26selecionados em1,7min, seguidos de4/4replays SAPI0 em27,8s, duas rodadas distintas no código congelado. Filtro da primeira rodada não incluía os quatroREPLAY SAPI; executados separadamente, não afirmar30/30emuma rodada. Cada replay transcreve idx0/1/2/3 e4intactos, duas chamadas, prévia sem efeitos, só confirma após segundo áudio. Iniciar usa series-target/original2026-10-02; remarcação/cancelamento abrem esse record sem writes, adendo abre final-target; todos consultam efetiva2026-10-03às15:45, nunca distração15:00. Snapshots preservados exceto acréscimo autorizado do rascunho ao iniciar. Produção manteve SHA-256 `ca6266a91b9dcd2933fb313c60c02b3f51f77e13f3b875e5d5d2d5d2edd31850` durante testes/build. JS344/344, Rust86aprovados/1ignorado, lint sem erros/oito avisos anteriores; guard/diff/revisão independente aprovados. Parágrafos de etapas intermediárias abaixo são histórico.
@@ -456,7 +464,7 @@ As consultas de calendário e a limpeza de campos estão incluídas no instalado
 
 Validação final do frontend: 48 testes do parser e 20/20 E2E de voz passaram. A suíte unitária geral teve 215 aprovações antes do ajuste de texto da prévia; o teste dessa prévia foi atualizado e o parser completo passou novamente. A execução intermediária E2E teve uma falha porque a fixture passou a filtrar corretamente as datas, enquanto o percurso antigo procurava a ocorrência de hoje na agenda de amanhã; o percurso foi corrigido para navegar para hoje. A revisão encontrou uma regressão de separação dos campos, corrigida e coberta pelos testes finais. Uma suspeita de regressão do botão de compromisso foi retirada após confirmar a existência do botão principal na tela real.
 
-## Pendências atuais da auditoria de cobertura
+## Histórico — pendências da auditoria de cobertura após 0.2.39
 
 ### Incremento em desenvolvimento após o instalador 0.2.39
 

@@ -1,6 +1,7 @@
 import { addCivilDays, parseCivilDate } from './calendarDate.js'
 import { inSupportedRange } from './analyticsRange.js'
 import { normalizeVoiceFieldValue } from './voiceFieldValue.js'
+import { VOICE_COMMAND_MAX_LENGTH, VOICE_CLINICAL_TEXT_MAX_LENGTH } from './voiceCommandLimits.js'
 
 const normalize = (value, preserveTerminal = false) => String(value ?? '')
   .normalize('NFD')
@@ -636,7 +637,7 @@ const chooseSessionCandidate = (candidates, context, fallback) => {
 const catalogPattern = name => `(?:["“])?${escapeRegExp(normalize(name, true))}(?:["”])?`
 
 const parseSessionDraft = ({ text, rawText, context }) => {
-  if (!/\b(?:sessao|rascunho)\b/u.test(text) || !/\b(?:comportamento|indicador|observacao|evolucao|procedimento|resultado|encaminhamento|fechamento|decisao)\b/u.test(text)) return null
+  if (!/\b(?:sessao|rascunho)\b/u.test(text) || !/\b(?:comportamento|indicador|observacao|evolucao|procedimentos?|resultado|encaminhamento|fechamento|decisao)\b/u.test(text)) return null
   const removeBehavior = /^(?:retirar|retire|remover|remova|desmarcar|desmarque)\s+(?:o\s+)?comportamento\s+(.+)$/u.exec(text)
   const behaviorCommand = removeBehavior || /^(?:selecionar|marcar|adicionar|registrar)\s+(?:o\s+)?comportamento\s+(.+)$/u.exec(text)
   if (behaviorCommand) {
@@ -700,7 +701,8 @@ const parseSessionDraft = ({ text, rawText, context }) => {
     const { target } = result
     const sessionTarget = sessionTargetFrom(target)
     const exactText = unwrapArgument(result.content)
-    if (!exactText || exactText.length > 1000) return refuse('O texto do campo deve ter entre 1 e 1000 caracteres.')
+    if (!exactText) return refuse(`O texto do campo deve ter entre 1 e ${VOICE_CLINICAL_TEXT_MAX_LENGTH} caracteres.`)
+    if (exactText.length > VOICE_CLINICAL_TEXT_MAX_LENGTH) return { ...refuse(`O texto do campo deve ter entre 1 e ${VOICE_CLINICAL_TEXT_MAX_LENGTH} caracteres.`), code: 'clinical_text_limit' }
     const key = fieldMap[field]
     return draft(
       { type: 'session.draft.update', target: sessionTarget, patch: { field: key, operation: 'replace', value: exactText } },
@@ -719,9 +721,9 @@ const parseSessionDraft = ({ text, rawText, context }) => {
  */
 export function parseCentralCommand({ text, context = {}, referenceDate } = {}) {
   const rawText = String(text ?? '').trim()
+  if (rawText.length > VOICE_COMMAND_MAX_LENGTH) return refuse(`O comando passou do limite de ${VOICE_COMMAND_MAX_LENGTH} caracteres. Divida-o em comandos menores.`)
   const normalized = normalize(rawText)
   if (!normalized) return refuse('Digite um comando para continuar.')
-  if (normalized.length > 1200) return refuse('O comando passou do limite de 1200 caracteres. Divida-o em comandos menores.')
   // Descriptions and session field text are literal payloads, not commands.
   const commandRegion = normalized.split(/\s+com\s+descricao\s+/u)[0]
     .replace(/^(?:preencher|anotar|registrar)\s+(?:observacao|evolucao|procedimentos?|resultado|decisao|encaminhamento|fechamento)\s+(?:da|do)\s+sessao\s+de\s+(.+?)\s+com\s+.+$/u, '$1')
