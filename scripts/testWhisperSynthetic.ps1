@@ -1,6 +1,7 @@
 ﻿param(
     [string]$VoiceDirectory,
-    [ValidateSet('core', 'behavior-save', 'behavior-remove', 'occurrence-date', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer', 'interface-series')][string]$Scenario = 'core'
+    [ValidateSet('core', 'behavior-save', 'behavior-remove', 'occurrence-date', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer', 'interface-series', 'interface-details')][string]$Scenario = 'core',
+    [switch]$KeepArtifacts
 )
 
 # Keep the UTF-8 BOM: Windows PowerShell 5.1 otherwise reads Portuguese text as ANSI.
@@ -115,6 +116,13 @@ try {
             'Confirmar comando.'
         )
     }
+    if ($Scenario -eq 'interface-details') {
+        $commands = @(
+            'Abrir detalhes de Ana Clara.',
+            'Ver detalhes de Ana Clara em quatro de outubro de dois mil e vinte e seis às quinze horas.',
+            'Confirmar comando.'
+        )
+    }
     $results = foreach ($index in 0..($commands.Count - 1)) {
         $wav = Join-Path $testDirectory "synthetic-command-$index.wav"
         $stream = New-Object -ComObject SAPI.SpFileStream
@@ -184,12 +192,12 @@ try {
         Remove-Item Env:CIRCULO_TEST_VOICE_RESOURCES -ErrorAction SilentlyContinue
         Remove-Item Env:CIRCULO_SYNTHETIC_WAV_COUNT -ErrorAction SilentlyContinue
     }
-    [pscustomobject]@{ Scenario = $Scenario; Voice = $voice.Voice.GetDescription(); NetworkUsed = $false; Cases = @($results); NativeCases = $nativeCases; NativeHarnessSeconds = [math]::Round($nativeClock.Elapsed.TotalSeconds, 2); NativeExitCode = $nativeProcess.ExitCode; SemanticExitCode = $semanticProcess.ExitCode; Semantic = $semantic } | ConvertTo-Json -Depth 10 -Compress
+    [pscustomobject]@{ Scenario = $Scenario; Voice = $voice.Voice.GetDescription(); NetworkUsed = $false; ArtifactDirectory = $testDirectory; ArtifactsPreserved = [bool]$KeepArtifacts; Cases = @($results); NativeCases = $nativeCases; NativeHarnessSeconds = [math]::Round($nativeClock.Elapsed.TotalSeconds, 2); NativeExitCode = $nativeProcess.ExitCode; SemanticExitCode = $semanticProcess.ExitCode; Semantic = $semantic } | ConvertTo-Json -Depth 10 -Compress
     if ($semantic.Failed -gt 0) { throw "$($semantic.Failed) comandos nativos não preservaram a ação e os campos esperados. Transcrição não vazia não significa funcionamento." }
 }
 finally {
     $resolvedDirectory = [IO.Path]::GetFullPath($testDirectory)
-    if ($resolvedDirectory.StartsWith($tempBase + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -and
+    if (-not $KeepArtifacts -and $resolvedDirectory.StartsWith($tempBase + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -and
         (Split-Path -Leaf $resolvedDirectory).StartsWith('circulo-whisper-synthetic-', [StringComparison]::Ordinal)) {
         Remove-Item -LiteralPath $resolvedDirectory -Recurse -Force
     }

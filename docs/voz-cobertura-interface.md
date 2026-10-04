@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Detalhes de compromisso pelo paciente —0.2.65
+
+Abrir/Ver/Detalhes de paciente e Clicar em Detalhes de paciente abrem o alvo visível do calendário após confirmar, sem alterar/iniciar sessão. Dia/Semana/Mês, nomes completos e rótulos antigos preservados; múltiplos exigem data civil completa e horário exato. Homônimos/mesmo dia e horário recusados. Data efetiva remarcada e concluídos consultáveis; revisão/record/epoch/metadados/competição de aliases revalidados na aplicação. Prefixo observado“Verdetales” limitado à ação, nenhum reparo de nomes/notas. Red principal0/1, green26/26; revisão encontrou duas exceções de gramática/pontuação, corrigidas. Rodada final selecionada88/88 em4,7min, inclui31novos e57anteriores; JS331/331, Rust86aprovados/1ignorado. Reconhecimento real de3WAVs e dois replays simulados separados, não prova de microfone físico ou persistência instalada. [Pacote e limites](melhoria-continua-voz.md). Instalado61 mantido.
+
 ## Encerramento de série pelo paciente —0.2.64
 
 “Encerrar série de Ana Clara” ou “Antecipar término de Ana Clara” prepara abertura do formulário; múltiplas séries exigem dia/horário exatos, sem ditar ID. Homônimos e mesmo dia/horário recusados. Data de corte e confirmação final permanecem no fluxo existente. Metadados/record/epoch revalidados; prefixo observado “Anticipar” aceito somente nessa ação. JS330/330, revisão focal aprovada; regressão138/139 com timeout na quarta montagem de um cenário combinado. Separados os testes sem mudar produção/timeout/asserções; repetição final18/18 em43,2s com shell completo e gateway/Agenda, não nova regressão integral. Rust86aprovados/1ignorado. Reconhecimento Rust real de3WAVs sintéticos e replay com mídia/IPC simulados não equivalem a teste de microfone físico ou persistência instalada. [Pacote, resultados e limites](melhoria-continua-voz.md). Instalado61 mantido.

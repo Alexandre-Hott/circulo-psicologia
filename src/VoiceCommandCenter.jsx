@@ -157,7 +157,7 @@ export function VoiceCommandCenter({
       <li>“Iniciar sessão de Ana Clara hoje às 15 horas”</li>
       <li>“Cancelar sessão de Ana Clara amanhã às três da tarde” abre o formulário</li>
       <li>“Encerrar série de Ana Clara na segunda às quinze horas” apenas abre o formulário</li>
-      <li>“Abrir Novo compromisso” ou “Recolher Detalhes e ações”</li>
+      <li>“Abrir detalhes de Ana Clara em quatro de outubro de dois mil e vinte e seis às quinze horas” apenas abre os detalhes após confirmar; não altera o compromisso nem inicia sessão</li>
       <li>“Preencher Nome com Ana Clara”</li>
       <li>“Preencher Data do compromisso com dez de outubro de 2026”</li>
       <li>“Preencher Horário inicial com três da tarde”</li>

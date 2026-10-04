@@ -1,5 +1,13 @@
 # Áudio sintético offline — 03/10/2026
 
+## Detalhes de compromisso —0.2.65
+
+Cenário interface-details,3WAVs SAPI Maria Português Brasil, rate-2 original, recursos locais instalados61 e backend Rust real sem rede/microfone/perfil. Saídas Rust preservadas em `native-voice-details-20261004.json`: “Abrir detalhes de Ana Clara.”, “Verdetales de Ana Clara em 4 de outubro de dois mil e vinte e seis às quinze horas.”, “Confirmar comando.”. CLI divergente no caso1(index1): “Verd detalhes de Ana, clara em 4 de outubro de 2.026 às 15 horas.”; não editar corpus para coincidir ou reparar nomes/data.
+
+WAV3,944s/9,385s/3,074s,173962/413946/135590bytes; todos abaixo do limite12s. CLI3,07s/2,02s/2,03s. Opt-in Rust1aprovado/86filtrados em5,29s, Cargo17,70s incluindo compilação offline; CLI/Rust/evaluator/wrapperexit0 na primeira execução, sem reinício. Avaliador central0Passed/0Failed/3NotEvaluated intencionalmente; unidade strict17/17aprova contrato do corpus, não execução de comandos. Logs/WAVs preservados pelo novo switch opcionalKeepArtifacts em `C:/Users/alexandre/AppData/Local/Temp/circulo-whisper-synthetic-d9ba5b8424c843ee8814d1dd9ed21d1b`; limpeza padrão continua limitada à pasta temporária do harness, sem recovery/perfil.
+
+Alias exato de ação “Verdetales” implementado, restrito ao controle de detalhes; nomes/notas/valores não reescritos. Dois replays completos usam índices0+2e1+2inalterados, mídia/IPC simulados: primeiro áudio prepara sem abrir, segundo confirma detalhes exatos, duas transcrições com amostras não vazias e paciente correto, zero gravações/inícios/snapshots alterados. Frase longa seleciona a ocorrência pela data efetiva remarcada/concluída entre duas, não a original. Novo fluxo primeiro26/26 e após revisão/cinco casos de nomes literais, rodada FINALselecionada88/88 em4,7min, exit0; inclui31novos e57regressões. Rust integral65:86aprovados/1ignorado em11,10s, opt-in separado no crate64, backend funcional inalterado. Pacote65 gerado/auditado localmente, não instalado/publicado/assinado. Nenhum microfone físico, banco/perfil instalado ou cadeia nativa ininterrupta comprovados; instalado61 mantido.
+
 ## Encerramento/antecipação de série —0.2.64
 
 Cenário interface-series:3WAVs SAPI Microsoft Maria Português Brasil; recursos instalados61 e backend Rust local sem alteração funcional/rede. Rust preservado em `native-voice-series-20261004.json`: “Encerrar série de Ana Clara na segunda às 15 horas.”; “Anticipar termino de Ana Clara na segunda às 15 horas.”; “Confirmar comando.”. A segunda saída CLI contém “Ana, clara”, mas a saída Rust usada na fixture não contém essa vírgula; não se alterou o corpus para padronizar nomes.

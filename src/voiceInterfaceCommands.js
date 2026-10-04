@@ -50,7 +50,9 @@ function inventory(root) {
       // Matching text alone must never merge different patient/session targets.
       const action = item.element.matches('button') && item.element.getAttribute('data-voice-action')
       if (!action) return true
-      const key = `${action}:${fold(item.name)}`
+      const key = item.element.hasAttribute('data-voice-appointment-details')
+        ? JSON.stringify([action, fold(item.name), item.element.getAttribute('data-voice-record'), item.element.getAttribute('data-voice-epoch'), appointmentMetadata(item.element)])
+        : `${action}:${fold(item.name)}`
       if (seenActions.has(key)) return false
       seenActions.add(key)
       return true
@@ -70,6 +72,32 @@ function seriesLabelMatches(query, item) {
   return weekday !== null && time !== null && weekday === element.getAttribute('data-voice-series-weekday') && time === element.getAttribute('data-voice-series-time')
 }
 
+const appointmentQuery = query => /^(?:(?:abrir|ver) detalhes|detalhes|verdetales) de /u.test(fold(query))
+// Keep punctuation inside appointment names literal, including a final initial
+// before a date suffix. Sentence punctuation is handled only at command end.
+const foldAppointmentName = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/·/g, ' ').replace(/\s+/g, ' ').trim()
+const appointmentMetadata = element => element.hasAttribute('data-voice-appointment-details')
+  ? JSON.stringify(['patient', 'date', 'start', 'end', 'original-date', 'ambiguous'].map(key => element.getAttribute(`data-voice-appointment-${key}`))) : null
+
+function appointmentLabelMatches(query, item) {
+  const element = item.element
+  if (!element.matches('button[data-voice-appointment-details]') || element.getAttribute('data-voice-appointment-ambiguous') === 'true') return false
+  // The observed ASR prefix aliases only this action, never names or values.
+  const payload = foldAppointmentName(query).replace(/[.!?]+$/g, '').replace(/^(?:(?:abrir|ver) detalhes|detalhes|verdetales) de /u, '')
+  const patient = foldAppointmentName(element.getAttribute('data-voice-appointment-patient'))
+  if (!appointmentQuery(query) || !patient) return false
+  if (payload === patient.replace(/[.!?]+$/g, '')) return true
+  for (const separator of [' em ', ' no dia ']) {
+    if (!payload.startsWith(patient + separator)) continue
+    const suffix = /^(.+?) as (.+)$/u.exec(payload.slice(patient.length + separator.length))
+    if (!suffix) continue
+    const date = normalizeVoiceFieldValue('date', suffix[1])
+    const time = normalizeVoiceFieldValue('time', suffix[2])
+    if (date !== null && time !== null && date === element.getAttribute('data-voice-appointment-date') && time === element.getAttribute('data-voice-appointment-start')) return true
+  }
+  return false
+}
+
 function matches(query, entries) {
   const normalized = fold(query)
   // One short save request covers both modes of the existing library form.
@@ -80,14 +108,16 @@ function matches(query, entries) {
   // Never rewrite a name, relation, text field or another checkbox label.
   const administrativeRoleAlias = normalized === 'contrato administrativo'
   const seriesQuery = /^(?:encerrar serie|antecipar termino|anticipar termino) de /u.test(normalized)
+  const detailsQuery = appointmentQuery(query)
   // Explicit legacy aliases compete with all matching controls, never picking
   // the first retry when two operations share an old short command.
   const exact = entries.filter(item => fold(item.name) === normalized || (administrativeRoleAlias && item.element.type === 'checkbox' && fold(item.name) === 'contato administrativo' && item.element.closest('form[data-voice-record^="party:"]')) || (behaviorSave && item.element.matches('button') && ['criar comportamento reutilizavel', 'salvar versao do comportamento'].includes(fold(item.name))) || fold(item.element.getAttribute('data-voice-alias') || '') === normalized || fold(`${item.name} de ${item.context}`) === normalized || fold(`${item.name} em ${item.context}`) === normalized)
-  if (!seriesQuery && exact.length) return exact
+  if (!seriesQuery && !detailsQuery && exact.length) return exact
   const aliases = entries.filter(item => fold(item.name.replace(/\s*·\s*v\d+\s*$/i, '').replace(/\s*\(opcional\)/i, '').replace(/\s*\(at[eé]\s+\d+\s+caracteres\)/iu, '').replace(/\s+em anos\b/i, '')) === normalized)
-  if (!seriesQuery) return aliases.length ? aliases : entries.filter(item => item.context && [fold(`${item.name} de ${item.context}`), fold(`${item.name} em ${item.context}`)].some(label => label.startsWith(normalized) && normalized.startsWith(fold(item.name) + ' ')))
+  if (!seriesQuery && !detailsQuery) return aliases.length ? aliases : entries.filter(item => item.context && [fold(`${item.name} de ${item.context}`), fold(`${item.name} em ${item.context}`)].some(label => label.startsWith(normalized) && normalized.startsWith(fold(item.name) + ' ')))
   const series = entries.filter(item => seriesLabelMatches(query, item))
-  return [...new Set([...exact, ...aliases, ...series])]
+  const appointments = entries.filter(item => appointmentLabelMatches(query, item))
+  return [...new Set([...exact, ...aliases, ...series, ...appointments])]
 }
 
 function fingerprint(item, drawer = false) {
@@ -125,6 +155,7 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   else if (clearField) { operation = 'fill'; query = clearField[1]; value = '' }
   else if (check) { operation = /^des/i.test(check[1]) ? 'uncheck' : 'check'; query = check[2] }
   else if (click) { operation = 'click'; query = click[1] }
+  else if (appointmentQuery(raw)) { operation = 'click'; query = raw }
   else if (drawer) { operation = /^abr/iu.test(drawer[1]) ? 'open' : 'close'; query = drawer[2] }
   else if (/^(?:salvar|salve)(?: o)? comportamento$/.test(normalized)) { operation = 'click'; query = 'Salvar comportamento' }
   else if (/^(?:encerrar s[eé]rie|antecipar t[eé]rmino|anticipar t[eé]rmino) de .+$/iu.test(raw)) { operation = 'click'; query = raw; directSeries = true }
@@ -152,6 +183,7 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
     return refusal(`Não encontrei “${query}” disponível nesta tela. Abra a área correspondente e diga o texto do botão ou campo.`)
   }
   const item = found[0]
+  if (appointmentQuery(query) && !appointmentLabelMatches(query, item)) return refusal(`Não encontrei “${query}” em um controle de detalhes disponível.`)
   if (directSeries && !item.element.hasAttribute('data-voice-series-kind')) return refusal(`Não encontrei “${query}” em um controle de série disponível.`)
   if (/^anticipar termino de /u.test(fold(query)) && !seriesLabelMatches(query, item)) return refusal(`Não encontrei “${query}” em um controle de série disponível.`)
   if (operation === 'uncheck' && item.element.type === 'radio') return refusal('Escolha outra opção deste grupo para alterar a seleção.')
@@ -180,17 +212,23 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   }
   return {
     status: 'draft',
-    intent: { type: 'interface.control', operation, target: { ...fingerprint(item, ['open', 'close'].includes(operation)), ...(['open', 'close'].includes(operation) ? { drawerId: item.element.matches('summary') ? item.element.parentElement.id : item.element.getAttribute('aria-controls') } : {}) }, ...(operation === 'fill' ? { value } : {}), ...(optionLabel !== undefined ? { optionLabel } : {}) },
+    intent: { type: 'interface.control', operation, target: { ...fingerprint(item, ['open', 'close'].includes(operation)), ...(appointmentMetadata(item.element) !== null ? { appointment: appointmentMetadata(item.element), ...(appointmentQuery(query) ? { appointmentQuery: query } : {}) } : {}), ...(['open', 'close'].includes(operation) ? { drawerId: item.element.matches('summary') ? item.element.parentElement.id : item.element.getAttribute('aria-controls') } : {}) }, ...(operation === 'fill' ? { value } : {}), ...(optionLabel !== undefined ? { optionLabel } : {}) },
     preview: clearField ? `Limpar ${item.name}.` : operation === 'fill' ? `${item.name}: ${item.element.tagName === 'SELECT' ? [...item.element.options].find(option => option.value === value)?.textContent : value}`
       : `${operation === 'open' ? 'Abrir' : operation === 'close' ? 'Recolher' : operation === 'click' ? 'Acionar' : operation === 'check' ? 'Marcar' : 'Desmarcar'} ${['open', 'close'].includes(operation) ? textContent(item.element) : item.name}${item.element.hasAttribute('data-voice-series-kind') ? ` · ${['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'][Number(item.element.getAttribute('data-voice-series-weekday'))]} às ${item.element.getAttribute('data-voice-series-time')}` : ''}${item.context ? ` · ${item.context}` : ''}.`,
-    notes: [],
+    notes: appointmentMetadata(item.element) !== null ? ['Apenas abre os detalhes do compromisso após confirmar. Não altera registros nem inicia sessão.'] : [],
   }
 }
 
 export function applyVoiceInterfaceCommand(intent, root = globalThis.document) {
   if (intent?.type !== 'interface.control') throw new Error('Comando de interface inválido.')
+  if (intent.target?.appointmentQuery) {
+    const candidates = inventory(root).filter(item => item.element.matches('button, summary, a[href^="#"], input[type="radio"], input[type="checkbox"]'))
+    const resolved = matches(intent.target.appointmentQuery, candidates)
+    if (resolved.length !== 1 || !appointmentLabelMatches(intent.target.appointmentQuery, resolved[0])) throw new Error('A tela mudou. Prepare o comando novamente antes de aplicar.')
+  }
   const found = inventory(root).filter(item => {
     const current = fingerprint(item, ['open', 'close'].includes(intent.operation)), target = intent.target
+    if (appointmentMetadata(item.element) !== (target.appointment ?? null)) return false
     if (['open', 'close'].includes(intent.operation) && (!isDrawer(item.element) || target.drawerId !== (item.element.matches('summary') ? item.element.parentElement.id : item.element.getAttribute('aria-controls')))) return false
     return current.id === target.id && current.tag === target.tag && current.inputType === target.inputType && current.valueType === target.valueType && current.name === target.name && current.context === target.context && current.action === target.action && current.record === target.record && current.epoch === target.epoch && current.series === target.series
   })

@@ -45,6 +45,7 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, onC
   const [series, setSeries] = useState([])
   const [voiceInstance] = useState(() => ++agendaVoiceInstance)
   const [seriesRevision, setSeriesRevision] = useState(0)
+  const [detailsRevision, setDetailsRevision] = useState(0)
   const [occurrences, setOccurrences] = useState([])
   const [history, setHistory] = useState([])
   const [form, setForm] = useState(() => emptyForm(patients, currentCivilDate(AGENDA_TIME_ZONE)))
@@ -148,6 +149,7 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, onC
   const rangeKey = `${from}|${to}`
   useLayoutEffect(() => { currentRangeRef.current = rangeKey; setLoadedRange(''); setSeriesRevision(value => value + 1) }, [rangeKey])
   const loaded = loadedRange === rangeKey
+  useLayoutEffect(() => { setDetailsRevision(value => value + 1) }, [day, mode])
   const visibleDates = datesBetween(from, to)
   const sortedOccurrences = [...occurrences].sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start) || a.id.localeCompare(b.id))
   const occurrencesFor = date => sortedOccurrences.filter(occurrence => occurrence.date === date)
@@ -291,6 +293,19 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, onC
 
   const patientName = id => allPatients.find(patient => patient.id === id)?.name || 'Paciente não encontrado'
   const voiceHomonym = id => allPatients.filter(patient => foldVoiceName(patient.name) === foldVoiceName(patientName(id))).length !== 1
+  const detailsControl = occurrence => ({
+    disabled: busy || !loaded || Boolean(selected),
+    'data-voice-action': `agenda:details:${occurrence.id}`,
+    'data-voice-record': JSON.stringify(['occurrence', occurrence.id, occurrence.patientId, occurrence.seriesId, occurrence.originalDate]),
+    'data-voice-epoch': `${voiceInstance}:${seriesRevision}:${detailsRevision}`,
+    'data-voice-appointment-details': 'true',
+    'data-voice-appointment-patient': patientName(occurrence.patientId),
+    'data-voice-appointment-date': occurrence.date,
+    'data-voice-appointment-start': occurrence.start,
+    'data-voice-appointment-end': occurrence.end,
+    'data-voice-appointment-original-date': occurrence.originalDate,
+    'data-voice-appointment-ambiguous': voiceHomonym(occurrence.patientId) ? 'true' : undefined,
+  })
   const endSeries = async event => {
     event.preventDefault()
     if (!ending || !isCivilDate(effectiveDate)) return
@@ -350,7 +365,7 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, onC
           const inside = date >= from && date <= to
           return <div className={`agenda-month-day${inside ? '' : ' outside'}${date === day ? ' selected' : ''}`} key={date}>
             <button type="button" className="agenda-date-button" onClick={() => { setDay(date); setMode('Dia') }} aria-label={`Ver dia ${date}`} aria-current={date === day ? 'date' : undefined}><time dateTime={date}>{formatCivilShortDate(date)}</time></button>
-            {inside && occurrencesFor(date).map(occurrence => <button type="button" className={`agenda-event-chip ${occurrence.status === 'completed' ? 'completed' : ''}`} key={occurrence.id} onClick={event => showOccurrenceActions(occurrence, event.currentTarget)} data-voice-action={`agenda:details:${occurrence.id}`} aria-label={`Ver ações de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`}><span>{occurrence.start} {patientName(occurrence.patientId)}</span>{(occurrence.wasRescheduled || occurrence.status === 'completed') && <small>{occurrence.wasRescheduled ? 'Remarcada' : statusLabel(occurrence.status)}</small>}</button>)}
+            {inside && occurrencesFor(date).map(occurrence => <button type="button" className={`agenda-event-chip ${occurrence.status === 'completed' ? 'completed' : ''}`} key={occurrence.id} onClick={event => showOccurrenceActions(occurrence, event.currentTarget)} {...detailsControl(occurrence)} aria-label={`Ver ações de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`}><span>{occurrence.start} {patientName(occurrence.patientId)}</span>{(occurrence.wasRescheduled || occurrence.status === 'completed') && <small>{occurrence.wasRescheduled ? 'Remarcada' : statusLabel(occurrence.status)}</small>}</button>)}
           </div>
         })}
       </div> : mode === 'Semana' ? <div className="agenda-time-grid week-view agenda-week-compact">
@@ -359,7 +374,7 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, onC
           return <div className="agenda-time-day" key={date}>
             <button type="button" className="agenda-time-heading" aria-label={`Ver dia ${date}`} onClick={() => { setDay(date); setMode('Dia') }} aria-current={date === day ? 'date' : undefined}>{weekDays[civilWeekday(date)]} <time dateTime={date}>{formatCivilShortDate(date)}</time></button>
             <div className="agenda-week-appointments">
-              {appointments.length ? appointments.map(occurrence => <button type="button" className={`agenda-time-event agenda-week-event ${occurrence.status === 'completed' ? 'completed' : ''}`} key={occurrence.id} onClick={event => showOccurrenceActions(occurrence, event.currentTarget)} data-voice-action={`agenda:details:${occurrence.id}`} aria-label={`Ver ações de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`}><strong>{occurrence.start}–{occurrence.end}</strong><span>{patientName(occurrence.patientId)}</span>{(occurrence.wasRescheduled || occurrence.status === 'completed') && <small>{occurrence.wasRescheduled ? 'Remarcada' : statusLabel(occurrence.status)}</small>}</button>) : <p className="agenda-week-empty">Sem compromissos</p>}
+              {appointments.length ? appointments.map(occurrence => <button type="button" className={`agenda-time-event agenda-week-event ${occurrence.status === 'completed' ? 'completed' : ''}`} key={occurrence.id} onClick={event => showOccurrenceActions(occurrence, event.currentTarget)} {...detailsControl(occurrence)} aria-label={`Ver ações de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`}><strong>{occurrence.start}–{occurrence.end}</strong><span>{patientName(occurrence.patientId)}</span>{(occurrence.wasRescheduled || occurrence.status === 'completed') && <small>{occurrence.wasRescheduled ? 'Remarcada' : statusLabel(occurrence.status)}</small>}</button>) : <p className="agenda-week-empty">Sem compromissos</p>}
             </div>
           </div>
         })}
@@ -368,7 +383,7 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, onC
           <button type="button" className="agenda-time-heading" aria-label={`Ver dia ${date}`} onClick={() => { setDay(date); setMode('Dia') }} aria-current={date === day ? 'date' : undefined}>{weekDays[civilWeekday(date)]} <time dateTime={date}>{formatCivilShortDate(date)}</time></button>
           {occurrencesFor(date).length > 0 && <ol className="agenda-day-list">{occurrencesFor(date).map(occurrence => <li key={occurrence.id} id={`agenda-occurrence-${occurrence.id}`} tabIndex={-1}>
             <div className="agenda-day-summary"><strong>{occurrence.start}–{occurrence.end}</strong><span>{patientName(occurrence.patientId)}</span><small>{statusLabel(occurrence.status)}{occurrence.wasRescheduled ? ' · Remarcada' : ''} · {occurrence.modality}</small></div>
-            <div className="agenda-day-actions"><button type="button" className="vault-secondary" data-voice-action={`agenda:details:${occurrence.id}`} aria-label={`Ver ações de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={event => showOccurrenceActions(occurrence, event.currentTarget)}>Detalhes</button>{occurrence.status !== 'completed' && <button disabled={busy} className="vault-secondary" type="button" data-voice-action={`agenda:edit:${occurrence.id}`} aria-label={`Alterar ocorrência de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={event => selectOccurrence(occurrence, event.currentTarget)}>Alterar</button>}{occurrence.status !== 'completed' && allPatients.some(patient => patient.id === occurrence.patientId && patient.archivedAt == null) && <button disabled={busy} type="button" data-voice-action={`agenda:start:${occurrence.id}`} aria-label={`Iniciar sessão de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={() => onStartSession(occurrence)}>Iniciar sessão</button>}</div>
+            <div className="agenda-day-actions"><button type="button" className="vault-secondary" {...detailsControl(occurrence)} aria-label={`Ver ações de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={event => showOccurrenceActions(occurrence, event.currentTarget)}>Detalhes</button>{occurrence.status !== 'completed' && <button disabled={busy} className="vault-secondary" type="button" data-voice-action={`agenda:edit:${occurrence.id}`} aria-label={`Alterar ocorrência de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={event => selectOccurrence(occurrence, event.currentTarget)}>Alterar</button>}{occurrence.status !== 'completed' && allPatients.some(patient => patient.id === occurrence.patientId && patient.archivedAt == null) && <button disabled={busy} type="button" data-voice-action={`agenda:start:${occurrence.id}`} aria-label={`Iniciar sessão de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={() => onStartSession(occurrence)}>Iniciar sessão</button>}</div>
           </li>)}</ol>}
         </div>)}
       </div>}
