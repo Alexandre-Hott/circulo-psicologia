@@ -1,5 +1,11 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Auditoria atual e complemento0.2.57
+
+Ajuda “O que posso pedir?” era inacessível por voz: whitelist estreita de summary/data-voice-help, red0/2, green2/2 em19,9s, bloqueado/desbloqueado e sem IPC. Demais controles do assistente continuam excluídos; interpretar/aplicar/descartar já têm palavras equivalentes e início de captura exige botão/atalho. Fonte revisada sem outro grupo habilitado sem rota localizado, mas isso não equivale à prova de uso nativo.
+
+Regressão inicial de todos os arquivosvoice146/146 em7,8min; seleção final inclui shell e demonstração por comando:192/192 em9,5min, exit0. Corpora3WAVs de campos transcritos no Rust revelaram prefixos errados; normalização de dois prefixos estritos não altera valores/nomes. Replay final3/3 em24,7s aplica idade9/nota/limpeza após segundo áudio de confirmar, sem escrita e com escala preservada. JS255/255, revisão25probesDOM aprovada. Rust final86 aprovados/1 ignorado após isolar teste que disputava mutex com aplicativo aberto; primeira execução85 aprovados/1 falha/1 ignorado documentada. Outros erros de transcrição seguem pendentes; prompt experimental revertido. Instalado52 não alterado; físico/nativeCRUD continuam não comprovados. [Tentativas e critérios](melhoria-continua-voz.md).
+
 ## Nota contextual sem pontuação — 0.2.56
 
 Mantido rótulo visível com separador; alias `Nota contextual de nome do indicador` permite preencher/limpar sem ditar “·”. Ajuda recolhida usa Regulação emocional, nome conferido no catálogo Rust. Dois E2E novos com comandos digitados:2/2 em36,3s; verificam prévia, confirmação, nota correta, escala inalterada, zero salvamento anterior e payload de rascunho exato. JS254/254; regressão conjunta53/53 em3,2min. Nenhuma nova prova de captura/transcrição física ou persistência instalada. Instalado52 conferido; não alterado. [Evidências e limites](melhoria-continua-voz.md).
@@ -105,6 +111,8 @@ Fonte comum: [gateway](../src/voiceInterfaceCommands.js), [cofre/roteamento](../
 Não há contagem por ocorrência de botão: navegação repetida, Bloquear no cabeçalho/Ajustes, ações de uma mesma ocorrência no calendário/gaveta e backup em estados diferentes são grupos únicos. A deduplicação do gateway só se aplica a botões com `data-voice-action` e nome equivalentes; não cobre qualquer texto repetido.
 
 ## Matriz: cofre desbloqueado
+
+**Matriz histórica inicial:** os estados abaixo precedem os complementos do topo. Não use os antigos `S/NV` ou a afirmação de ausência do assistente bloqueado como diagnóstico da0.2.57. Os complementos e a auditoria atual acima registram os testes posteriores e seus limites, sem converter execução simulada em homologação nativa.
 
 | Área / grupo de ações e campos existentes | Estado e evidência específica | Pendência/limite concreto |
 |---|---|---|

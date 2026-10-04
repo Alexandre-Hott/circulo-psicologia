@@ -141,7 +141,7 @@ export function VoiceCommandCenter({
       {(compact ? result.notes?.filter(note => /apenas nesta sessão|somente ao rascunho|mantido literalmente/.test(note)) : result.notes)?.map(note => <small key={note}>{note}</small>)}
       <small>{onApply ? 'Diga “confirmar” para aplicar ou “cancelar comando” para descartar.' : 'Nada foi salvo nem alterado. Revise na tela correspondente.'}</small>
     </div>}
-    <details className="voice-command-help"><summary>O que posso pedir?</summary>{interfaceOnly ? <><ul><li>“Clicar em Desbloquear” após digitar sua senha</li><li>“Clicar em Criar cofre cifrado” na primeira configuração</li><li>“Clicar em Opções avançadas de backup e restauração” quando disponível</li></ul><small>Somente botões visíveis nesta tela. Digite as senhas manualmente; pacientes e agenda ficam disponíveis após desbloquear.</small></> : <><ul>
+    <details className="voice-command-help"><summary data-voice-help>O que posso pedir?</summary>{interfaceOnly ? <><ul><li>“Clicar em Desbloquear” após digitar sua senha</li><li>“Clicar em Criar cofre cifrado” na primeira configuração</li><li>“Clicar em Opções avançadas de backup e restauração” quando disponível</li></ul><small>Somente botões visíveis nesta tela. Digite as senhas manualmente; pacientes e agenda ficam disponíveis após desbloquear.</small></> : <><ul>
       <li>“Cadastrar paciente Ana Clara com 8 anos”</li>
       <li>“Criar comportamento Pede ajuda”</li>
       <li>“Agendar sessão para Ana Clara amanhã às três da tarde”</li>

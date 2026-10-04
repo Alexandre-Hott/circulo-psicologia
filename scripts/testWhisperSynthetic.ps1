@@ -1,6 +1,6 @@
 ﻿param(
     [string]$VoiceDirectory,
-    [ValidateSet('core', 'behavior-save', 'occurrence-date', 'analytics-range')][string]$Scenario = 'core'
+    [ValidateSet('core', 'behavior-save', 'occurrence-date', 'analytics-range', 'interface-fields')][string]$Scenario = 'core'
 )
 
 # Keep the UTF-8 BOM: Windows PowerShell 5.1 otherwise reads Portuguese text as ANSI.
@@ -79,6 +79,13 @@ try {
         $commands = @(
             'Mostrar análises de Ana Clara de um de setembro de 2026 até trinta de setembro de 2026.',
             'Mostrar análises de um de setembro de 2026 até trinta de setembro de 2026.'
+        )
+    }
+    if ($Scenario -eq 'interface-fields') {
+        $commands = @(
+            'Preencher idade com nove.',
+            'Preencher nota contextual de Regulação emocional com Participou com apoio.',
+            'Limpar nota contextual de Regulação emocional.'
         )
     }
     $results = foreach ($index in 0..($commands.Count - 1)) {

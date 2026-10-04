@@ -1,5 +1,13 @@
 # Áudio sintético offline — 03/10/2026
 
+## Campos e tentativas de reconhecimento — 0.2.57
+
+Harness aceita `-Scenario interface-fields`,3WAVs SAPI Microsoft Maria, recursos instalados52. Frases originais finais emrate-2: preencher idade/note contextual/limpar. `native-voice-fields-20261004.json` preserva exatamente a saída Rust, incluindo prefixos `Prinscheridade` e `Princher`; replay exige proposta e segundo áudio de confirmar, aplica só o campo certo e preserva escala. Red1/3, green3/3 em24,7s. Captura/getUserMedia/IPC simulados no replay, não microfone físico.
+
+Primeiro áudio rate0 falhou semanticamente em dois pedidos; `native-voice-fields-failed-20261004.json` preserva textos sem reparo. Alternativa `Definir idade` ainda distorcida, nota com Definir correta: corpus `native-voice-fields-alternative-20261004.json`. “O campo idade” também distorcido; prompt maior não corrigiu conteúdo e foi revertido. O gateway só normaliza dois prefixos finais observados; não corrige `Nov`, não supõe nove e não reescreve palavras da nota.
+
+Avaliação central **Passed0/Failed0/NotEvaluated3**, exit0 do harness: esse retorno valida execução/transcrição, não sucesso funcional. Aprovação de campos pertence ao replayE2E. JS verifica que o evaluator não aprova esse corpus, inclusive índice/transcrição inválidos. Nenhum dado real, rede ou gravação ambiente. Outros erros de transcrição seguem como limitação explícita.
+
 ## Intervalo de análises — 04/10/2026 UTC
 
 `-Scenario analytics-range` gera dois WAVs fictícios de pedido global/por paciente, com recursos de voz da instalação52. Primeira tentativa SAPI rate-2 com frase extensa foi recusada pelo backend: excedia12s. Segunda tentativa usa frases mais curtas, SAPI rate0, preservando limite12s da produção. Resultado **Passed2/Failed0/NotEvaluated0**, exit0. As transcrições reais e não editadas estão em `test/fixtures/native-voice-analytics-20261004.json`; avaliam paciente e datas exatos, sem inferir ano. Fluxo Rust opt-in real de áudio, mas sem microfone físico, execução de consulta instalada ou consentimento/confirmar nativo. Comandos maiores precisam ser divididos; nenhuma captura ambiente feita.

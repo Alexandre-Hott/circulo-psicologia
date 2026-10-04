@@ -4,10 +4,11 @@ import { readFileSync } from 'node:fs'
 const nativeVoiceCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-20261003.json', import.meta.url), 'utf8'))
 const nativeSaveCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-save-20261004.json', import.meta.url), 'utf8'))
 const nativeOccurrenceCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-occurrence-20261004.json', import.meta.url), 'utf8'))
+const nativeFieldsCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-fields-20261004.json', import.meta.url), 'utf8'))
 
-async function openApp(page, { emptyLibrary = false, archivedPatient = false, specialCatalog = false } = {}) {
+async function openApp(page, { emptyLibrary = false, archivedPatient = false, specialCatalog = false, nativeCatalog = false } = {}) {
   await page.clock.install({ time: new Date('2026-10-03T15:00:00Z') })
-  await page.addInitScript(({ emptyLibrary, archivedPatient, specialCatalog }) => {
+  await page.addInitScript(({ emptyLibrary, archivedPatient, specialCatalog, nativeCatalog }) => {
     window.writes = []
     window.voiceTranscript = ''
     window.analyticsRequests = []
@@ -49,7 +50,7 @@ async function openApp(page, { emptyLibrary = false, archivedPatient = false, sp
       if (command === 'patient_list') return patients.filter(patient => args?.includeArchived || patient.archivedAt == null)
       if (command === 'related_party_list') return []
       if (command === 'behavior_list') return window.voiceBehaviorCatalog ?? behaviors
-      if (command === 'indicator_catalog') return specialCatalog ? [{ id: 'group', name: 'Participação em grupo como apoio', version: 1, labels: ['Com apoio em grupo', 'Sem apoio'] }] : []
+      if (command === 'indicator_catalog') return nativeCatalog ? [{ id: 'reg', name: 'Regulação emocional', definition: 'Uso de recursos para lidar com emoções intensas.', version: 1, labels: ['Ainda não observado', 'Com muito apoio', 'Com algum apoio', 'Com autonomia'] }] : specialCatalog ? [{ id: 'group', name: 'Participação em grupo como apoio', version: 1, labels: ['Com apoio em grupo', 'Sem apoio'] }] : []
       if (command === 'voice_transcribe') return window.deferVoice ? await new Promise(resolve => { window.resolveVoice = resolve }) : window.voiceTranscript
       if (command === 'agenda_occurrences') return (window.voiceOccurrences || [occurrence]).filter(item => item.date >= args.from && item.date <= args.to)
       if (command === 'session_draft_start') return draft
@@ -71,7 +72,7 @@ async function openApp(page, { emptyLibrary = false, archivedPatient = false, sp
       if (command === 'plugin:updater|check') return null
       return null
     } }
-  }, { emptyLibrary, archivedPatient, specialCatalog })
+  }, { emptyLibrary, archivedPatient, specialCatalog, nativeCatalog })
   await page.goto('/')
   await expect(page.getByRole('region', { name: 'Comando do Círculo' })).toBeVisible()
 }
@@ -746,6 +747,53 @@ for (const editing of [false, true]) test(`transcrição nativa de salvar compor
     : { command: 'behavior_create', args: { title: 'Solicita pausa', description: '' } }])
   expect(await page.evaluate(() => window.voiceNativeCalls.filter(item => item.command === 'voice_transcribe').length)).toBe(2)
   await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+})
+
+for (const index of [0, 1, 2]) test(`campos: transcrição nativa ${index} prepara alvo correto e aguarda segundo áudio`, async ({ page }) => {
+  await openApp(page, { nativeCatalog: true })
+  let field
+  let expected
+  if (index === 0) {
+    await command(page, 'Editar paciente Ana Clara')
+    field = page.getByLabel('Idade em anos (opcional)')
+    expected = '9'
+  } else {
+    await command(page, 'Iniciar sessão de Ana Clara hoje às 15 horas')
+    await command(page, 'Registrar indicador Regulação emocional como Com algum apoio na sessão de Ana Clara')
+    await command(page, 'Preencher Nota contextual de Regulação emocional com Nota original fictícia')
+    field = page.getByLabel('Nota contextual opcional · Regulação emocional')
+    expected = index === 1 ? 'participou com apoio' : ''
+  }
+  const before = await field.inputValue()
+  const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
+  await page.evaluate(text => { window.voiceTranscript = text }, nativeFieldsCorpus.find(item => item.Index === index).Transcript)
+  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await expect(page.locator('.voice-command-preview')).toBeVisible()
+  await expect(field).toHaveValue(before)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await page.evaluate(text => { window.voiceTranscript = text }, nativeSaveCorpus.find(item => item.Index === 2).Transcript)
+  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await expect(field).toHaveValue(expected)
+  await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  if (index !== 0) await expect(page.getByLabel('Regulação emocional · v1', { exact: true })).toHaveValue('2')
+  expect(await page.evaluate(() => window.voiceNativeCalls.filter(item => item.command === 'voice_transcribe').length)).toBe(2)
+})
+
+test('reparo de prefixo não adivinha valor, respeita negação e mantém conteúdo literal', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Editar paciente Ana Clara')
+  const age = page.getByLabel('Idade em anos (opcional)')
+  for (const text of ['Preencher Idade com Nov.', 'Não prinscheridade com nove.', 'Prinscheridade com nove ou dez.', 'Prie encher idade com nove.']) {
+    await propose(page, text)
+    await expect(page.locator('.voice-command-error')).toBeVisible()
+    await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+    await expect(age).toHaveValue('8')
+    expect(await page.evaluate(() => window.writes)).toEqual([])
+  }
+  await command(page, 'Preencher Nome com Princher e Prinscheridade')
+  await expect(page.getByLabel('Nome', { exact: true })).toHaveValue('Princher e Prinscheridade')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
 })
 
 test('transcrição nativa observada abre biblioteca após confirmação sem gravar', async ({ page }) => {

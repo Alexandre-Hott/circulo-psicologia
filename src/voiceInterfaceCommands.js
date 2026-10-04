@@ -42,7 +42,7 @@ function inventory(root) {
   const scope = dialog && visible(dialog) ? dialog : root
   const seenActions = new Set()
   return [...scope.querySelectorAll('button, summary, input, textarea, select, a[href^="#"]')]
-    .filter(element => visible(element) && !element.closest('.voice-command-center') && !element.matches(':disabled') && element.type !== 'hidden')
+    .filter(element => visible(element) && (!element.closest('.voice-command-center') || element.matches('summary[data-voice-help]')) && !element.matches(':disabled') && element.type !== 'hidden')
     .map(element => ({ element, name: nameOf(element), context: contextOf(element) }))
     .filter(item => item.name)
     .filter(item => {
@@ -81,6 +81,10 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   // Exact variant observed in the synthetic Portuguese Whisper test. No names
   // or field contents are repaired; this still produces a reviewable proposal.
   const raw = clean(text).replace(/^ficarem novo cadastro$/iu, 'Clicar em Novo cadastro')
+    // Exact command-prefix variants captured from local Portuguese recognition.
+    // Never repair the value, patient's name, indicator title or note content.
+    .replace(/^princher(?=\s)/iu, 'Preencher')
+    .replace(/^prinscheridade(?=\s+(?:com|como|para)\s)/iu, 'Preencher Idade')
   const normalized = fold(raw)
   if (!root || !normalized) return null
   if (/^(?:nao|nunca)\b/.test(normalized)) return refusal('Pedido negado. Nenhuma ação preparada.')

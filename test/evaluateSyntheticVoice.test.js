@@ -104,6 +104,17 @@ test('intervalo realmente transcrito mantém paciente e duas datas exatas', () =
   assert.throws(() => evaluateSyntheticVoice(cases.slice(1), { scenario: 'analytics-range' }))
 })
 
+test('corpus de campos nativos não é aprovado sem interface', () => {
+  const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-fields-20261004.json', import.meta.url), 'utf8'))
+  const result = evaluateSyntheticVoice(cases, { scenario: 'interface-fields' })
+  assert.equal(result.Passed, 0)
+  assert.equal(result.Failed, 0)
+  assert.equal(result.NotEvaluated, 3)
+  assert.throws(() => evaluateSyntheticVoice(cases.slice(1), { scenario: 'interface-fields' }))
+  const empty = structuredClone(cases); empty[0].Transcript = ''
+  assert.throws(() => evaluateSyntheticVoice(empty, { scenario: 'interface-fields' }))
+})
+
 test('recusa corpus incompleto, índice duplicado e transcrição vazia', () => {
   assert.throws(() => evaluateSyntheticVoice(corpus().slice(1)))
   const duplicate = corpus(); duplicate[1].Index = 0

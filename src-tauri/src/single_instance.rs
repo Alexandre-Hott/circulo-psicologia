@@ -4,13 +4,18 @@ pub struct Guard(windows_sys::Win32::Foundation::HANDLE);
 #[cfg(windows)]
 impl Guard {
     pub fn acquire() -> Result<Self, String> {
+        const PROFILE: &str = "br.circulo.psicologia";
+        Self::acquire_for_profile(PROFILE)
+    }
+
+    fn acquire_for_profile(profile: &str) -> Result<Self, String> {
         use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS};
         use windows_sys::Win32::System::Threading::CreateMutexW;
 
         // The user SID scopes the fixed local app profile's global kernel mutex.
         // No file in the profile (or vault) is opened or created.
         let sid = user_sid()?;
-        let identity = format!("{sid}:br.circulo.psicologia");
+        let identity = format!("{sid}:{profile}");
         use sha2::{Digest, Sha256};
         let digest = Sha256::digest(identity.as_bytes());
         let name: Vec<u16> = format!("Global\\Circulo-{}\0", hex::encode(digest))
@@ -108,22 +113,31 @@ mod tests {
 
     #[test]
     fn child_probe() {
-        if std::env::var_os("CIRCULO_MUTEX_PROBE").is_none() {
+        let Ok(profile) = std::env::var("CIRCULO_MUTEX_PROBE") else {
             return;
-        }
+        };
         assert_eq!(
-            Guard::acquire().err().as_deref(),
+            Guard::acquire_for_profile(&profile).err().as_deref(),
             Some("Círculo já está aberto para este usuário do Windows.")
         );
     }
 
     #[test]
     fn second_process_is_rejected_then_reopen_succeeds() {
-        let first = Guard::acquire().expect("first process must acquire guard");
+        let profile = format!(
+            "br.circulo.psicologia.test.{}.{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let first = Guard::acquire_for_profile(&profile)
+            .expect("first process must acquire guard");
         let output = std::process::Command::new(std::env::current_exe().unwrap())
             .arg("--exact")
             .arg("single_instance::tests::child_probe")
-            .env("CIRCULO_MUTEX_PROBE", "1")
+            .env("CIRCULO_MUTEX_PROBE", &profile)
             .output()
             .expect("launch isolated second process");
         assert!(
@@ -132,7 +146,8 @@ mod tests {
             String::from_utf8_lossy(&output.stderr)
         );
         drop(first);
-        let reopened = Guard::acquire().expect("guard must be released after close");
+        let reopened = Guard::acquire_for_profile(&profile)
+            .expect("guard must be released after close");
         drop(reopened);
     }
 }

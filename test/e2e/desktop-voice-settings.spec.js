@@ -318,6 +318,26 @@ test('ajustes: inspeção, cópia automática, licenças e bloqueio por voz', as
   await expect(page.locator('[data-voice-record="patient:ana"]')).toHaveCount(0)
 })
 
+for (const initiallyLocked of [true, false]) test(`ajuda por comando abre e recolhe com confirmação: ${initiallyLocked ? 'bloqueado' : 'desbloqueado'}`, async ({ page }) => {
+  await openApp(page, { initiallyLocked })
+  const help = page.locator('.voice-command-help')
+  await expect(help).not.toHaveAttribute('open', '')
+  const before = await page.evaluate(() => window.settingsFixture.calls)
+  for (const open of [true, false]) {
+    await propose(page, 'Clicar em O que posso pedir?')
+    await expect(page.locator('.voice-command-preview')).toContainText('O que posso pedir')
+    if (open) await expect(help).not.toHaveAttribute('open', '')
+    else await expect(help).toHaveAttribute('open', '')
+    await propose(page, 'confirmar')
+    await page.clock.runFor(32)
+    if (open) await expect(help).toHaveAttribute('open', '')
+    else await expect(help).not.toHaveAttribute('open', '')
+    await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+  }
+  expect(await page.evaluate(() => window.settingsFixture.calls)).toEqual(before)
+  if (initiallyLocked) expect(await calls(page, 'patient_list')).toEqual([])
+})
+
 test('cofre bloqueado: comandos visíveis sem dados clínicos; senha manual e desbloqueio normal', async ({ page }) => {
   await openApp(page, { initiallyLocked: true })
   expect(await calls(page, 'patient_list')).toHaveLength(0)
