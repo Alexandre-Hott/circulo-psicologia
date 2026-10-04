@@ -23,7 +23,10 @@ async function openApp(page, { multiple = false, endDate = null } = {}) {
     const history = [{ id: 'event-prior', seriesId: 'series-ana-15', action: 'reschedule', originalDate: '2026-09-28', effectiveDate: '2026-09-29', start: '15:00', end: '15:50', reason: 'Ajuste administrativo sintético anterior' }]
     const drafts = [{ id: 'draft-prior', patientId: 'ana', seriesId: 'series-ana-15', originalDate: '2026-09-21', observation: 'Rascunho sintético preservado', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicators: [] }]
     const sessions = [{ id: 'session-prior', patientId: 'ana', seriesId: 'series-ana-15', originalDate: '2026-09-14', observation: 'Registro sintético preservado' }]
-    const fixture = window.seriesEnding = { state: { patients, series, history, drafts, sessions }, calls: [], writes: [], unexpected: [], catalogReady: false, transcript: '' }
+    const fixture = window.seriesEnding = {
+      state: { patients, series, history, drafts, sessions }, calls: [], writes: [], unexpected: [], catalogReady: false, transcript: '',
+      mediaRequests: 0, trackStops: 0, contextCloses: 0, sourceDisconnects: 0, processorDisconnects: 0, captureRefs: [],
+    }
     const catalogReads = new Set()
     const catalog = (command, result) => {
       catalogReads.add(command)
@@ -43,29 +46,35 @@ async function openApp(page, { multiple = false, endDate = null } = {}) {
       return result
     })
 
-    // Exact SyntheticAudioContext/getUserMedia helper from the old
-    // desktop-voice-interface.spec.js. Native transcript replay is not evidence
-    // of Rust execution, real audio playback or a physical microphone.
+    // Short synthetic speech followed by >1100 ms of trailing silence, matching
+    // the other replay fixtures. Continuous nonzero frames hit the 12-second
+    // cap and correctly require manual preparation under the cutoff contract.
+    // Preserved transcript replay is not Rust/ASR execution or real microphone.
     class SyntheticAudioContext {
       constructor() { this.sampleRate = 8_000; this.state = 'running'; this.destination = {} }
-      createMediaStreamSource() { return { connect() {}, disconnect() {} } }
+      createMediaStreamSource() { return { connect() {}, disconnect() { fixture.sourceDisconnects++ } } }
       createScriptProcessor() {
-        const processor = { onaudioprocess: null, disconnect() {} }
+        const processor = { onaudioprocess: null, disconnect() { fixture.processorDisconnects++ } }
         processor.connect = () => queueMicrotask(() => {
+          let frames = 0
           const emit = () => {
             if (!processor.onaudioprocess) return
-            processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(0.1) }, outputBuffer: { getChannelData: () => new Float32Array(4096) } })
-            if (processor.onaudioprocess) setTimeout(emit, 0)
+            const amplitude = frames++ < 2 ? 0.1 : 0
+            processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(amplitude) }, outputBuffer: { getChannelData: () => new Float32Array(4096) } })
+            if (processor.onaudioprocess) setTimeout(emit, 200)
           }
           emit()
         })
         return processor
       }
       resume() { return Promise.resolve() }
-      close() { this.state = 'closed'; return Promise.resolve() }
+      close() { this.state = 'closed'; fixture.contextCloses++; return Promise.resolve() }
     }
     Object.defineProperty(window, 'AudioContext', { configurable: true, value: SyntheticAudioContext })
-    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } })
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => {
+      fixture.mediaRequests++
+      return { getTracks: () => [{ stop() { fixture.trackStops++ } }] }
+    } } })
     window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
       fixture.calls.push(clone({ command, args }))
       if (command === 'vault_status') return { initialized: true, unlocked: true, profileState: 'ready' }
@@ -78,7 +87,7 @@ async function openApp(page, { multiple = false, endDate = null } = {}) {
       if (command === 'agenda_occurrences') return clone(occurrences(args.from, args.to))
       if (command === 'session_draft_list') return clone(drafts)
       if (command === 'session_timeline') return clone(sessions)
-      if (command === 'voice_transcribe') return fixture.transcript
+      if (command === 'voice_transcribe') { fixture.captureRefs.push(args); return fixture.transcript }
       if (command === 'agenda_end_series') {
         const item = series.find(item => item.id === args.seriesId)
         if (!item || args.effectiveDate < '2026-10-04' || (item.endDate && args.effectiveDate > item.endDate)) throw new Error('Corte sintético inválido')
@@ -144,8 +153,10 @@ async function replayAudio(page, index) {
   await page.evaluate(text => { window.seriesEnding.transcript = text }, recording.Transcript)
   const listen = page.getByRole('region', { name: 'Comando do Círculo' }).getByRole('button', { name: 'Ouvir e transcrever' })
   await listen.click()
-  await page.clock.runFor(1000)
+  await page.clock.runFor(1600)
   await expect(listen).toBeEnabled()
+  await expect(page.getByRole('region', { name: 'Comando do Círculo' }).getByLabel('Seu comando')).toHaveValue(recording.Transcript)
+  await expect(page.getByRole('region', { name: 'Comando do Círculo' }).getByText(/A captura atingiu .*segundos e pode estar incompleta/u)).toHaveCount(0)
 }
 
 test.beforeEach(async ({ page, baseURL }) => {
@@ -249,9 +260,15 @@ test('REPLAY nativo índices 1 e 2: Anticipar e Confirmar abrem formulário some
   await expectUnchanged(page, before)
   const captures = await page.evaluate(() => window.seriesEnding.calls.filter(call => call.command === 'voice_transcribe'))
   expect(captures).toHaveLength(2)
+  expect(await page.evaluate(() => {
+    const fixture = window.seriesEnding
+    return [fixture.mediaRequests, fixture.trackStops, fixture.contextCloses, fixture.sourceDisconnects, fixture.processorDisconnects]
+  })).toEqual([2, 2, 2, 2, 2])
+  expect(await page.evaluate(() => window.seriesEnding.captureRefs.every(args => args.samples.every(sample => sample === 0) && args.patientNames.every(name => name === '')))).toBe(true)
   for (const { args } of captures) {
     expect(args.sampleRate).toBe(8000)
     expect(args.samples.length).toBeGreaterThan(0)
+    expect(args.samples.length / args.sampleRate).toBeLessThan(12)
     expect(args.samples.some(sample => sample !== 0)).toBe(true)
     expect(args.patientNames).toContain('Ana Clara')
   }

@@ -1,5 +1,9 @@
 # Matriz atual de voz — 0.2.67
 
+## Atualização de referência 0.2.75
+
+A [validação 0.2.75](validacao-voz-0.2.75.md) acrescenta seleção de séries recorrentes por opção visível, permitindo desambiguar nomes homônimos sem ditar UUID. Não elimina a confirmação final do encerramento. JS865/865, Rust135 aprovados/1 ignorado; UI23/23 e regressão selecionada47/47 em rodadas separadas. Não houve nova ASR nem prova de microfone físico ou cobertura universal das oito áreas. Pacote local auditado, não instalado/publicado nem assinado. Referências abaixo são históricas.
+
 ## Atualização de referência 0.2.74
 
 A [validação 0.2.74](validacao-voz-0.2.74.md) acrescenta ditado direcionado aos quatro textos do rascunho, sem enviar o conteúdo ao parser. Exige escolha explícita, preparo, confirmação e salvamento; áudio obsoleto não preenche o editor. JS806/806, Rust135 aprovados/1 ignorado, UI22/22 e regressão selecionada33/33 em rodadas separadas. Não prova precisão do microfone nem cobertura universal das oito áreas. Pacote local auditado, não instalado/publicado nem assinado. Referências abaixo são históricas.
