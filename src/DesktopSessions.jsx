@@ -4,6 +4,8 @@ import { invoke } from '@tauri-apps/api/core'
 import { groupIndicatorHistory } from './desktopIndicatorEvolution.js'
 import './DesktopSessions.css'
 
+let resumeVoiceInstance = 0
+
 export default function DesktopSessions({ ref, patientId, onPatientChange, activeDraft, workspaceActive = true, voiceCommandDraft = null, onVoiceDraftApplied, onDraftChange, onChanged, onSessionMessage, onStartRecord, onConfirm = async message => window.confirm(message) }) {
   const [patients, setPatients] = useState([])
   const [templates, setTemplates] = useState([])
@@ -17,6 +19,8 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   const [addendumSessionId, setAddendumSessionId] = useState('')
   const [addendumContent, setAddendumContent] = useState('')
   const [loadedPatientId, setLoadedPatientId] = useState('')
+  const [resumeInstance] = useState(() => ++resumeVoiceInstance)
+  const [resumeRevision, setResumeRevision] = useState(0)
   const [observation, setObservation] = useState(activeDraft?.observation || '')
   const [procedures, setProcedures] = useState(activeDraft?.procedures || '')
   const [outcomeDecision, setOutcomeDecision] = useState(activeDraft?.outcomeDecision || '')
@@ -66,6 +70,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   useLayoutEffect(() => {
     sectionRequestEpochRef.current++
   }, [workspaceActive, patientId])
+  useLayoutEffect(() => { setResumeRevision(value => value + 1) }, [workspaceActive, patientId, activeDraft?.id, activeDraft?.patientId])
   useLayoutEffect(() => {
     draftIdentityRef.current = { id: activeDraft?.id, patientId: activeDraft?.patientId }
     return () => { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null }
@@ -80,7 +85,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       const [nextDrafts, nextTimeline, nextAddenda, nextContexts] = await Promise.all([
         invoke('session_draft_list', { patientId: selected }), invoke('session_timeline', { patientId: selected }), invoke('session_addendum_list', { patientId: selected }), invoke('case_context_list', { patientId: selected }),
       ])
-      setDrafts(nextDrafts); setTimeline(nextTimeline); setAddenda(nextAddenda); setCaseContexts(nextContexts); setLoadedPatientId(selected)
+      setDrafts(nextDrafts); setTimeline(nextTimeline); setAddenda(nextAddenda); setCaseContexts(nextContexts); setLoadedPatientId(selected); setResumeRevision(value => value + 1)
     }
   }
 
@@ -97,7 +102,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     setLoadedPatientId('')
     if (!patientId) return () => { active = false }
     Promise.all([invoke('session_draft_list', { patientId }), invoke('session_timeline', { patientId }), invoke('session_addendum_list', { patientId }), invoke('case_context_list', { patientId })])
-      .then(([nextDrafts, nextTimeline, nextAddenda, nextContexts]) => { if (active) { setDrafts(nextDrafts); setTimeline(nextTimeline); setAddenda(nextAddenda); setCaseContexts(nextContexts); setCaseDemand(''); setCaseObjectives(''); setLoadedPatientId(patientId) } })
+      .then(([nextDrafts, nextTimeline, nextAddenda, nextContexts]) => { if (active) { setDrafts(nextDrafts); setTimeline(nextTimeline); setAddenda(nextAddenda); setCaseContexts(nextContexts); setCaseDemand(''); setCaseObjectives(''); setLoadedPatientId(patientId); setResumeRevision(value => value + 1) } })
       .catch(reason => { if (active) setError(String(reason)) })
     return () => { active = false }
   }, [patientId])
@@ -371,6 +376,18 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   }
 
   const visibleDrafts = loadedPatientId === patientId ? drafts : []
+  const resumeControl = (draft, index) => ({
+    disabled: busy || !workspaceActive || loadedPatientId !== patientId || draft.patientId !== patientId,
+    'data-voice-draft-resume': 'true',
+    'data-voice-resume-patient': draft.patientId,
+    'data-voice-resume-draft': draft.id,
+    'data-voice-resume-date': draft.originalDate,
+    'data-voice-resume-option': String(index + 1),
+    'data-voice-resume-needs-option': visibleDrafts.filter(item => item.originalDate === draft.originalDate).length > 1 ? 'true' : 'false',
+    'data-voice-action': `sessions:resume:${draft.patientId}:${draft.id}`,
+    'data-voice-record': `draft:${draft.id}`,
+    'data-voice-epoch': `${resumeInstance}:${resumeRevision}`,
+  })
   const chooseDraftToResume = () => {
     if (visibleDrafts.length === 1) { void selectDraft(visibleDrafts[0]); return }
     const panel = document.getElementById('session-other-drafts')
@@ -487,7 +504,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       {!visibleContexts.length && <p>Contexto do caso não registrado; a sessão pode ser finalizada com esta lacuna.</p>}
       <button type="button" className="vault-secondary" disabled={busy} onClick={cancel}>Cancelar rascunho</button>
     </form>}
-    {patientId && <details id="session-other-drafts" className="session-secondary"><summary>Outros rascunhos do paciente</summary>{visibleDrafts.length ? <ul className="vault-patients">{visibleDrafts.map((draft, index) => <li key={draft.id} data-voice-record={`draft:${draft.id}`}>Ocorrência original {draft.originalDate}<button type="button" disabled={busy} className="vault-secondary" onClick={() => selectDraft(draft)}>Retomar rascunho {draft.originalDate}{visibleDrafts.filter(item => item.originalDate === draft.originalDate).length > 1 ? ` · opção ${index + 1}` : ''}</button></li>)}</ul> : <p>Nenhum rascunho deste paciente.</p>}</details>}
+    {patientId && <details id="session-other-drafts" className="session-secondary"><summary>Outros rascunhos do paciente</summary>{visibleDrafts.length ? <ul className="vault-patients">{visibleDrafts.map((draft, index) => <li key={draft.id} data-voice-record={`draft:${draft.id}`}>Ocorrência original {draft.originalDate}<button type="button" {...resumeControl(draft, index)} className="vault-secondary" onClick={() => selectDraft(draft)}>Retomar rascunho {draft.originalDate} · opção {index + 1}</button></li>)}</ul> : <p>Nenhum rascunho deste paciente.</p>}</details>}
     <details id="session-behaviors" className="session-secondary"><summary>Biblioteca de comportamentos reutilizáveis</summary><p>Crie ou edite opções para usar em sessões. A biblioteca não vincula o item ao paciente.</p><form data-voice-record={editingTemplate ? `behavior:${editingTemplate.id}` : 'behavior:new'} data-voice-epoch={editingTemplate?.version || 0} onSubmit={saveTemplate} aria-label="Comportamento reutilizável"><label htmlFor="behavior-title">Título descritivo</label><input disabled={busy} id="behavior-title" maxLength={160} required value={templateTitle} onChange={event => setTemplateTitle(event.target.value)} /><label htmlFor="behavior-description">Descrição opcional</label><textarea disabled={busy} id="behavior-description" maxLength={1000} value={templateDescription} onChange={event => setTemplateDescription(event.target.value)} /><button disabled={busy} type="submit">{editingTemplate ? 'Salvar versão do comportamento' : 'Criar comportamento reutilizável'}</button>{editingTemplate && <button type="button" className="vault-secondary" onClick={() => { setEditingTemplate(null); setTemplateTitle(''); setTemplateDescription('') }}>Cancelar edição</button>}</form>{templates.length > 0 && <ul className="vault-patients">{templates.map(template => <li key={template.id} data-voice-record={`behavior:${template.id}`} data-voice-epoch={template.version}>{template.title} · v{template.version}<small>{template.description}</small><button type="button" disabled={busy} className="vault-secondary" onClick={() => { setEditingTemplate(template); setTemplateTitle(template.title); setTemplateDescription(template.description); document.getElementById('session-behaviors')?.setAttribute('open', '') }}>Editar comportamento {template.title}{templateOption(template)}</button></li>)}</ul>}</details>
     {patientId && <details className="session-secondary"><summary>Contexto do caso</summary>{visibleContexts.length ? <><h4>Contexto atual</h4><p>Registrado em <time dateTime={visibleContexts[0].recordedAt}>{new Date(visibleContexts[0].recordedAt).toLocaleString('pt-BR')}</time>{visibleContexts[0].author && ` · Identidade local declarada: ${visibleContexts[0].author.displayName} · ${visibleContexts[0].author.registration}`}</p><dl><dt>Demanda avaliada</dt><dd>{visibleContexts[0].demand}</dd><dt>Objetivos de trabalho</dt><dd>{visibleContexts[0].objectives}</dd></dl><h4>Revisões anteriores</h4>{visibleContexts.length > 1 ? <ol>{visibleContexts.slice(1).map(item => <li key={item.id}><time dateTime={item.recordedAt}>{new Date(item.recordedAt).toLocaleString('pt-BR')}</time>{item.author && ` · ${item.author.displayName} · ${item.author.registration}`}<dl><dt>Demanda avaliada</dt><dd>{item.demand}</dd><dt>Objetivos de trabalho</dt><dd>{item.objectives}</dd></dl></li>)}</ol> : <p>Nenhuma revisão anterior.</p>}</> : <p role="status">Contexto do caso não registrado para este paciente.</p>}<form onSubmit={saveCaseContext} aria-label="Nova revisão do contexto do caso"><p>Cada envio cria uma revisão datada; anteriores são preservadas.</p><label htmlFor="case-demand">Demanda avaliada</label><textarea id="case-demand" disabled={busy} required maxLength={4000} value={caseDemand} onChange={event => setCaseDemand(event.target.value)} /><label htmlFor="case-objectives">Objetivos de trabalho</label><textarea id="case-objectives" disabled={busy} required maxLength={4000} value={caseObjectives} onChange={event => setCaseObjectives(event.target.value)} /><button type="submit" disabled={busy || !caseDemand.trim() || !caseObjectives.trim()}>Salvar nova revisão do contexto</button></form></details>}
     {patientId && <details className="session-secondary"><summary>Exportar cópia legível</summary><p className="vault-warning">A cópia .txt não é cifrada. Escolha destino local seguro e revise o conteúdo. Uma queda durante a exportação pode deixar arquivo temporário em texto puro.</p><button type="button" disabled={busy} onClick={exportRecord}>Exportar cópia legível deste paciente</button></details>}

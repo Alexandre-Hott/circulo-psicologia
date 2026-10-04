@@ -1,0 +1,5 @@
+[
+  { "Index": 0, "IntendedCommand": "Continuar sessão opção um.", "Transcript": "Continuar seção opção 1." },
+  { "Index": 1, "IntendedCommand": "Continuar sessão opção dois.", "Transcript": "Continuar seção opção 2." },
+  { "Index": 2, "IntendedCommand": "Confirmar comando.", "Transcript": "Confirmar comando." }
+]

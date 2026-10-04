@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Retomada de sessão por opção —0.2.66
+
+Com paciente selecionado/gaveta de rascunhos aberta, “Continuar sessão opção dois” prepara o botão de opção2; confirmar retoma o rascunho existente. Opção aparece em todas as datas e continua vinculada ao ID, nunca à primeira sessão encontrada. Data completa falada/ISO também aceita; duplicadas exigem opção. Revalida paciente, draft, data, opção, disponibilidade e epoch após mudanças/remontagem. Handler/autosave existentes intactos. Três cenários nativos: dois falharam na data/prefixo, sem reparo do ano; terceiro preservou opção1/2 com prefixo seção, aceito apenas nessa ação. Replay no shell confirmou d1/d2 sem writes em rascunhos limpos. FINAL44/44 selecionados, JS334/334, Rust86aprovados/1ignorado, revisão estática aprovada. [Pacote e limites](melhoria-continua-voz.md). Não comprova microfone físico/persistência instalada; instalado61 mantido.
+
 ## Detalhes de compromisso pelo paciente —0.2.65
 
 Abrir/Ver/Detalhes de paciente e Clicar em Detalhes de paciente abrem o alvo visível do calendário após confirmar, sem alterar/iniciar sessão. Dia/Semana/Mês, nomes completos e rótulos antigos preservados; múltiplos exigem data civil completa e horário exato. Homônimos/mesmo dia e horário recusados. Data efetiva remarcada e concluídos consultáveis; revisão/record/epoch/metadados/competição de aliases revalidados na aplicação. Prefixo observado“Verdetales” limitado à ação, nenhum reparo de nomes/notas. Red principal0/1, green26/26; revisão encontrou duas exceções de gramática/pontuação, corrigidas. Rodada final selecionada88/88 em4,7min, inclui31novos e57anteriores; JS331/331, Rust86aprovados/1ignorado. Reconhecimento real de3WAVs e dois replays simulados separados, não prova de microfone físico ou persistência instalada. [Pacote e limites](melhoria-continua-voz.md). Instalado61 mantido.

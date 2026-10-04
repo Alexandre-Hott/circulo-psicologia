@@ -52,6 +52,8 @@ function inventory(root) {
       if (!action) return true
       const key = item.element.hasAttribute('data-voice-appointment-details')
         ? JSON.stringify([action, fold(item.name), item.element.getAttribute('data-voice-record'), item.element.getAttribute('data-voice-epoch'), appointmentMetadata(item.element)])
+        : item.element.hasAttribute('data-voice-draft-resume')
+          ? JSON.stringify([action, fold(item.name), item.element.getAttribute('data-voice-record'), item.element.getAttribute('data-voice-epoch'), resumeMetadata(item.element)])
         : `${action}:${fold(item.name)}`
       if (seenActions.has(key)) return false
       seenActions.add(key)
@@ -98,6 +100,29 @@ function appointmentLabelMatches(query, item) {
   return false
 }
 
+const resumeQuery = query => /^(?:retomar rascunho|continuar sessao (?:em|opcao)|continuar secao opcao)(?: |$)/u.test(fold(query))
+const resumeMetadata = element => element.hasAttribute('data-voice-draft-resume')
+  ? JSON.stringify(['patient', 'draft', 'date', 'option', 'needs-option'].map(key => element.getAttribute(`data-voice-resume-${key}`))) : null
+
+function resumeLabelMatches(query, item) {
+  const element = item.element
+  if (!element.matches('button[data-voice-draft-resume]') || !element.getAttribute('data-voice-resume-patient') || !element.getAttribute('data-voice-resume-draft')) return false
+  const option = element.getAttribute('data-voice-resume-option')
+  const originalDate = element.getAttribute('data-voice-resume-date')
+  if (!/^[1-9]\d*$/u.test(option || '') || !originalDate || normalizeVoiceFieldValue('date', originalDate) !== originalDate || !['true', 'false'].includes(element.getAttribute('data-voice-resume-needs-option'))) return false
+  if (fold(item.name) !== `retomar rascunho ${originalDate} opcao ${option}`) return false
+  // Exact observed prefix variant, scoped to marked resume buttons only.
+  // Do not rewrite names, notes, dates or any other control's command.
+  const optionOnly = /^continuar (?:sessao|secao) opcao ([1-9]\d*)$/u.exec(fold(query))
+  if (optionOnly) return optionOnly[1] === option
+  const match = /^(?:retomar rascunho|continuar sessao em) (.+?)(?: opcao ([1-9]\d*))?$/u.exec(fold(query))
+  if (!match) return false
+  const date = normalizeVoiceFieldValue('date', match[1])
+  // An option is accepted only when actually displayed by this draft button.
+  // Repeated dates require it even if another same-date button is disabled.
+  return date !== null && date === element.getAttribute('data-voice-resume-date') && (match[2] ? match[2] === option : element.getAttribute('data-voice-resume-needs-option') === 'false')
+}
+
 function matches(query, entries) {
   const normalized = fold(query)
   // One short save request covers both modes of the existing library form.
@@ -109,15 +134,17 @@ function matches(query, entries) {
   const administrativeRoleAlias = normalized === 'contrato administrativo'
   const seriesQuery = /^(?:encerrar serie|antecipar termino|anticipar termino) de /u.test(normalized)
   const detailsQuery = appointmentQuery(query)
+  const draftResumeQuery = resumeQuery(query)
   // Explicit legacy aliases compete with all matching controls, never picking
   // the first retry when two operations share an old short command.
   const exact = entries.filter(item => fold(item.name) === normalized || (administrativeRoleAlias && item.element.type === 'checkbox' && fold(item.name) === 'contato administrativo' && item.element.closest('form[data-voice-record^="party:"]')) || (behaviorSave && item.element.matches('button') && ['criar comportamento reutilizavel', 'salvar versao do comportamento'].includes(fold(item.name))) || fold(item.element.getAttribute('data-voice-alias') || '') === normalized || fold(`${item.name} de ${item.context}`) === normalized || fold(`${item.name} em ${item.context}`) === normalized)
-  if (!seriesQuery && !detailsQuery && exact.length) return exact
+  if (!seriesQuery && !detailsQuery && !draftResumeQuery && exact.length) return exact
   const aliases = entries.filter(item => fold(item.name.replace(/\s*·\s*v\d+\s*$/i, '').replace(/\s*\(opcional\)/i, '').replace(/\s*\(at[eé]\s+\d+\s+caracteres\)/iu, '').replace(/\s+em anos\b/i, '')) === normalized)
-  if (!seriesQuery && !detailsQuery) return aliases.length ? aliases : entries.filter(item => item.context && [fold(`${item.name} de ${item.context}`), fold(`${item.name} em ${item.context}`)].some(label => label.startsWith(normalized) && normalized.startsWith(fold(item.name) + ' ')))
+  if (!seriesQuery && !detailsQuery && !draftResumeQuery) return aliases.length ? aliases : entries.filter(item => item.context && [fold(`${item.name} de ${item.context}`), fold(`${item.name} em ${item.context}`)].some(label => label.startsWith(normalized) && normalized.startsWith(fold(item.name) + ' ')))
   const series = entries.filter(item => seriesLabelMatches(query, item))
   const appointments = entries.filter(item => appointmentLabelMatches(query, item))
-  return [...new Set([...exact, ...aliases, ...series, ...appointments])]
+  const resumableDrafts = entries.filter(item => resumeLabelMatches(query, item))
+  return [...new Set([...exact, ...aliases, ...series, ...appointments, ...resumableDrafts])]
 }
 
 function fingerprint(item, drawer = false) {
@@ -156,6 +183,7 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   else if (check) { operation = /^des/i.test(check[1]) ? 'uncheck' : 'check'; query = check[2] }
   else if (click) { operation = 'click'; query = click[1] }
   else if (appointmentQuery(raw)) { operation = 'click'; query = raw }
+  else if (resumeQuery(raw)) { operation = 'click'; query = raw }
   else if (drawer) { operation = /^abr/iu.test(drawer[1]) ? 'open' : 'close'; query = drawer[2] }
   else if (/^(?:salvar|salve)(?: o)? comportamento$/.test(normalized)) { operation = 'click'; query = 'Salvar comportamento' }
   else if (/^(?:encerrar s[eé]rie|antecipar t[eé]rmino|anticipar t[eé]rmino) de .+$/iu.test(raw)) { operation = 'click'; query = raw; directSeries = true }
@@ -180,9 +208,15 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   }
   if (found.length !== 1) {
     if (found.length > 1) return refusal(`Há mais de uma opção “${query}”. Diga o nome completo ou acrescente o paciente: “clicar em ${found[0].name} de ${found[0].context || 'nome do paciente'}”.`)
+    if (resumeQuery(query)) {
+      // Diagnose the missing visible option without admitting any selection.
+      const repeated = candidates.filter(item => item.element.getAttribute('data-voice-resume-needs-option') === 'true' && resumeLabelMatches(`${query} opção ${item.element.getAttribute('data-voice-resume-option')}`, item))
+      if (repeated.length) return refusal('Há mais de um rascunho nessa data. Diga a opção visível: “Continuar sessão opção dois”, por exemplo, usando o número do rascunho desejado.')
+    }
     return refusal(`Não encontrei “${query}” disponível nesta tela. Abra a área correspondente e diga o texto do botão ou campo.`)
   }
   const item = found[0]
+  if (resumeQuery(query) && !resumeLabelMatches(query, item)) return refusal(`Não encontrei “${query}” em um controle de retomada disponível. Diga a data completa e a opção exibida quando houver datas repetidas.`)
   if (appointmentQuery(query) && !appointmentLabelMatches(query, item)) return refusal(`Não encontrei “${query}” em um controle de detalhes disponível.`)
   if (directSeries && !item.element.hasAttribute('data-voice-series-kind')) return refusal(`Não encontrei “${query}” em um controle de série disponível.`)
   if (/^anticipar termino de /u.test(fold(query)) && !seriesLabelMatches(query, item)) return refusal(`Não encontrei “${query}” em um controle de série disponível.`)
@@ -212,7 +246,7 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   }
   return {
     status: 'draft',
-    intent: { type: 'interface.control', operation, target: { ...fingerprint(item, ['open', 'close'].includes(operation)), ...(appointmentMetadata(item.element) !== null ? { appointment: appointmentMetadata(item.element), ...(appointmentQuery(query) ? { appointmentQuery: query } : {}) } : {}), ...(['open', 'close'].includes(operation) ? { drawerId: item.element.matches('summary') ? item.element.parentElement.id : item.element.getAttribute('aria-controls') } : {}) }, ...(operation === 'fill' ? { value } : {}), ...(optionLabel !== undefined ? { optionLabel } : {}) },
+    intent: { type: 'interface.control', operation, target: { ...fingerprint(item, ['open', 'close'].includes(operation)), ...(resumeMetadata(item.element) !== null ? { resume: resumeMetadata(item.element), ...(resumeQuery(query) ? { resumeQuery: query } : {}) } : {}), ...(appointmentMetadata(item.element) !== null ? { appointment: appointmentMetadata(item.element), ...(appointmentQuery(query) ? { appointmentQuery: query } : {}) } : {}), ...(['open', 'close'].includes(operation) ? { drawerId: item.element.matches('summary') ? item.element.parentElement.id : item.element.getAttribute('aria-controls') } : {}) }, ...(operation === 'fill' ? { value } : {}), ...(optionLabel !== undefined ? { optionLabel } : {}) },
     preview: clearField ? `Limpar ${item.name}.` : operation === 'fill' ? `${item.name}: ${item.element.tagName === 'SELECT' ? [...item.element.options].find(option => option.value === value)?.textContent : value}`
       : `${operation === 'open' ? 'Abrir' : operation === 'close' ? 'Recolher' : operation === 'click' ? 'Acionar' : operation === 'check' ? 'Marcar' : 'Desmarcar'} ${['open', 'close'].includes(operation) ? textContent(item.element) : item.name}${item.element.hasAttribute('data-voice-series-kind') ? ` · ${['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'][Number(item.element.getAttribute('data-voice-series-weekday'))]} às ${item.element.getAttribute('data-voice-series-time')}` : ''}${item.context ? ` · ${item.context}` : ''}.`,
     notes: appointmentMetadata(item.element) !== null ? ['Apenas abre os detalhes do compromisso após confirmar. Não altera registros nem inicia sessão.'] : [],
@@ -221,6 +255,11 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
 
 export function applyVoiceInterfaceCommand(intent, root = globalThis.document) {
   if (intent?.type !== 'interface.control') throw new Error('Comando de interface inválido.')
+  if (intent.target?.resumeQuery) {
+    const candidates = inventory(root).filter(item => item.element.matches('button, summary, a[href^="#"], input[type="radio"], input[type="checkbox"]'))
+    const resolved = matches(intent.target.resumeQuery, candidates)
+    if (resolved.length !== 1 || !resumeLabelMatches(intent.target.resumeQuery, resolved[0])) throw new Error('A tela mudou. Prepare o comando novamente antes de aplicar.')
+  }
   if (intent.target?.appointmentQuery) {
     const candidates = inventory(root).filter(item => item.element.matches('button, summary, a[href^="#"], input[type="radio"], input[type="checkbox"]'))
     const resolved = matches(intent.target.appointmentQuery, candidates)
@@ -228,6 +267,7 @@ export function applyVoiceInterfaceCommand(intent, root = globalThis.document) {
   }
   const found = inventory(root).filter(item => {
     const current = fingerprint(item, ['open', 'close'].includes(intent.operation)), target = intent.target
+    if (resumeMetadata(item.element) !== (target.resume ?? null)) return false
     if (appointmentMetadata(item.element) !== (target.appointment ?? null)) return false
     if (['open', 'close'].includes(intent.operation) && (!isDrawer(item.element) || target.drawerId !== (item.element.matches('summary') ? item.element.parentElement.id : item.element.getAttribute('aria-controls')))) return false
     return current.id === target.id && current.tag === target.tag && current.inputType === target.inputType && current.valueType === target.valueType && current.name === target.name && current.context === target.context && current.action === target.action && current.record === target.record && current.epoch === target.epoch && current.series === target.series

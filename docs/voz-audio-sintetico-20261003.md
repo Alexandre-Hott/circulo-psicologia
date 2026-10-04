@@ -1,5 +1,17 @@
 # Áudio sintético offline — 03/10/2026
 
+## Retomada de sessão —0.2.66
+
+Fechamento: replay das opções1/2 aprovado no shell completo com confirmação, quatro transcrições por caso, IDs d1/d2 corretos e zero writes para rascunhos limpos. Saídas ruins de data/prefixo preservadas e recusadas nos replays, sem inferir ano. Segunda rodada23/24 identificou mensagem genérica em ambiguidade; corrigida sem permitir seleção. FINAL44/44 selecionados em2,5min incluiu24novos/20anteriores; JS334/334 e Rust66 release offline/locked86aprovados/1ignorado em8,45s. Revisão estática aprovada. Os parágrafos abaixo registram a sequência anterior; não são o estado final. Sem microfone físico/instalação66 validados.
+
+Três cenários nativos separados, todos preservados sem editar corpus. interface-draft-resume produziu “Reto marras com o 3 de outubro de dois mil e vinte e seis.” e “Retomar raccunho 3 de outubro de 2022 e 26 opção 2.”. Prefixo/ano incorretos: não aprovam retomada nem autorizam corrigir o ano. WAV6,826s/7,832s/3,074s e301066/345432/135590bytes; Rust5,24s, Cargo6,17s; CLI3,06s/2,03s/2,03s. Uma execuçãoexit0 da infraestrutura, mas reconhecimento das duas ações falhou. Corpus emnative-voice-draft-resume-20261004.json. CLI ainda diverge no ano e no prefixo; não usado como corpusRust.
+
+Alternativa interface-draft-continue também falhou no ano: “Continuar seção em 3 de outubro de 2016.” e “Continuar seção em 3 de outubro de 2022 e 26 opção 2.”. Saídas originais emnative-voice-draft-continue-20261004.json. Um ano válido reconhecido errado não pode ser detectado como erro gramatical: prévia/confirmar continua essencial; não inferir2026. Esse cenário não comprova reconhecimento confiável de data.
+
+Alternativa adicional sem data, interface-draft-choice: “Continuar seção opção 1.”, “Continuar seção opção 2.”, “Confirmar comando.”. Números preservados; CLI diferente (“Continuar se são opção1/2”). WAV3,843s/4,116s/3,074s,169540/181582/135590bytes; CLI2,03s/2,02s/2,03s; Rust4,89s/Cargo5,85s. Uma execuçãoCLI/Rust/evaluator/wrapperexit0. Corpusnative-voice-draft-choice-20261004.json; alias de ação seção/sessão e replay ainda em implementação, não aprovar seleção antes do replay. SAPI Maria rate-2original, recursos instalados61, backend crate65 sem alteração funcional/rede/mic/perfil, todos WAVs abaixo12s.
+
+Cada evaluator central retorna0Passed/0Failed/3NotEvaluated por contrato; unidades dos três cenários fazem validação estrita do corpus. Primeira unidade principal, durante produção do corpus,17/18 com saída resumida sem causa registrada; depois18/18 e com os três cenários20/20, exit0. Não atribuir a primeira falha à aplicação sem evidência. Primeiros21E2E13aprovados/8falhos: cinco setups de componente comReact duplicado e três setups de shell com seletorli/button duplicado, antes de validar retomada. Correções de harness e seleção por número ainda em andamento. Não provam microfone físico, persistência instalada ou cadeia nativa ininterrupta; instalado61 mantido.
+
 ## Detalhes de compromisso —0.2.65
 
 Cenário interface-details,3WAVs SAPI Maria Português Brasil, rate-2 original, recursos locais instalados61 e backend Rust real sem rede/microfone/perfil. Saídas Rust preservadas em `native-voice-details-20261004.json`: “Abrir detalhes de Ana Clara.”, “Verdetales de Ana Clara em 4 de outubro de dois mil e vinte e seis às quinze horas.”, “Confirmar comando.”. CLI divergente no caso1(index1): “Verd detalhes de Ana, clara em 4 de outubro de 2.026 às 15 horas.”; não editar corpus para coincidir ou reparar nomes/data.

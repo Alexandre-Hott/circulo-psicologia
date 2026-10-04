@@ -1,6 +1,6 @@
 ﻿param(
     [string]$VoiceDirectory,
-    [ValidateSet('core', 'behavior-save', 'behavior-remove', 'occurrence-date', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer', 'interface-series', 'interface-details')][string]$Scenario = 'core',
+    [ValidateSet('core', 'behavior-save', 'behavior-remove', 'occurrence-date', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer', 'interface-series', 'interface-details', 'interface-draft-resume', 'interface-draft-continue', 'interface-draft-choice')][string]$Scenario = 'core',
     [switch]$KeepArtifacts
 )
 
@@ -120,6 +120,27 @@ try {
         $commands = @(
             'Abrir detalhes de Ana Clara.',
             'Ver detalhes de Ana Clara em quatro de outubro de dois mil e vinte e seis às quinze horas.',
+            'Confirmar comando.'
+        )
+    }
+    if ($Scenario -eq 'interface-draft-resume') {
+        $commands = @(
+            'Retomar rascunho três de outubro de dois mil e vinte e seis.',
+            'Retomar rascunho três de outubro de dois mil e vinte e seis opção dois.',
+            'Confirmar comando.'
+        )
+    }
+    if ($Scenario -eq 'interface-draft-continue') {
+        $commands = @(
+            'Continuar sessão em três de outubro de dois mil e vinte e seis.',
+            'Continuar sessão em três de outubro de dois mil e vinte e seis opção dois.',
+            'Confirmar comando.'
+        )
+    }
+    if ($Scenario -eq 'interface-draft-choice') {
+        $commands = @(
+            'Continuar sessão opção um.',
+            'Continuar sessão opção dois.',
             'Confirmar comando.'
         )
     }

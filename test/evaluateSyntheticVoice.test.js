@@ -3,6 +3,99 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { evaluateSyntheticVoice } from '../scripts/evaluateSyntheticVoice.js'
 
+test('escolha nativa de rascunho exige interface e corpus estrito de três índices', () => {
+  const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-draft-choice-20261004.json', import.meta.url), 'utf8'))
+  const result = evaluateSyntheticVoice(cases, { scenario: 'interface-draft-choice' })
+  assert.equal(result.Passed, 0)
+  assert.equal(result.Failed, 0)
+  assert.equal(result.NotEvaluated, 3)
+  assert.deepEqual(result.Results.map(item => item.Status), ['not-evaluated', 'not-evaluated', 'not-evaluated'])
+  for (const [index, item] of result.Results.entries()) {
+    assert.equal(item.Transcript, cases[index].Transcript)
+    assert.match(item.Reason, /não avaliado pelo parser central/)
+    assert.equal(Object.hasOwn(item, 'ActualIntent'), false)
+  }
+  for (const invalidCorpus of [null, [], cases.slice(1), [...cases, cases[0]]]) {
+    assert.throws(() => evaluateSyntheticVoice(invalidCorpus, { scenario: 'interface-draft-choice' }))
+  }
+  for (const invalid of [
+    { Index: 0, Transcript: '' }, { Index: 0, Transcript: '   ' },
+    { Index: 0, Transcript: null }, { Index: 0, Transcript: 42 },
+    { Index: 1, Transcript: 'Confirmar comando.' },
+    { Index: -1, Transcript: 'Confirmar comando.' }, { Index: 3, Transcript: 'Confirmar comando.' },
+    { Index: 0.5, Transcript: 'Confirmar comando.' }, { Index: '0', Transcript: 'Confirmar comando.' },
+    { Transcript: 'Confirmar comando.' },
+  ]) {
+    assert.throws(() => evaluateSyntheticVoice([invalid, ...cases.slice(1)], { scenario: 'interface-draft-choice' }))
+  }
+  const reordered = evaluateSyntheticVoice([...cases].reverse(), { scenario: 'interface-draft-choice' })
+  assert.equal(reordered.NotEvaluated, 3)
+  assert.equal(reordered.Passed, 0)
+  assert.equal(reordered.Failed, 0)
+})
+
+test('continuar sessão nativa exige interface e corpus estrito de três índices', () => {
+  const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-draft-continue-20261004.json', import.meta.url), 'utf8'))
+  const result = evaluateSyntheticVoice(cases, { scenario: 'interface-draft-continue' })
+  assert.equal(result.Passed, 0)
+  assert.equal(result.Failed, 0)
+  assert.equal(result.NotEvaluated, 3)
+  assert.deepEqual(result.Results.map(item => item.Status), ['not-evaluated', 'not-evaluated', 'not-evaluated'])
+  for (const [index, item] of result.Results.entries()) {
+    assert.equal(item.Transcript, cases[index].Transcript)
+    assert.match(item.Reason, /não avaliado pelo parser central/)
+    assert.equal(Object.hasOwn(item, 'ActualIntent'), false)
+  }
+  for (const invalidCorpus of [null, [], cases.slice(1), [...cases, cases[0]]]) {
+    assert.throws(() => evaluateSyntheticVoice(invalidCorpus, { scenario: 'interface-draft-continue' }))
+  }
+  for (const invalid of [
+    { Index: 0, Transcript: '' }, { Index: 0, Transcript: '   ' },
+    { Index: 0, Transcript: null }, { Index: 0, Transcript: 42 },
+    { Index: 1, Transcript: 'Confirmar comando.' },
+    { Index: -1, Transcript: 'Confirmar comando.' }, { Index: 3, Transcript: 'Confirmar comando.' },
+    { Index: 0.5, Transcript: 'Confirmar comando.' }, { Index: '0', Transcript: 'Confirmar comando.' },
+    { Transcript: 'Confirmar comando.' },
+  ]) {
+    assert.throws(() => evaluateSyntheticVoice([invalid, ...cases.slice(1)], { scenario: 'interface-draft-continue' }))
+  }
+  const reordered = evaluateSyntheticVoice([...cases].reverse(), { scenario: 'interface-draft-continue' })
+  assert.equal(reordered.NotEvaluated, 3)
+  assert.equal(reordered.Passed, 0)
+  assert.equal(reordered.Failed, 0)
+})
+
+test('retomada de rascunho nativa exige interface e corpus estrito de três índices', () => {
+  const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-draft-resume-20261004.json', import.meta.url), 'utf8'))
+  const result = evaluateSyntheticVoice(cases, { scenario: 'interface-draft-resume' })
+  assert.equal(result.Passed, 0)
+  assert.equal(result.Failed, 0)
+  assert.equal(result.NotEvaluated, 3)
+  assert.deepEqual(result.Results.map(item => item.Status), ['not-evaluated', 'not-evaluated', 'not-evaluated'])
+  for (const [index, item] of result.Results.entries()) {
+    assert.equal(item.Transcript, cases[index].Transcript)
+    assert.match(item.Reason, /não avaliado pelo parser central/)
+    assert.equal(Object.hasOwn(item, 'ActualIntent'), false)
+  }
+  for (const invalidCorpus of [null, [], cases.slice(1), [...cases, cases[0]]]) {
+    assert.throws(() => evaluateSyntheticVoice(invalidCorpus, { scenario: 'interface-draft-resume' }))
+  }
+  for (const invalid of [
+    { Index: 0, Transcript: '' }, { Index: 0, Transcript: '   ' },
+    { Index: 0, Transcript: null }, { Index: 0, Transcript: 42 },
+    { Index: 1, Transcript: 'Confirmar comando.' },
+    { Index: -1, Transcript: 'Confirmar comando.' }, { Index: 3, Transcript: 'Confirmar comando.' },
+    { Index: 0.5, Transcript: 'Confirmar comando.' }, { Index: '0', Transcript: 'Confirmar comando.' },
+    { Transcript: 'Confirmar comando.' },
+  ]) {
+    assert.throws(() => evaluateSyntheticVoice([invalid, ...cases.slice(1)], { scenario: 'interface-draft-resume' }))
+  }
+  const reordered = evaluateSyntheticVoice([...cases].reverse(), { scenario: 'interface-draft-resume' })
+  assert.equal(reordered.NotEvaluated, 3)
+  assert.equal(reordered.Passed, 0)
+  assert.equal(reordered.Failed, 0)
+})
+
 test('detalhes nativos exigem replay de interface e corpus estrito de três índices', () => {
   const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-details-20261004.json', import.meta.url), 'utf8'))
   const result = evaluateSyntheticVoice(cases, { scenario: 'interface-details' })
