@@ -1,6 +1,12 @@
 # Matriz de voz do Círculo
 
-## Entrega local 0.2.80
+## Entrega local 0.2.81
+
+A [entrega81](validacao-voz-0.2.81.md) invalida proposta antiga de descarte depois de salvar um cadastro e começar outro. JS1882/1882, Rust138 aprovados/1 ignorado; UI15/15 focal e59/59 regressão em rodadas separadas sem retries. Inclui captura sintética para os cinco atalhos internos do rascunho e recusa de alvos indisponíveis ou de outro paciente. O pacote local foi gerado e auditado por metadados, não instalado, extraído, assinado ou publicado.
+
+Não houve nova medição nativa na entrega81: sua configuração mantém os cinco acertos e duas falhas dos sete pedidos medidos na80, com confirmação textual separada. Uma [comparação posterior da configuração](voz-comparacao-beam-20261004.md) mostrou seis acertos e uma falha na candidata, ainda não integrada ao pacote. A auditoria não encontrou um botão desktop habilitado adicional sem rota, mas isso não comprova reconhecimento de toda fala. Modelos de sessão existem na demonstração web volátil, não na interface Windows atual; não se afirma paridade entre elas. Senhas, seletores de arquivos e início explícito do microfone permanecem manuais. A meta continua ativa.
+
+## Referência 0.2.80
 
 Modelo local small Q5 e confirmação vinculada ao recurso exato do updater. [Resultados atuais](validacao-voz-0.2.80.md): JS1882/1882, Rust138 aprovados/1 ignorado; controles residuais/updater18/18, regressão64/64 e replay8/8 em rodadas separadas sem retries. As provas incluem pacientes/vínculos, biblioteca e registros de comportamento, agenda, sessões, análises, ajustes e recuperação nos cenários selecionados. Não equivalem a cobertura universal de fala ou teste do pacote instalado. Reconhecimento Rust real:5 corretos/2 falhos/1 não avaliado em oito áudios fictícios; recorrência e observação ainda foram recusadas. Senhas, arquivos e início de captura são manuais. Meta ativa para ampliar cobertura e reconhecimento; referências abaixo são históricas.
 
