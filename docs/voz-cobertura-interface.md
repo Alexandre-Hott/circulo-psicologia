@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Evidência de transcrição dos dias — complemento0.2.58
+
+Corpusweekday com três saídas reais do backend Rust/SAPI: quinta-feira, terça-feira, confirmar. Replay2/2 em26,7s preserva seleção antes de confirmar e não grava; regressão de replays/dias21/21 em1,4min, unidade257/257. Core17 repetido no reconhecedor/parser, exit0; duas ações de interface não são aprovadas pelo parser central. Nenhuma mudança de produção/instalador nesta rodada. Continuidade do áudio físico e persistência instalada seguem sem prova. [Detalhes](voz-audio-sintetico-20261003.md).
+
 ## Complemento0.2.58 — dias completos no formulário recorrente
 
 Somente o select Dia da semana da Agenda recebe tipo explícito weekday. “Selecionar Dia da semana como quinta-feira” prepara Quinta; confirmar aplica; Criar série permanece separado. Abreviações visíveis e números0a6 continuam aceitos, assim como segunda/terça/quarta/quinta/sexta-feira (hífen ou espaço) e sábado/domingo. Não infere próxima data nem alternativas. Textos livres continuam literais. Unidade256/256; revisão independente sem achados; novos E2E11/11 em1,1min e regressão final interface/identidade de seleção66/66 em3,3min. Instalador58 gerado/auditado, não instalado/publicado. Sem nova prova de captura física ou transcrição nativa. [Evidências](melhoria-continua-voz.md).

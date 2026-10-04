@@ -1,6 +1,6 @@
 ﻿param(
     [string]$VoiceDirectory,
-    [ValidateSet('core', 'behavior-save', 'occurrence-date', 'analytics-range', 'interface-fields')][string]$Scenario = 'core'
+    [ValidateSet('core', 'behavior-save', 'occurrence-date', 'analytics-range', 'interface-fields', 'interface-weekday')][string]$Scenario = 'core'
 )
 
 # Keep the UTF-8 BOM: Windows PowerShell 5.1 otherwise reads Portuguese text as ANSI.
@@ -86,6 +86,13 @@ try {
             'Preencher idade com nove.',
             'Preencher nota contextual de Regulação emocional com Participou com apoio.',
             'Limpar nota contextual de Regulação emocional.'
+        )
+    }
+    if ($Scenario -eq 'interface-weekday') {
+        $commands = @(
+            'Selecionar Dia da semana como quinta-feira.',
+            'Selecionar Dia da semana como terça-feira.',
+            'Confirmar comando.'
         )
     }
     $results = foreach ($index in 0..($commands.Count - 1)) {

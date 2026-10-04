@@ -1,5 +1,11 @@
 # Melhoria contínua de voz
 
+## Validação nativa complementar ao0.2.58 — sem mudança de produção
+
+Reconhecedor local/Rust opt-in executou3WAVs fictícios para quinta-feira, terça-feira e confirmar: exit0, textos corretos preservados no corpusweekday. Replay2/2 em26,7s com primeiro áudio apenas proposta, segundo aplicação ao dia correto e zero escrita. Regressão21/21 em1,4min; unidade257/257, guard/diff/lint aprovados (cinco avisos anteriores). Cenário core17 repetido exit0, com quinze intents avaliadas e duas dependentes de interface não avaliadas pelo parser central, conforme contrato do harness. [Detalhes e limites](voz-audio-sintetico-20261003.md).
+
+Não exigiu novo build/versão: somente ferramentas, fixture e testes mudaram; instalador58 existente conferido novamente por versão/tamanho/hash/docs. Instalado52 e perfil não alterados, sem rede, gravação ambiente, microfone físico ou jornada instalada validada. Sem Release/assinatura nova. Meta ativa; não substituir evidência nativa de captura/persistência por esse replay simulado.
+
 ## Entrega local0.2.58 — dias completos da semana
 
 Pacote `Círculo_0.2.58_x64-setup.exe`, **135.885.060 bytes**, SHA-256 `0d35da610025b857ebe695006471673a1691f2f60577e0b185960c9d1f93751b`. Build NSIS offline/locked exit0, release Rust58,90s; aviso anterior OpenSSL/PDB LNK4099. Override temporário removido após término; configuração oficial updater preservada. Manifest `%TEMP%\\circulo-0258-audit-20261004.json`: PE0.2.58/x64/NotSigned. Conteúdo interno não extraído; não instalado/aberto. Instalado52/perfil não alterados. Sem `.sig`, Authenticode ou Release; link local não oferece atualização pelo GitHub. Consistência de versão/tamanho/hash/docs aprovada; regressão66/66 em3,3min, sem transcrição/microfone físico novos. Meta ativa.

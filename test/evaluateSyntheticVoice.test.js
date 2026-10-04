@@ -122,3 +122,14 @@ test('recusa corpus incompleto, índice duplicado e transcrição vazia', () => 
   const empty = corpus(); empty[1].Transcript = ''
   assert.throws(() => evaluateSyntheticVoice(empty))
 })
+
+test('dias da semana transcritos exigem prova na interface e não aprovação central', () => {
+  const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-weekday-20261004.json', import.meta.url), 'utf8'))
+  const result = evaluateSyntheticVoice(cases, { scenario: 'interface-weekday' })
+  assert.equal(result.Passed, 0)
+  assert.equal(result.Failed, 0)
+  assert.equal(result.NotEvaluated, 3)
+  assert.throws(() => evaluateSyntheticVoice(cases.slice(1), { scenario: 'interface-weekday' }))
+  const duplicate = structuredClone(cases); duplicate[1].Index = 0
+  assert.throws(() => evaluateSyntheticVoice(duplicate, { scenario: 'interface-weekday' }))
+})

@@ -5,6 +5,7 @@ const nativeVoiceCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-vo
 const nativeSaveCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-save-20261004.json', import.meta.url), 'utf8'))
 const nativeOccurrenceCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-occurrence-20261004.json', import.meta.url), 'utf8'))
 const nativeFieldsCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-fields-20261004.json', import.meta.url), 'utf8'))
+const nativeWeekdayCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-weekday-20261004.json', import.meta.url), 'utf8'))
 
 async function openApp(page, { emptyLibrary = false, archivedPatient = false, specialCatalog = false, nativeCatalog = false } = {}) {
   await page.clock.install({ time: new Date('2026-10-03T15:00:00Z') })
@@ -916,6 +917,34 @@ test('retomada distingue dois rascunhos do mesmo dia e cancelamento preserva o o
   await expect.poll(() => page.evaluate(() => window.writes.filter(item => item.command === 'session_draft_cancel'))).toEqual([{ command: 'session_draft_cancel', args: { id: 'second' } }])
   await expect.poll(() => page.evaluate(() => window.voiceDrafts.map(item => item.id))).toEqual(['first'])
   await expect.poll(() => page.evaluate(() => window.writes.filter(item => item.command === 'session_finalize').length)).toBe(0)
+})
+
+for (const [index, label, value] of [[0, 'Quinta', '4'], [1, 'Terça', '2']]) test(`dia da semana: replay nativo ${index} seleciona ${label} somente após segundo áudio sem gravar`, async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Mostrar agenda de hoje')
+  await command(page, 'Clicar em Abrir formulário de novo compromisso')
+  await command(page, 'Selecionar Tipo como Recorrente')
+  const form = page.getByRole('form', { name: 'Novo compromisso', exact: true })
+  const weekday = form.getByLabel('Dia da semana', { exact: true })
+  await expect(weekday).toHaveValue('6')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
+  // Replay native SAPI transcripts through synthetic media; this does not verify a physical microphone.
+  await page.evaluate(text => { window.voiceTranscript = text }, nativeWeekdayCorpus.find(item => item.Index === index).Transcript)
+  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await page.clock.runFor(1000)
+  await expect(page.locator('.voice-command-preview')).toContainText(`Dia da semana: ${label}`)
+  await expect(weekday).toHaveValue('6')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  expect(await page.evaluate(() => window.voiceNativeCalls.filter(item => item.command === 'voice_transcribe').length)).toBe(1)
+  await page.evaluate(text => { window.voiceTranscript = text }, nativeWeekdayCorpus.find(item => item.Index === 2).Transcript)
+  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await page.clock.runFor(1000)
+  await expect(weekday).toHaveValue(value)
+  await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  expect(await page.evaluate(() => window.voiceNativeCalls.filter(item => item.command === 'voice_transcribe').length)).toBe(2)
+  expect(await page.evaluate(() => window.voiceNativeCalls.filter(item => item.command === 'agenda_create_series'))).toEqual([])
 })
 
 test('quinta-feira seleciona Quinta somente após confirmar e cria série somente ao salvar explicitamente', async ({ page }) => {
