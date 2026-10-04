@@ -28,6 +28,12 @@ A primeira rodada do autor passou três casos e falhou na expectativa de uma ún
 - Fixture de transcrições: `07FF18B9C6405EA68352BAA4AE14A683981681300A2FF32B9A8562C0AB895C7C`.
 - Replay da interface: `C9672580C62CA86ED4C0E97C6D0E58D65AE4D7D540895B280FCE22DE629EBD13`.
 
+## Correção explícita do título
+
+Uma prova adicional usa o formulário aberto pelo texto Rust bruto “Criar comportamento. Espera a vez.”. Digitar “Preencher Título descritivo com Espera a vez” e preparar mantém o título original com ponto. Confirmar altera somente o campo para “Espera a vez”, sem salvar ou escrever no catálogo. Descrição, pacientes e rascunhos concorrentes permanecem iguais. A correção é digitada pelo usuário; não é nova inferência nem reparo automático do corpus.
+
+O caso focal passou 1/1 no autor em 19,4 s. A conferência independente do principal passou os cinco casos do arquivo em 24,7 s, com um worker e zero retries. Revisão estática aprovada; fixture de transcrições intacta. O arquivo de teste após a adição tem SHA-256 `1320CF4C5DE580AE0F6F1AFAF1DB66C81C200B2519DBF9AE46BA528A04A52D88`; o hash anterior acima identifica a prova original de quatro casos. Cleanup de captura e ausência de escrita foram exigidos. Sem mudança de produção, novo build, acesso ao perfil instalado ou nova ASR. O relatório estrito original continua dois aprovados, um falho e um não avaliado.
+
 ## Testes e pacote
 
 Com metadados 84, JavaScript passou 1891/1891 em 5,47 s; Rust release/offline/locked passou 138 testes e ignorou o opt-in, em 11,57 s. Esse opt-in foi executado separadamente na rodada de quatro áudios descrita acima, antes da atualização mecânica. A confirmação foi previamente conferida em 25/25 de assistente e 26/26 de ditado, em rodadas separadas; o fluxo rápido de sessão passou14/14 no arquivo de calendário. Esses testes usam mídia/IPC simulados, não nova inferência.

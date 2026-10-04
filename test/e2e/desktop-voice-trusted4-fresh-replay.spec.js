@@ -197,6 +197,42 @@ async function realPendingIntent(page) {
 
 const editor = page => page.getByRole('form', { name: 'Comportamento reutilizável', exact: true })
 
+test('Correção explícita digitada: título bruto muda só após confirmação, sem Save', async ({ page }) => {
+  await openApp(page)
+  const before = await snapshot(page)
+  await replayAudio(page, 0)
+  await expect(preview(page)).toBeVisible()
+  await expectNoWrites(page, before)
+  await replayAudio(page, 'confirmation')
+  const title = editor(page).getByLabel('Título descritivo', { exact: true })
+  const description = editor(page).getByLabel('Descrição opcional', { exact: true })
+  await expect(editor(page)).toHaveAttribute('data-voice-record', 'behavior:new')
+  await expect(title).toHaveValue('Espera a vez.')
+  await expect(description).toHaveValue('')
+  await expectNoWrites(page, before)
+
+  // Explicit user correction is typed, not another native ASR result or corpus repair.
+  const input = assistant(page).getByLabel('Seu comando')
+  await input.fill('Preencher Título descritivo com Espera a vez')
+  await input.press('Control+Enter')
+  await page.clock.runFor(32)
+  await expect(preview(page)).toBeVisible()
+  await expect(preview(page)).toContainText('Título descritivo')
+  await expect(title).toHaveValue('Espera a vez.')
+  await expect(description).toHaveValue('')
+  await expectNoWrites(page, before)
+  await input.fill('Confirmar')
+  await input.press('Control+Enter')
+  await page.clock.runFor(32)
+  await expect(preview(page)).toHaveCount(0)
+  await expect(editor(page)).toHaveAttribute('data-voice-record', 'behavior:new')
+  await expect(title).toHaveValue('Espera a vez')
+  await expect(description).toHaveValue('')
+  expect(corpus.TitleComparison).toEqual({ Expected: 'Espera a vez', Actual: 'Espera a vez.', StrictMatch: false })
+  expect(await page.evaluate(() => window.freshBeamRustNative.captures.map(item => item.transcript))).toEqual([recording(0).Transcript, confirmation])
+  await expectNoWrites(page, before)
+})
+
 test('RAW Rust4 0: criação preserva título com ponto, sem Save', async ({ page }) => {
   await openApp(page)
   const before = await snapshot(page)
