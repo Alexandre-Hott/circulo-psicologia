@@ -7,6 +7,7 @@ import DesktopSessions from './DesktopSessions.jsx'
 import VoiceCommandCenter from './VoiceCommandCenter.jsx'
 import { parseCentralCommand } from './centralCommandRouter.js'
 import { validateClinicalTextAppend } from './clinicalTextAppend.js'
+import { createClinicalDictationSelection, prepareClinicalDictation, validateClinicalDictationSelection } from './clinicalFieldDictation.js'
 import { applyVoiceInterfaceCommand, nextVoiceLifecycle, parseVoiceInterfaceCommand } from './voiceInterfaceCommands.js'
 import { captureCommandAudio } from './localVoiceCapture.js'
 import { seedSyntheticDemo } from './desktopDemoSeed.js'
@@ -184,6 +185,20 @@ export default function DesktopVault() {
     if (specific.status === 'clarification' && specific.code === 'clinical_text_limit') return specific
     return control || specific
   }
+  const getDictationSnapshot = field => {
+    if (!vaultUnlocked.current || busyRef.current || confirmationRef.current || space !== 'sessions' || !sessionsOpen) return null
+    return sessionsRef.current?.getClinicalTextSnapshot(field) ?? null
+  }
+  const getDictationTarget = field => {
+    const snapshot = getDictationSnapshot(field)
+    const patient = patients.find(item => item.id === snapshot?.patientId && item.archivedAt == null)
+    if (!patient) throw new Error('Abra um rascunho disponível e selecione novamente o campo para ditar. Seu trecho permanece editável.')
+    return createClinicalDictationSelection(field, snapshot, patient.name)
+  }
+  const validateDictationTarget = selection => {
+    validateClinicalDictationSelection(selection, getDictationSnapshot(selection?.field))
+  }
+  const prepareDictation = (selection, body) => prepareClinicalDictation(selection, body, getDictationSnapshot(selection?.field))
   const openVoiceDraftForReview = async (requestedIntent) => {
     const intent = requestedIntent?.type?.includes('.') ? requestedIntent : voiceIntent
     if (!intent) return
@@ -316,6 +331,7 @@ export default function DesktopVault() {
       setSpace('sessions')
     } else if (intent.type === 'session.draft.update') {
       if (intent.patch?.operation === 'append') {
+        if (intent.dictationSelection) validateDictationTarget(intent.dictationSelection)
         validateClinicalTextAppend(intent.target, intent.patch,
           space === 'sessions' && sessionsOpen ? sessionsRef.current?.getClinicalTextSnapshot() : null)
       }
@@ -924,13 +940,16 @@ export default function DesktopVault() {
             onDraft={setVoiceIntent}
             onTranscribe={transcribeLocalVoice}
             parseCommand={prepareVoiceCommand}
+            getDictationTarget={getDictationTarget}
+            validateDictationTarget={validateDictationTarget}
+            prepareDictation={prepareDictation}
             onApply={applyVoiceCommand}
             onCancel={() => setVoiceIntent(null)}
             pendingIntent={voiceIntent}
             autoInterpret
             compact
           />
-          {voiceIntent && <div className="vault-voice-review"><button type="button" disabled={busy} onClick={() => applyVoiceCommand()}>{voiceIntent.type === 'interface.control' || voiceIntent.type === 'workspace.open' || voiceIntent.type === 'patient.archive' || voiceIntent.type === 'patient.restore' ? 'Aplicar comando' : 'Revisar no formulário'}</button><button type="button" className="vault-secondary" onClick={() => setVoiceIntent(null)}>Descartar rascunho</button></div>}
+          {voiceIntent && !voiceIntent.dictationSelection && <div className="vault-voice-review"><button type="button" disabled={busy} onClick={() => applyVoiceCommand()}>{voiceIntent.type === 'interface.control' || voiceIntent.type === 'workspace.open' || voiceIntent.type === 'patient.archive' || voiceIntent.type === 'patient.restore' ? 'Aplicar comando' : 'Revisar no formulário'}</button><button type="button" className="vault-secondary" onClick={() => setVoiceIntent(null)}>Descartar rascunho</button></div>}
           {voiceNotice && <p className="vault-error" role="alert">{voiceNotice}</p>}
         <div inert={confirmation ? true : undefined}>
         {space === 'home' && <section className="vault-panel vault-home" aria-label="Início">

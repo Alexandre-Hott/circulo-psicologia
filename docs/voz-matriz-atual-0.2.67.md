@@ -1,5 +1,9 @@
 # Matriz atual de voz — 0.2.67
 
+## Atualização de referência 0.2.74
+
+A [validação 0.2.74](validacao-voz-0.2.74.md) acrescenta ditado direcionado aos quatro textos do rascunho, sem enviar o conteúdo ao parser. Exige escolha explícita, preparo, confirmação e salvamento; áudio obsoleto não preenche o editor. JS806/806, Rust135 aprovados/1 ignorado, UI22/22 e regressão selecionada33/33 em rodadas separadas. Não prova precisão do microfone nem cobertura universal das oito áreas. Pacote local auditado, não instalado/publicado nem assinado. Referências abaixo são históricas.
+
 ## Atualização de referência 0.2.73
 
 A [validação 0.2.73](validacao-voz-0.2.73.md) acrescenta aviso de corte e revisão manual quando o ditado atinge 12 segundos; pausa normal e confirmação permanecem. JS783/783, Rust135 aprovados/1 ignorado, UI selecionada33/33. Decoder do teste opt-in corrigido, sem nova inferência ou homologação do microfone físico. Pacote local não instalado/publicado nem assinado. Não amplia a matriz de ações nem prova cobertura universal; preparo após corte é manual. Referências abaixo são históricas.

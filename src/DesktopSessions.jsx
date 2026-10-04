@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import { entityOptionSuffix } from './voiceEntityLabels.js'
 import { clinicalTextFields, validateClinicalTextAppend } from './clinicalTextAppend.js'
+import { validateClinicalDictationSelection } from './clinicalFieldDictation.js'
 import { nextVoiceLifecycle } from './voiceInterfaceCommands.js'
 import { invoke } from '@tauri-apps/api/core'
 import { groupIndicatorHistory } from './desktopIndicatorEvolution.js'
@@ -155,18 +156,36 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     }
   }, [patientId])
 
-  const getClinicalTextSnapshot = useCallback(() => {
+  const getClinicalTextSnapshot = useCallback(field => {
     const form = clinicalFormRef.current
     if (!mountedRef.current || !workspaceActive || !activeDraft?.id || activeDraft.patientId !== patientId
       || draftIdentityRef.current.id !== activeDraft.id || draftIdentityRef.current.patientId !== patientId
       || loadedPatientId !== patientId || busyRef.current || savePromiseRef.current || !form?.isConnected) return null
+    const lifecycle = []
     for (let element = form; element; element = element.parentElement) {
       const style = getComputedStyle(element)
       if (element.hidden || element.inert || element.getAttribute('aria-hidden') === 'true'
         || style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return null
+      const token = element.getAttribute('data-voice-lifecycle')
+      if (token !== null) lifecycle.push(token)
+    }
+    if (field !== undefined) {
+      const ids = { observation: 'session-observation', procedures: 'session-procedures', outcomeDecision: 'session-outcome-decision', referralClosure: 'session-referral-closure' }
+      if (!Object.hasOwn(ids, field)) return null
+      const controls = form.querySelectorAll(`#${ids[field]}`)
+      if (controls.length !== 1) return null
+      const control = controls[0]
+      if (control.tagName !== 'TEXTAREA' || control.matches(':disabled') || control.readOnly) return null
+      for (let element = control; element && element !== form; element = element.parentElement) {
+        const style = getComputedStyle(element)
+        if (element.hidden || element.inert || element.getAttribute('aria-hidden') === 'true'
+          || style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse'
+          || (element.tagName === 'DETAILS' && !element.open)) return null
+      }
     }
     if (clinicalTextFields.some(field => typeof valuesRef.current[field] !== 'string')) return null
     return { patientId, sessionDraftId: activeDraft.id, epoch: clinicalEpochRef.current, revision: revisionRef.current,
+      lifecycle: lifecycle.length ? JSON.stringify(lifecycle) : null,
       values: Object.fromEntries(clinicalTextFields.map(field => [field, valuesRef.current[field]])) }
   }, [workspaceActive, activeDraft, patientId, loadedPatientId])
 
@@ -262,7 +281,14 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       // Consume even a refused request: it must not replay when the UI later becomes ready.
       appliedVoiceDraftRef.current = intent.commandId
       try {
-        const combined = validateClinicalTextAppend(intent.target, intent.patch, getClinicalTextSnapshot())
+        const snapshot = getClinicalTextSnapshot(intent.dictationSelection?.field)
+        if (intent.dictationSelection) {
+          validateClinicalDictationSelection(intent.dictationSelection, snapshot)
+          if (intent.dictationSelection.field !== intent.patch.field
+            || intent.dictationSelection.patientId !== intent.target?.patientId
+            || intent.dictationSelection.sessionDraftId !== intent.target?.sessionDraftId) throw new Error('Selecione novamente o campo do rascunho antes de aplicar o trecho.')
+        }
+        const combined = validateClinicalTextAppend(intent.target, intent.patch, snapshot)
         const setter = { observation: setObservation, procedures: setProcedures, outcomeDecision: setOutcomeDecision, referralClosure: setReferralClosure }[intent.patch.field]
         voiceVersionRef.current++
         voiceConfirmationPendingRef.current = true
