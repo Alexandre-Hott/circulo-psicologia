@@ -2,6 +2,7 @@ import { addCivilDays, parseCivilDate } from './calendarDate.js'
 import { inSupportedRange } from './analyticsRange.js'
 import { normalizeVoiceFieldValue } from './voiceFieldValue.js'
 import { VOICE_COMMAND_MAX_LENGTH, VOICE_CLINICAL_TEXT_MAX_LENGTH } from './voiceCommandLimits.js'
+import { prepareClinicalTextAppend } from './clinicalTextAppend.js'
 
 const normalize = (value, preserveTerminal = false) => String(value ?? '')
   .normalize('NFD')
@@ -686,6 +687,7 @@ const parseSessionDraft = ({ text, rawText, context }) => {
   }
 
   const fieldCommand = /^(?:preencher|anotar|registrar)\s+(observa(?:ção|cao)|evolu(?:ção|cao)|procedimentos?|resultado|decis(?:ão|ao)|encaminhamento|fechamento)\s+(?:da|do)\s+sess(?:ão|ao)\s+de\s+(.+)$/iu.exec(rawText)
+    || /^(?:acrescentar|acrescente|acrescenta|acrecentar)\s+(observa(?:ção|cao)|evolu(?:ção|cao)|procedimentos?|resultado|decis(?:ão|ao)|encaminhamento|fechamento)\s+(?:da|do)\s+(?:sess(?:ão|ao)|se(?:ção|cao))\s+de\s+(.+)$/iu.exec(rawText)
   if (fieldCommand) {
     const field = normalize(fieldCommand[1])
     const fieldMap = {
@@ -702,8 +704,18 @@ const parseSessionDraft = ({ text, rawText, context }) => {
     const sessionTarget = sessionTargetFrom(target)
     const exactText = unwrapArgument(result.content)
     if (!exactText) return refuse(`O texto do campo deve ter entre 1 e ${VOICE_CLINICAL_TEXT_MAX_LENGTH} caracteres.`)
-    if (exactText.length > VOICE_CLINICAL_TEXT_MAX_LENGTH) return { ...refuse(`O texto do campo deve ter entre 1 e ${VOICE_CLINICAL_TEXT_MAX_LENGTH} caracteres.`), code: 'clinical_text_limit' }
     const key = fieldMap[field]
+    if (/^(?:acrescent(?:ar|e|a)|acrecentar)\s/iu.test(rawText)) {
+      try {
+        const { patch, combined } = prepareClinicalTextAppend(sessionTarget, key, exactText, context.clinicalTextSnapshot)
+        return draft({ type: 'session.draft.update', target: sessionTarget, patch },
+          `Rascunho para ${target.patient.name}: acrescentar ao campo “${fieldCommand[1]}”: “${combined}”.`,
+          ['Os trechos serão separados por um espaço, mantendo o texto literal. Revise e salve explicitamente o rascunho.'])
+      } catch (error) {
+        return { ...refuse(error.message), ...(error.code === 'clinical_text_limit' ? { code: error.code } : {}) }
+      }
+    }
+    if (exactText.length > VOICE_CLINICAL_TEXT_MAX_LENGTH) return { ...refuse(`O texto do campo deve ter entre 1 e ${VOICE_CLINICAL_TEXT_MAX_LENGTH} caracteres.`), code: 'clinical_text_limit' }
     return draft(
       { type: 'session.draft.update', target: sessionTarget, patch: { field: key, operation: 'replace', value: exactText } },
       `Rascunho para ${target.patient.name}: preencher “${fieldCommand[1]}” da sessão com “${exactText}”.`,
@@ -726,7 +738,9 @@ export function parseCentralCommand({ text, context = {}, referenceDate } = {}) 
   if (!normalized) return refuse('Digite um comando para continuar.')
   // Descriptions and session field text are literal payloads, not commands.
   const commandRegion = normalized.split(/\s+com\s+descricao\s+/u)[0]
-    .replace(/^(?:preencher|anotar|registrar)\s+(?:observacao|evolucao|procedimentos?|resultado|decisao|encaminhamento|fechamento)\s+(?:da|do)\s+sessao\s+de\s+(.+?)\s+com\s+.+$/u, '$1')
+    .replace(/^(?:preencher|anotar|registrar|acrescentar|acrescente|acrescenta|acrecentar)\s+(?:observacao|evolucao|procedimentos?|resultado|decisao|encaminhamento|fechamento)\s+(?:da|do)\s+sessao\s+de\s+(.+?)\s+com\s+.+$/u, '$1')
+  if (/\b(?:nao|nunca|jamais)\s+(?:acrescent(?:ar|e|a)|acrecentar)\b/u.test(commandRegion)) return refuse('O pedido contém uma negação. Informe um único comando afirmativo.')
+  if (/(?:\s+e\s+|;\s*|\s+depois\s+|\s+ou\s+|,\s*|\s+em seguida\s+)(?:acrescent(?:ar|e|a)|acrecentar)\b/u.test(commandRegion)) return refuse('Informe apenas uma ação por comando.')
   if (/^(?:(?:por favor|por gentileza)\s*[,،]?\s*)?(?:nao|nunca|jamais)\b/u.test(normalized)
     || /\b(?:nao|nunca|jamais)\s+(?:iniciar|remarcar|cancelar|cadastre|cadastra|cadastrar|crie|cria|criar|adicione|adiciona|adicionar|editar|edite|edita|mudar|mude|muda|renomear|renomeie|arquivar|arquive|arquiva|restaurar|restaure|restaura|agendar|agende|agenda|marcar|marque|marca|abrir|abra|abre|mostrar|mostre|mostra|registrar|preencher|selecionar|definir)\b/u.test(commandRegion)) {
     return refuse('O pedido contém uma negação. Informe um único comando afirmativo.')

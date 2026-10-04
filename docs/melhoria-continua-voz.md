@@ -2,6 +2,10 @@
 
 ## Estado atual — 04/10/2026
 
+A 0.2.69 acrescenta trechos aos quatro textos do rascunho sem apagar a base viva. [Entrega, instalador e limites](validacao-voz-0.2.69.md): JS393/393, Rust86 aprovados/1 ignorado; rodada final selecionada43/43 em2,9min, exit0. Áudio real sintético preservado: parser final2 aprovados/2 falhos/1 não avaliado contra o pedido original; erros clínicos não corrigidos. Pacote local gerado/auditado, não instalado/publicado nem assinado; instalado61/perfil preservados. Meta ativa.
+
+As entregas abaixo são históricas, incluindo o estado anterior0.2.68.
+
 A 0.2.68 foi testada e empacotada localmente para alinhar os quatro textos de sessão ao limite de 4000 unidades UTF-16 do formulário. [Entrega, instalador e limites](validacao-voz-0.2.68.md): JS365/365, Rust86 aprovados/1 ignorado, opt-in sintético separado aprovado e regressão selecionada117/117 em12,7min. A instalação local continua na 0.2.61; o novo pacote não foi instalado/publicado como Release nem assinado para updater/Authenticode.
 
 Fontes atuais: [matriz de ações](voz-matriz-atual-0.2.67.md), [regressão ampla](voz-regressao-ampla-0.2.67.md) e [reconhecimento e replay dos valores de indicador](voz-indicador-nativo-20261004.md). Regressão 0.2.67: 319/322 na rodada integral; depois de corrigir três seletores antigos, 3/3 na repetição focal. Replay de escala: 2/2. Não é uma única execução de 322 verdes nem homologação do microfone físico.

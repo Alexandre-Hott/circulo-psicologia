@@ -1,6 +1,6 @@
 ﻿param(
     [string]$VoiceDirectory,
-    [ValidateSet('core', 'behavior-save', 'behavior-remove', 'indicator-value', 'occurrence-date', 'occurrence-minutes', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer', 'interface-series', 'interface-details', 'interface-draft-resume', 'interface-draft-continue', 'interface-draft-choice')][string]$Scenario = 'core',
+    [ValidateSet('core', 'behavior-save', 'behavior-remove', 'indicator-value', 'clinical-append', 'occurrence-date', 'occurrence-minutes', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer', 'interface-series', 'interface-details', 'interface-draft-resume', 'interface-draft-continue', 'interface-draft-choice')][string]$Scenario = 'core',
     [switch]$KeepArtifacts
 )
 
@@ -160,6 +160,16 @@ try {
         $commands = @(
             'Registrar indicador Regulação emocional como Com algum apoio na sessão de Ana Clara.',
             'Registrar indicador Regulação emocional como Com autonomia na sessão de Ana Clara.',
+            'Confirmar comando.'
+        )
+    }
+    if ($Scenario -eq 'clinical-append') {
+        $voice.Rate = 0
+        $commands = @(
+            'Acrescentar observação da sessão de Ana Clara com pediu ajuda.',
+            'Acrescentar procedimentos da sessão de Ana Clara com fez jogo de turnos.',
+            'Acrescentar resultado da sessão de Ana Clara com manteve atenção.',
+            'Acrescentar encaminhamento da sessão de Ana Clara com próxima sessão semanal.',
             'Confirmar comando.'
         )
     }

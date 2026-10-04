@@ -6,6 +6,7 @@ import DesktopAnalytics from './DesktopAnalytics.jsx'
 import DesktopSessions from './DesktopSessions.jsx'
 import VoiceCommandCenter from './VoiceCommandCenter.jsx'
 import { parseCentralCommand } from './centralCommandRouter.js'
+import { validateClinicalTextAppend } from './clinicalTextAppend.js'
 import { applyVoiceInterfaceCommand, parseVoiceInterfaceCommand } from './voiceInterfaceCommands.js'
 import { captureCommandAudio } from './localVoiceCapture.js'
 import { seedSyntheticDemo } from './desktopDemoSeed.js'
@@ -171,7 +172,10 @@ export default function DesktopVault() {
     const control = parseVoiceInterfaceCommand(request.text)
     if (!vaultUnlocked.current) return control || { status: 'clarification', message: 'Digite sua senha para acessar pacientes e agenda. Aqui você pode pedir para clicar nos botões visíveis.' }
     if (control?.status === 'draft' || /^criar comportamento reutiliz[aá]vel[.!?]*$/iu.test(request.text.trim())) return control
-    const specific = parseCentralCommand(request)
+    const appendRequested = /^(?:acrescent(?:ar|e|a)|acrecentar)\s/iu.test(String(request.text ?? '').trim())
+    const specific = parseCentralCommand(appendRequested ? { ...request, context: { ...request.context,
+      clinicalTextSnapshot: space === 'sessions' && sessionsOpen ? sessionsRef.current?.getClinicalTextSnapshot() : null,
+    } } : request)
     if (specific.status === 'draft') return specific
     if (specific.status === 'clarification' && specific.code === 'clinical_text_limit') return specific
     return control || specific
@@ -307,6 +311,10 @@ export default function DesktopVault() {
       setSessionsOpen(true)
       setSpace('sessions')
     } else if (intent.type === 'session.draft.update') {
+      if (intent.patch?.operation === 'append') {
+        validateClinicalTextAppend(intent.target, intent.patch,
+          space === 'sessions' && sessionsOpen ? sessionsRef.current?.getClinicalTextSnapshot() : null)
+      }
       if (!activeDraft || activeDraft.id !== intent.target.sessionDraftId || activeDraft.patientId !== intent.target.patientId) {
         setVoiceNotice('O rascunho de sessão não está mais aberto. Abra a sessão correta e prepare o comando novamente.')
         setVoiceIntent(null)

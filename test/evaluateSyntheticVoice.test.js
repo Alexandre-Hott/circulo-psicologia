@@ -3,6 +3,103 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { evaluateSyntheticVoice } from '../scripts/evaluateSyntheticVoice.js'
 
+const clinicalAppendCorpus = () => [
+  'Acrescentar observação da sessão de Ana Clara com pediu ajuda.',
+  'Acrescentar procedimentos da sessão de Ana Clara com fez jogo de turnos.',
+  'Acrescentar resultado da sessão de Ana Clara com manteve atenção.',
+  'Acrescentar encaminhamento da sessão de Ana Clara com próxima sessão semanal.',
+  'Confirmar comando.',
+].map((Transcript, Index) => ({ Index, Transcript }))
+
+test('append clínico nativo após aliases de cabeçalho aprova dois e preserva duas falhas clínicas', () => {
+  const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-clinical-append-20261004.json', import.meta.url), 'utf8'))
+  assert.deepEqual(cases.map(item => item.Transcript), [
+    'Acrescentar observação da seção de Ana Clara compidiu ajuda.',
+    'Acrescentar procedimentos da sessão de Ana Clara com fez jogo de turnos.',
+    'Acrescentar resultado da seção de Ana Clara com manteve atenção.',
+    'Acrecentar encaminhamento da seção de Ana Clara com próxima seção semanal.',
+    'Confirmar comando.',
+  ])
+  const result = evaluateSyntheticVoice(cases, { scenario: 'clinical-append' })
+  assert.equal(result.Passed, 2)
+  assert.equal(result.Failed, 2)
+  assert.equal(result.NotEvaluated, 1)
+  assert.deepEqual(result.Results.map(item => item.Status), ['failed', 'passed', 'passed', 'failed', 'not-evaluated'])
+  assert.deepEqual(result.Results.map(item => item.Transcript), cases.map(item => item.Transcript))
+  assert.equal(result.Results[0].ActualIntent, null)
+  assert.deepEqual(result.Results[1].ActualIntent, {
+    type: 'session.draft.update',
+    target: { patientId: 'ana', patientName: 'Ana Clara', sessionDraftId: 'synthetic-draft', sessionDate: '2026-10-04' },
+    patch: { field: 'procedures', operation: 'append', value: 'fez jogo de turnos.', separator: ' ', baseValue: 'Base fictícia.', baseEpoch: 1, baseRevision: 7 },
+  })
+  assert.deepEqual(result.Results[2].ActualIntent, {
+    type: 'session.draft.update',
+    target: { patientId: 'ana', patientName: 'Ana Clara', sessionDraftId: 'synthetic-draft', sessionDate: '2026-10-04' },
+    patch: { field: 'outcomeDecision', operation: 'append', value: 'manteve atenção.', separator: ' ', baseValue: 'Base fictícia.', baseEpoch: 1, baseRevision: 7 },
+  })
+  assert.deepEqual(result.Results[3].ActualIntent, {
+    type: 'session.draft.update',
+    target: { patientId: 'ana', patientName: 'Ana Clara', sessionDraftId: 'synthetic-draft', sessionDate: '2026-10-04' },
+    patch: { field: 'referralClosure', operation: 'append', value: 'próxima seção semanal.', separator: ' ', baseValue: 'Base fictícia.', baseEpoch: 1, baseRevision: 7 },
+  })
+  assert.deepEqual(result.Results.slice(0, 4).map(item => item.ExpectedIntent.patch.value), [
+    'pediu ajuda.', 'fez jogo de turnos.', 'manteve atenção.', 'próxima sessão semanal.',
+  ])
+})
+
+test('append clínico digitado exige quatro patches literais com snapshot isolado', () => {
+  const cases = clinicalAppendCorpus()
+  const result = evaluateSyntheticVoice(cases, { scenario: 'clinical-append' })
+  assert.equal(result.Passed, 4, JSON.stringify(result.Results))
+  assert.equal(result.Failed, 0)
+  assert.equal(result.NotEvaluated, 1)
+  assert.deepEqual(result.Results.slice(0, 4).map(item => item.ActualIntent), [
+    ['observation', 'pediu ajuda.'], ['procedures', 'fez jogo de turnos.'],
+    ['outcomeDecision', 'manteve atenção.'], ['referralClosure', 'próxima sessão semanal.'],
+  ].map(([field, value]) => ({
+    type: 'session.draft.update',
+    target: { patientId: 'ana', patientName: 'Ana Clara', sessionDraftId: 'synthetic-draft', sessionDate: '2026-10-04' },
+    patch: { field, operation: 'append', value, separator: ' ', baseValue: 'Base fictícia.', baseEpoch: 1, baseRevision: 7 },
+  })))
+  assert.equal(result.Results[4].Status, 'not-evaluated')
+  for (const [index, transcript] of [
+    [0, cases[0].Transcript.replace('pediu ajuda.', 'Pediu ajuda.')],
+    [0, cases[0].Transcript.replace('pediu ajuda.', 'pediu ajuda')],
+    [0, cases[0].Transcript.replace('pediu ajuda.', 'pediu apoio.')],
+    [1, cases[1].Transcript.replace('Acrescentar', 'Preencher')],
+    [2, cases[2].Transcript.replace('atenção', 'atencao')],
+    [3, cases[3].Transcript.replace('próxima', 'proxima')],
+    [0, cases[0].Transcript.replace('Ana Clara', 'Ana')],
+  ]) {
+    const changed = structuredClone(cases); changed[index].Transcript = transcript
+    assert.equal(evaluateSyntheticVoice(changed, { scenario: 'clinical-append' }).Results[index].Status, 'failed', transcript)
+  }
+  const coreCases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-20261003.json', import.meta.url), 'utf8'))
+  coreCases[2].Transcript = cases[0].Transcript
+  assert.equal(evaluateSyntheticVoice(coreCases).Results[2].ActualIntent, null)
+})
+
+test('append clínico exige corpus completo de cinco índices únicos e textos não vazios', () => {
+  const cases = clinicalAppendCorpus()
+  for (const invalidCorpus of [null, [], cases.slice(1), [...cases, cases[0]]]) {
+    assert.throws(() => evaluateSyntheticVoice(invalidCorpus, { scenario: 'clinical-append' }))
+  }
+  for (const invalid of [
+    { Index: 0, Transcript: '' }, { Index: 0, Transcript: '   ' },
+    { Index: 0, Transcript: null }, { Index: 0, Transcript: 42 },
+    { Index: 1, Transcript: 'Confirmar comando.' },
+    { Index: -1, Transcript: 'Confirmar comando.' }, { Index: 5, Transcript: 'Confirmar comando.' },
+    { Index: 0.5, Transcript: 'Confirmar comando.' }, { Index: '0', Transcript: 'Confirmar comando.' },
+    { Transcript: 'Confirmar comando.' },
+  ]) {
+    assert.throws(() => evaluateSyntheticVoice([invalid, ...cases.slice(1)], { scenario: 'clinical-append' }))
+  }
+  const reordered = evaluateSyntheticVoice([...cases].reverse(), { scenario: 'clinical-append' })
+  assert.equal(reordered.Passed, 4)
+  assert.equal(reordered.Failed, 0)
+  assert.equal(reordered.NotEvaluated, 1)
+})
+
 test('indicador sintético nativo preserva transcrições reais e aplica somente valores exatos da escala', () => {
   const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-indicator-value-20261004.json', import.meta.url), 'utf8'))
   assert.deepEqual(cases.map(item => item.Transcript), [

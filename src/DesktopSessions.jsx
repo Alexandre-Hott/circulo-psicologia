@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import { entityOptionSuffix } from './voiceEntityLabels.js'
+import { clinicalTextFields, validateClinicalTextAppend } from './clinicalTextAppend.js'
 import { invoke } from '@tauri-apps/api/core'
 import { groupIndicatorHistory } from './desktopIndicatorEvolution.js'
 import './DesktopSessions.css'
 
 let resumeVoiceInstance = 0
+let clinicalSnapshotEpoch = 0
 
 export default function DesktopSessions({ ref, patientId, onPatientChange, activeDraft, workspaceActive = true, voiceCommandDraft = null, onVoiceDraftApplied, onDraftChange, onChanged, onSessionMessage, onStartRecord, onConfirm = async message => window.confirm(message) }) {
   const [patients, setPatients] = useState([])
@@ -35,6 +37,8 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   const [busy, setBusyState] = useState(false)
   const valuesRef = useRef({ observation, procedures, outcomeDecision, referralClosure, behaviorIds, indicatorEntries })
   const revisionRef = useRef(0)
+  const clinicalEpochRef = useRef(0)
+  const clinicalFormRef = useRef(null)
   const dirtyRef = useRef(false)
   const savePromiseRef = useRef(null)
   const saveRef = useRef(null)
@@ -71,6 +75,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     sectionRequestEpochRef.current++
   }, [workspaceActive, patientId])
   useLayoutEffect(() => { setResumeRevision(value => value + 1) }, [workspaceActive, patientId, activeDraft?.id, activeDraft?.patientId])
+  useLayoutEffect(() => { clinicalEpochRef.current = ++clinicalSnapshotEpoch }, [workspaceActive, patientId, activeDraft?.id, activeDraft?.patientId, loadedPatientId, resumeRevision])
   useLayoutEffect(() => {
     draftIdentityRef.current = { id: activeDraft?.id, patientId: activeDraft?.patientId }
     return () => { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null }
@@ -120,6 +125,21 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       }, 600)
     }
   }, [patientId])
+
+  const getClinicalTextSnapshot = useCallback(() => {
+    const form = clinicalFormRef.current
+    if (!mountedRef.current || !workspaceActive || !activeDraft?.id || activeDraft.patientId !== patientId
+      || draftIdentityRef.current.id !== activeDraft.id || draftIdentityRef.current.patientId !== patientId
+      || loadedPatientId !== patientId || busyRef.current || savePromiseRef.current || !form?.isConnected) return null
+    for (let element = form; element; element = element.parentElement) {
+      const style = getComputedStyle(element)
+      if (element.hidden || element.inert || element.getAttribute('aria-hidden') === 'true'
+        || style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return null
+    }
+    if (clinicalTextFields.some(field => typeof valuesRef.current[field] !== 'string')) return null
+    return { patientId, sessionDraftId: activeDraft.id, epoch: clinicalEpochRef.current, revision: revisionRef.current,
+      values: Object.fromEntries(clinicalTextFields.map(field => [field, valuesRef.current[field]])) }
+  }, [workspaceActive, activeDraft, patientId, loadedPatientId])
 
   useEffect(() => {
     const intent = voiceCommandDraft
@@ -207,6 +227,21 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       })
       return
     }
+    if (intent.type === 'session.draft.update' && intent.patch?.operation === 'append') {
+      // Consume even a refused request: it must not replay when the UI later becomes ready.
+      appliedVoiceDraftRef.current = intent.commandId
+      try {
+        const combined = validateClinicalTextAppend(intent.target, intent.patch, getClinicalTextSnapshot())
+        const setter = { observation: setObservation, procedures: setProcedures, outcomeDecision: setOutcomeDecision, referralClosure: setReferralClosure }[intent.patch.field]
+        voiceVersionRef.current++
+        voiceConfirmationPendingRef.current = true
+        setVoiceConfirmationPending(true)
+        setter(combined); updateValues({ [intent.patch.field]: combined })
+        onSessionMessage?.('Trecho acrescentado. Confira o formulário e clique em “Salvar rascunho” para gravar.')
+      } catch (reason) { setError(reason.message) }
+      onVoiceDraftApplied?.(intent.commandId)
+      return
+    }
     if ((intent.type && intent.type !== 'session.draft.update') || !activeDraft || activeDraft.id !== intent.target?.sessionDraftId || activeDraft.patientId !== intent.target?.patientId || patientId !== activeDraft.patientId) return
     appliedVoiceDraftRef.current = intent.commandId
     voiceVersionRef.current++
@@ -231,7 +266,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       onSessionMessage?.(`Indicador preenchido. Confira o formulário e clique em “Salvar rascunho” para gravar.`)
     } else onSessionMessage?.('Não apliquei o comando: o campo ou a operação não é compatível com este rascunho.')
     onVoiceDraftApplied?.(intent.commandId)
-  }, [voiceCommandDraft, activeDraft, patientId, loadedPatientId, workspaceActive, addendumSessionId, addendumContent, onVoiceDraftApplied, onSessionMessage, updateValues])
+  }, [voiceCommandDraft, activeDraft, patientId, loadedPatientId, workspaceActive, addendumSessionId, addendumContent, onVoiceDraftApplied, onSessionMessage, updateValues, getClinicalTextSnapshot])
   const save = useCallback(() => {
     clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = null
@@ -281,6 +316,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   }
 
   useImperativeHandle(ref, () => ({
+    getClinicalTextSnapshot,
     cancelPendingSectionNavigation: () => { sectionRequestEpochRef.current++ },
     savePending: async () => {
       if (voiceConfirmationPendingRef.current) throw new Error('Há uma alteração de voz não salva. Revise e clique em “Salvar rascunho” ou cancele o rascunho antes de sair.')
@@ -476,7 +512,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       {!activeDraft && !visibleDrafts.length && <p>Escolha ou crie um compromisso para este paciente; depois marque os comportamentos na sessão.</p>}
       {!activeDraft && !visibleDrafts.length && !onStartRecord && <p>Abra a Agenda para criar ou escolher um compromisso.</p>}
     </section>}
-    {activeDraft && activeDraft.patientId === patientId && <form id="session-draft" data-voice-record={activeDraft.id} onSubmit={saveDraft} aria-label="Rascunho de sessão">
+    {activeDraft && activeDraft.patientId === patientId && <form ref={clinicalFormRef} id="session-draft" data-voice-record={activeDraft.id} onSubmit={saveDraft} aria-label="Rascunho de sessão">
       <h3>Rascunho da ocorrência {activeDraft.originalDate}</h3>
       <p>Paciente: <strong>{patients.find(patient => patient.id === patientId)?.name || patientId}</strong> · {activeDraft.originalDate}</p>
       <fieldset id="draft-behaviors" className="session-behavior-choices" tabIndex={-1} disabled={busy}><legend>Comportamentos desta sessão</legend>{templates.length ? templates.map(template => <label key={template.id} data-voice-record={`${activeDraft.id}:behavior:${template.id}`} data-voice-epoch={template.version} className="vault-checkbox"><input type="checkbox" checked={behaviorIds.includes(template.id)} onChange={event => { const next = event.target.checked ? [...behaviorIds, template.id] : behaviorIds.filter(id => id !== template.id); setBehaviorIds(next); updateValues({ behaviorIds: next }) }} /> {template.title} · v{template.version}{templateOption(template)}</label>) : <p>Nenhum comportamento disponível. <a href="#session-behaviors" onClick={() => document.getElementById('session-behaviors')?.setAttribute('open', '')}>Criar na biblioteca</a>.</p>}</fieldset>

@@ -39,15 +39,26 @@ function matches(actual, desired, key = '') {
 }
 
 export function evaluateSyntheticVoice(cases, { scenario = 'core' } = {}) {
-  if (!['core', 'behavior-save', 'behavior-remove', 'indicator-value', 'occurrence-date', 'occurrence-minutes', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer', 'interface-series', 'interface-details', 'interface-draft-resume', 'interface-draft-continue', 'interface-draft-choice'].includes(scenario)) throw new Error('Cenário de áudio desconhecido.')
+  if (!['core', 'behavior-save', 'behavior-remove', 'indicator-value', 'clinical-append', 'occurrence-date', 'occurrence-minutes', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer', 'interface-series', 'interface-details', 'interface-draft-resume', 'interface-draft-continue', 'interface-draft-choice'].includes(scenario)) throw new Error('Cenário de áudio desconhecido.')
   const scenarioContext = scenario === 'indicator-value' ? {
     ...context,
     indicators: [{ id: 'indicator-regulation', name: 'Regulação emocional', archivedAt: null, labels: ['Ainda não observado', 'Com muito apoio', 'Com algum apoio', 'Com autonomia'] }],
+  } : scenario === 'clinical-append' ? {
+    patients: [{ id: 'ana', name: 'Ana Clara', archivedAt: null }],
+    activeSessionDraft: { id: 'synthetic-draft', patientId: 'ana', originalDate: '2026-10-04' },
+    clinicalTextSnapshot: {
+      patientId: 'ana', sessionDraftId: 'synthetic-draft', epoch: 1, revision: 7,
+      values: { observation: 'Base fictícia.', procedures: 'Base fictícia.', outcomeDecision: 'Base fictícia.', referralClosure: 'Base fictícia.' },
+    },
   } : context
   const expectations = scenario === 'core' ? expected : ['behavior-save', 'interface-fields', 'interface-weekday', 'interface-drawer', 'interface-series', 'interface-details', 'interface-draft-resume', 'interface-draft-continue', 'interface-draft-choice'].includes(scenario) ? [null, null, null]
     : scenario === 'interface-party' ? [{ type: 'patient.workspace.open', target: { patientId: 'ana', space: 'links' } }, null, null]
     : scenario === 'behavior-remove' ? [0, 1].map(() => ({ type: 'session.draft.update', target: { patientId: 'ana', patientName: 'Ana Clara', sessionDraftId: 'synthetic-draft', sessionDate: null }, patch: { field: 'behaviorIds', operation: 'remove', value: 'help', label: 'Pede ajuda' } })).concat(null)
     : scenario === 'indicator-value' ? ['Com algum apoio', 'Com autonomia'].map((label, index) => ({ type: 'session.draft.update', target: { patientId: 'ana', patientName: 'Ana Clara', sessionDraftId: 'synthetic-draft', sessionDate: null }, patch: { field: 'indicators', operation: 'set', value: { id: 'indicator-regulation', value: index + 2, label } } })).concat(null)
+    : scenario === 'clinical-append' ? [
+      ['observation', 'pediu ajuda.'], ['procedures', 'fez jogo de turnos.'],
+      ['outcomeDecision', 'manteve atenção.'], ['referralClosure', 'próxima sessão semanal.'],
+    ].map(([field, value]) => ({ type: 'session.draft.update', target: { patientId: 'ana', patientName: 'Ana Clara', sessionDraftId: 'synthetic-draft', sessionDate: '2026-10-04' }, patch: { field, operation: 'append', value, separator: ' ', baseValue: 'Base fictícia.', baseEpoch: 1, baseRevision: 7 } })).concat(null)
     : scenario === 'analytics-range' ? ['ana', ''].map(patientId => ({ type: 'analytics.view', target: { patientId, from: '2026-09-01', to: '2026-09-30', view: 'custom' } }))
     : scenario === 'occurrence-minutes' ? ['start', 'remarcar', 'cancelar'].map(action => ({ type: 'agenda.occurrence.action', target: { patientId: 'ana', date: '2026-10-03', start: '15:45', action } })).concat(
       { type: 'session.addendum.open', target: { patientId: 'ana', date: '2026-10-03', start: '15:45' } }, null)
