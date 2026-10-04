@@ -2,7 +2,9 @@
 
 ## Entrega local 0.2.84
 
-A [entrega84](validacao-voz-0.2.84.md) inclui a correção da confirmação digitada pontuada, com provas de25/25 do assistente e26/26 do ditado em rodadas separadas. Metadados84: JS1891/1891 e Rust138 aprovados/1 ignorado. Quatro WAVs adicionais passaram pelo backend Rust real:2 intents exatos,1 divergência literal de título e1 rota DOM ainda não avaliada. Não é acerto universal nem replay UI concluído desses quatro textos. Pacote local gerado e auditado, não instalado, extraído, assinado ou publicado. Meta ativa.
+A auditoria preparatória atual de fonte não identificou controle funcional habilitado sem rota natural, controle genérico ou dispatcher local nas oito áreas. Isso é evidência de classes/rotas, não de execução universal por áudio, precisão acústica ou conclusão da meta. As exceções de senha, arquivo, início explícito do microfone e controles desabilitados permanecem. As provas pontuais e limitações abaixo não foram convertidas em aprovação geral.
+
+A [entrega84](validacao-voz-0.2.84.md) inclui a correção da confirmação digitada pontuada, com provas de25/25 do assistente e26/26 do ditado em rodadas separadas. Metadados84: JS1891/1891 e Rust138 aprovados/1 ignorado. Quatro WAVs adicionais passaram pelo backend Rust real: avaliação pura2 intents exatos/1 divergência literal de título/1 rota DOM não avaliada. O replay posterior desses textos passou4/4 no autor e4/4 no principal, sem gravações; não reclassifica a divergência de título como acerto ASR. Pacote local gerado e auditado, não instalado, extraído, assinado ou publicado. Meta ativa, sem prova universal ou microfone físico.
 
 ## Referência local 0.2.83
 

@@ -1,0 +1,41 @@
+{
+  "Provenance": {
+    "ArtifactRoot": "C:/Users/alexandre/AppData/Local/Temp/circulo-trusted4-short-d9e220c93018447387a8e0424a348ce5",
+    "NativeStdout": "C:/Users/alexandre/AppData/Local/Temp/circulo-trusted4-short-d9e220c93018447387a8e0424a348ce5/results/native-stdout.log",
+    "NativeStdoutSHA256": "A8BCC868616134CB8416F4E64D1ABFC827877652291D3F86E8C08C33D7FF4AA9",
+    "NativeSessionHandle": 26794,
+    "NativeExitCode": 0,
+    "Marker": "CIRCULO_SYNTHETIC_RESULT_JSON:",
+    "Replay": "Raw Rust transcripts; synthetic PCM/IPC only; no new ASR or repair."
+  },
+  "Confirmation": {
+    "Fixture": "native-voice-beam8-rust8-fresh.json",
+    "FixtureSHA256": "8016585AE8C6B174A155DFFFC06631CFEAC3915C7ABAF9F35E5E8378E44C8803",
+    "Index": 7,
+    "Transcript": "Confirmar comando.",
+    "NativeSessionHandle": 7035
+  },
+  "TitleComparison": {
+    "Expected": "Espera a vez",
+    "Actual": "Espera a vez.",
+    "StrictMatch": false
+  },
+  "Cases": [
+    {
+      "Index": 0,
+      "Transcript": "Criar comportamento. Espera a vez."
+    },
+    {
+      "Index": 1,
+      "Transcript": "Editar comportamento pede ajuda."
+    },
+    {
+      "Index": 2,
+      "Transcript": "Abrir análises."
+    },
+    {
+      "Index": 3,
+      "Transcript": "Clicar em Registrar Sessão."
+    }
+  ]
+}

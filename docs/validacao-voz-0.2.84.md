@@ -11,13 +11,22 @@ Uma rodada opt-in pelo backend Rust real transcreveu os quatro WAVs fictícios n
 | Criar comportamento Espera a vez | Criar comportamento. Espera a vez. | Falha literal: o título criado seria “Espera a vez.”, com ponto |
 | Editar comportamento Pede ajuda | Editar comportamento pede ajuda. | Intent completo correto, ID help único |
 | Abrir análises | Abrir análises. | Intent completo correto, destino analytics |
-| Clicar em Registrar sessão | Clicar em Registrar Sessão. | Texto compatível; ação depende do DOM, ainda não avaliada nesta prova |
+| Clicar em Registrar sessão | Clicar em Registrar Sessão. | Não avaliado pelo parser puro; replay posterior abriu somente o formulário rápido |
 
 O harness passou, mas isso não equivale a quatro ações corretas. A avaliação pura estrita deu dois aprovados, um falho e um não avaliado, decisão semântica 2; a chamada PowerShell retornou código 1. O ponto no título foi preservado, não removido para obter acerto. Um avaliador preliminar que normalizava nomes/títulos foi rejeitado e não executado; permanece como artefato histórico. O novo usa igualdade profunda de todas as chaves/valores dos três intents, confere bytes com o único marker e só tolera caixa/pontuação terminal na comparação textual do quarto comando.
 
 Os textos Unicode/codepoints foram registrados antes da síntese. A geração anterior teve quatro Speak, zero retries e sinal PCM22050 mono16 não zero, com durações 2,30 a 3,69 s. A auditoria independente confirmou os 43 pins antes/depois: cinco fontes, 19 recursos, três referências e oito históricos nas duas localizações. O principal conferiu novamente fontes, recursos e WAVs antes/depois da inferência. A mudança posterior de metadados para 84 não alterou essas fontes funcionais. Não há latência por caso nem logs internos Whisper.
 
 Artefatos em `C:\Users\alexandre\AppData\Local\Temp\circulo-trusted4-short-d9e220c93018447387a8e0424a348ce5\results`: stdout `A8BCC868616134CB8416F4E64D1ABFC827877652291D3F86E8C08C33D7FF4AA9`, stderr `65523252DC695ACAA878E5D97C480A68A0018EAE69F21884D1723F26628F9DFC` e relatório estrito `DE49F084E3DDBE2A78CE7F55126B7B7F76E71A812942DA8C59A6FCCEBCCC97A7`. Entrada extraída do marker `6127189F601815D2429612E3225745CA456E8AE17B7227DB827241085E2184DE`; avaliador estrito `286E6EC331DB45192DA3AD024AEFFFF58C9B47688D902C96FC23DA1AF1382B0A`.
+
+## Replay dos textos na interface
+
+Após o build, os quatro textos Rust intactos passaram4/4 na UI do autor em23,9s e4/4 na conferência do principal em23,7s. Rodadas separadas, um worker e zero retries, portas5263/5264. A proposta só abre formulário ou espaço depois do segundo áudio “Confirmar comando.”, reutilizado da rodada Rust fresca anterior de oito áudios; isso não é outra inferência. O formulário de criação conserva literalmente “Espera a vez.”, a edição abre somente help/v1, Análises consulta os filtros exatos e Registrar sessão abre somente Novo compromisso/Avulsa. Catálogo, pacientes e rascunhos concorrentes ficam iguais, sem Save ou outra gravação. Recursos e buffers da captura foram encerrados/zerados; não houve tráfego externo inesperado ou janela nativa.
+
+A primeira rodada do autor passou três casos e falhou na expectativa de uma única leitura analítica; a aplicação fez duas consultas idênticas. Somente o teste foi ajustado para exigir ao menos uma consulta e validar cada payload integralmente. Revisão estática independente aprovou fixture, leitura das props atuais sem callbacks e os quatro cenários. O replay passou, mas não transforma a divergência literal do reconhecimento em acerto; o relatório puro original2/1/1 permanece intacto. Não houve mudança de produção ou outro build por esse replay.
+
+- Fixture de transcrições: `07FF18B9C6405EA68352BAA4AE14A683981681300A2FF32B9A8562C0AB895C7C`.
+- Replay da interface: `C9672580C62CA86ED4C0E97C6D0E58D65AE4D7D540895B280FCE22DE629EBD13`.
 
 ## Testes e pacote
 
@@ -29,4 +38,4 @@ Auditoria de metadados em `C:\Users\alexandre\AppData\Local\Temp\circulo-0284-au
 
 ## Limites e próxima prova
 
-Ainda falta conferir os quatro textos Rust intactos na interface. A diferença no título não será escondida por esse replay. Reconhecimento nativo e aplicação UI são provas separadas; não há homologação de microfone físico, precisão geral ou cobertura universal. Senhas, seletores de arquivos e início explícito do áudio permanecem manuais. Limpeza de recovery, backups antigos e novas funcionalidades clínicas ficaram fora do escopo.
+Os quatro textos Rust foram conferidos na interface; a diferença no título permanece como limitação explícita. Reconhecimento nativo e aplicação UI são provas separadas; não há homologação de microfone físico, precisão geral ou cobertura universal. Senhas, seletores de arquivos e início explícito do áudio permanecem manuais. Limpeza de recovery, backups antigos e novas funcionalidades clínicas ficaram fora do escopo. A próxima auditoria procura lacunas funcionais reais nas oito áreas, sem criar funcionalidades ou prolongar o ciclo apenas com testes redundantes.
