@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Instalação local atual: 0.2.52
+
+Instalação silenciosa exit0, PEversão52, quatro arquivos do cofre preservados por hash e Whisper/modelo instalados conferidos. Aplicativo abriu; captura gráfica falhou por timeout, mas nova seleção/leitura de acessibilidade confirmou a tela de senha e o assistente. Desbloqueio manual solicitado, sem automação de senha. Harness17WAVs com recursos instalados terminouexit0, passando transcrição pelo backend Rust; não comprova host IPC instalado, microfone físico ou novo alias de salvamento (fora desse corpus). Sem prova das ações instaladas pós-desbloqueio. Notas anteriores “instalado47” passam a ser históricas; não indicam novo resultado negativo. [Evidência e preservação](melhoria-continua-voz.md).
+
 ## Complemento 0.2.52: salvar comportamento
 
 Pedido curto “salvar comportamento”/“salve o comportamento” aciona criação ou salvamento de versão apenas após prévia/confirmar. Duas ações disponíveis são recusadas; trocar de editor invalida a proposta preparada. Jornada da biblioteca e regressão de alvos7/7 aprovada; regressão final interface/biblioteca49/49 em3,4min, JS245/245 aprovado e revisão estática sem achados. Incluído com alias de ocorrência no pacote52 PE/x64/hash auditado, não instalado/publicado; instalado permanece47. Componente/RPC sintético, não prova de fala física. [Empacotamento, tentativas e limites](melhoria-continua-voz.md).
