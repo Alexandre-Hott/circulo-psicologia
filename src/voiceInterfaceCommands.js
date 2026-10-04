@@ -65,7 +65,7 @@ function contextOf(element) {
   return clean(card?.getAttribute('aria-label') || (heading ? textContent(heading) : ''))
 }
 
-function inventory(root) {
+function inventory(root, raw = false) {
   const dialog = root.querySelector('[role="alertdialog"]')
   const scope = dialog && visible(dialog) ? dialog : root
   const seenActions = new Set()
@@ -74,6 +74,7 @@ function inventory(root) {
     .map(element => ({ element, name: nameOf(element), context: contextOf(element) }))
     .filter(item => item.name)
     .filter(item => {
+      if (raw) return true
       // Separate series cards must compete even when an action/label is copied.
       if (item.element.hasAttribute('data-voice-series-kind')) return true
       // Only explicitly identical, record-scoped button actions are equivalent.
@@ -89,6 +90,63 @@ function inventory(root) {
       seenActions.add(key)
       return true
     })
+}
+
+const focusedPrefix = 'data-voice-focused-appointment-'
+const focusedKeys = ['action', 'id', 'patient-id', 'patient', 'series-id', 'original-date', 'date', 'start', 'end']
+const focusedMarked = element => focusedKeys.some(key => element.hasAttribute(focusedPrefix + key))
+const focusedShortAction = query => fold(query) === 'alterar' ? 'edit' : fold(query) === 'iniciar sessao' ? 'start' : null
+const focusedMetadata = element => focusedMarked(element) ? JSON.stringify([
+  ...focusedKeys.map(key => element.getAttribute(focusedPrefix + key)),
+  element.closest('[data-voice-focused-occurrence]')?.getAttribute('data-voice-focused-occurrence'),
+  element.closest('[data-voice-focused-occurrence]')?.getAttribute('data-voice-focused-patient'),
+]) : null
+
+function focusedCoherent(element, root) {
+  const values = focusedKeys.map(key => element.getAttribute(focusedPrefix + key))
+  if (values.some(value => value === null)) return false
+  const [action, id, patientId, patient, seriesId, originalDate, date, start, end] = values
+  const panel = element.closest('[data-voice-focused-occurrence]')
+  if (!element.matches('button') || !['edit', 'start'].includes(action) || !id || !patientId || !patient.trim()
+    || !panel || panel.getAttribute('data-voice-focused-occurrence') !== id
+    || panel.getAttribute('data-voice-focused-patient') !== patientId
+    || element.getAttribute('data-voice-action') !== `agenda:${action}:${id}`
+    || nameOf(element) !== `${action === 'edit' ? 'Alterar ocorrência' : 'Iniciar sessão'} de ${patient} em ${date} às ${start}–${end}`
+    || !element.getAttribute('data-voice-epoch') || !lifecycleChain(element)
+    || [originalDate, date].some(value => normalizeVoiceFieldValue('date', value) !== value)
+    || [start, end].some(value => normalizeVoiceFieldValue('time', value) !== value) || end <= start) return false
+  if ([...root.querySelectorAll('form')].some(form => visible(form)
+    && ['Alterar ocorrência individual', 'Encerrar série recorrente'].includes(form.getAttribute('aria-label')))) return false
+  try {
+    const record = JSON.parse(element.getAttribute('data-voice-record'))
+    return Array.isArray(record) && record.length === 5 && record[0] === 'occurrence'
+      && record[1] === id && record[2] === patientId && record[3] === (seriesId || null) && record[4] === originalDate
+  } catch { return false }
+}
+
+// Resolve marked controls BEFORE inventory equivalence. Only an unmarked,
+// identically named representation of the same action may share a full label.
+// Short commands never borrow their target from that calendar representation.
+function focusedResolution(query, candidates, root, required = false) {
+  const shortAction = focusedShortAction(query)
+  const ordinary = matches(query, candidates)
+  const marked = shortAction
+    ? candidates.filter(item => focusedMarked(item.element)
+      && item.element.getAttribute(focusedPrefix + 'action') === shortAction)
+    : candidates.filter(item => focusedMarked(item.element) && (ordinary.includes(item)
+      || ordinary.some(other => other.element.getAttribute('data-voice-action')
+        && other.element.getAttribute('data-voice-action') === item.element.getAttribute('data-voice-action'))))
+  if (!shortAction && !marked.length && !required) return null
+  if (marked.length !== 1 || !focusedCoherent(marked[0].element, root)) return []
+  const target = marked[0]
+  const competitors = ordinary.filter(item => item !== target)
+  if (shortAction) return competitors.length ? [target, ...competitors] : [target]
+  const equivalent = item => !focusedMarked(item.element)
+    && item.element.matches('button') && item.name === target.name
+    && item.element.getAttribute('data-voice-action') === target.element.getAttribute('data-voice-action')
+    && (!item.element.hasAttribute('data-voice-record') || item.element.getAttribute('data-voice-record') === target.element.getAttribute('data-voice-record'))
+    && (!item.element.hasAttribute('data-voice-epoch') || item.element.getAttribute('data-voice-epoch') === target.element.getAttribute('data-voice-epoch'))
+  return [target, ...competitors.filter(item => !equivalent(item))]
 }
 
 const isSeriesQuery = query => /^(?:encerrar serie|antecipar termino|anticipar termino) de /u.test(fold(query))
@@ -324,12 +382,15 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   else if (/^(?:confirmar|confirma|confirmar acao|confirmar ação)$/.test(normalized)) { operation = 'click'; query = 'Confirmar ação' }
   else if (/^(?:salvar paciente|salvar alteracoes|salvar rascunho|finalizar sessao|cancelar rascunho|novo cadastro|novo compromisso|criar comportamento reutilizavel|criar compromisso|criar serie|atualizar lista|bloquear|voltar|confirmar cancelamento|confirmar remarcacao individual|confirmar encerramento)$/.test(normalized)) { operation = 'click'; query = raw }
   else return null
-  const candidates = inventory(root).filter(item => operation === 'fill'
+  const eligible = item => operation === 'fill'
     ? ['INPUT', 'TEXTAREA', 'SELECT'].includes(item.element.tagName) && !['checkbox', 'radio', 'password', 'file'].includes(item.element.type) && !item.element.readOnly
     : ['open', 'close'].includes(operation) ? isDrawer(item.element)
     : ['check', 'uncheck'].includes(operation) ? item.element.type === 'checkbox' || item.element.type === 'radio'
-      : item.element.matches('button, summary, a[href^="#"], input[type="radio"], input[type="checkbox"]'))
-  let found = matches(query, candidates)
+      : item.element.matches('button, summary, a[href^="#"], input[type="radio"], input[type="checkbox"]')
+  const rawCandidates = inventory(root, true).filter(eligible)
+  const focused = operation === 'click' ? focusedResolution(query, rawCandidates, root) : null
+  const candidates = focused !== null ? rawCandidates : inventory(root).filter(eligible)
+  let found = focused ?? matches(query, candidates)
   if (['open', 'close'].includes(operation)) {
     // Toggle buttons may describe the current action instead of the drawer name.
     // Only their exact visible caption is an additional label; no fuzzy target.
@@ -382,7 +443,7 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
       if (probe.value !== value || (!clearField && !probe.checkValidity())) return refusal(`Valor inválido para “${item.name}”. Confira o formato e os limites do campo.`)
     }
   }
-  return {
+  const proposal = {
     status: 'draft',
     intent: { type: 'interface.control', operation, target: { ...fingerprint(item, ['open', 'close'].includes(operation)), ...(seriesMetadata(item.element) !== null && isSeriesQuery(query) ? { seriesQuery: query } : {}), ...(resumeMetadata(item.element) !== null ? { resume: resumeMetadata(item.element), ...(resumeQuery(query) ? { resumeQuery: query } : {}) } : {}), ...(appointmentMetadata(item.element) !== null ? { appointment: appointmentMetadata(item.element), appointmentQuery: query } : {}), ...(['open', 'close'].includes(operation) ? { drawerId: item.element.matches('summary') ? item.element.parentElement.id : item.element.getAttribute('aria-controls') } : {}) }, ...(operation === 'fill' ? { value } : {}), ...(optionLabel !== undefined ? { optionLabel } : {}) },
     preview: clearField ? `Limpar ${item.name}.` : operation === 'fill' ? `${item.name}: ${item.element.tagName === 'SELECT' ? [...item.element.options].find(option => option.value === value)?.textContent : value}`
@@ -391,10 +452,24 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
       : `${operation === 'open' ? 'Abrir' : operation === 'close' ? 'Recolher' : operation === 'click' ? 'Acionar' : operation === 'check' ? 'Marcar' : 'Desmarcar'} ${['open', 'close'].includes(operation) ? textContent(item.element) : item.name}${item.element.hasAttribute('data-voice-series-kind') ? ` · ${['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'][Number(item.element.getAttribute('data-voice-series-weekday'))]} às ${item.element.getAttribute('data-voice-series-time')}` : ''}${item.context ? ` · ${item.context}` : ''}.`,
     notes: appointmentMetadata(item.element) !== null ? ['Apenas abre os detalhes do compromisso após confirmar. Não altera registros nem inicia sessão.'] : [],
   }
+  if (focused !== null) {
+    proposal.intent.target.focused = focusedMetadata(item.element)
+    proposal.intent.target.focusedQuery = query
+    proposal.preview = `${item.element.getAttribute(focusedPrefix + 'action') === 'edit' ? 'Alterar' : 'Iniciar sessão'} de ${item.element.getAttribute(focusedPrefix + 'patient')} · ${item.element.getAttribute(focusedPrefix + 'date')} às ${item.element.getAttribute(focusedPrefix + 'start')}–${item.element.getAttribute(focusedPrefix + 'end')}.`
+  }
+  return proposal
 }
 
 export function applyVoiceInterfaceCommand(intent, root = globalThis.document) {
   if (intent?.type !== 'interface.control') throw new Error('Comando de interface inválido.')
+  let focusedCandidates = null
+  if (intent.target?.focusedQuery) {
+    const candidates = inventory(root, true).filter(item => item.element.matches('button, summary, a[href^="#"], input[type="radio"], input[type="checkbox"]'))
+    focusedCandidates = focusedResolution(intent.target.focusedQuery, candidates, root, true)
+    if (focusedCandidates.length !== 1 || focusedMetadata(focusedCandidates[0].element) !== intent.target.focused) {
+      throw new Error('A tela mudou. Prepare o comando novamente antes de aplicar.')
+    }
+  }
   if (intent.target?.seriesQuery) {
     const candidates = inventory(root).filter(item => item.element.matches('button, summary, a[href^="#"], input[type="radio"], input[type="checkbox"]'))
     const resolved = matches(intent.target.seriesQuery, candidates)
@@ -415,7 +490,7 @@ export function applyVoiceInterfaceCommand(intent, root = globalThis.document) {
       || (appointmentQuery(intent.target.appointmentQuery) && !appointmentLabelMatches(intent.target.appointmentQuery, resolved[0]))
       || !appointmentSelectionUnique(intent.target.appointmentQuery, resolved[0], candidates)) throw new Error('A tela mudou. Prepare o comando novamente antes de aplicar.')
   }
-  const found = inventory(root).filter(item => {
+  const found = (focusedCandidates ?? inventory(root)).filter(item => {
     const current = fingerprint(item, ['open', 'close'].includes(intent.operation)), target = intent.target
     if (resumeMetadata(item.element) !== (target.resume ?? null)) return false
     if (appointmentMetadata(item.element) !== (target.appointment ?? null)) return false

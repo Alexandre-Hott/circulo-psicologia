@@ -1,5 +1,9 @@
 # Matriz atual de voz — 0.2.67
 
+## Atualização de referência 0.2.77
+
+A [validação 0.2.77](validacao-voz-0.2.77.md) acrescenta pedidos curtos de Alterar e Iniciar sessão no detalhe de uma ocorrência focada. Não escolhe um item da lista geral nem finaliza sessão. JS1417/1417, Rust135 aprovados/1 ignorado e UI117/117 numa única rodada selecionada, sem retries. Os casos novos usam comandos digitados; a regressão inclui mídia simulada. Sem nova ASR, prova de microfone físico ou cobertura universal das oito áreas. Pacote local auditado, não instalado/publicado nem assinado. A auditoria estática atual aponta controles internos do ditado ainda dependentes de clique e uma lacuna de teste da recuperação automática por voz; não comprova paridade integral. Referências abaixo são históricas.
+
 ## Atualização de referência 0.2.76
 
 A [validação 0.2.76](validacao-voz-0.2.76.md) acrescenta seleção de uma ocorrência por opção visível em Dia/Semana/Mês para abrir detalhes, inclusive com nomes e horários iguais. Não inicia sessão nem grava alterações. JS960/960, Rust135 aprovados/1 ignorado; UI19/19 e regressão selecionada69/69 em rodadas separadas. A mídia dos replays antigos foi alinhada à terminação por silêncio, sem alterar transcrições ou executar nova ASR. Não comprova microfone físico nem cobertura universal das oito áreas. Pacote local auditado, não instalado/publicado nem assinado. Referências abaixo são históricas.

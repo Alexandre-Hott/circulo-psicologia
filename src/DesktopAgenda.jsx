@@ -164,21 +164,23 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, onC
   const rangeKey = `${from}|${to}`
   useLayoutEffect(() => { currentRangeRef.current = rangeKey; setLoadedRange(''); setSeriesRevision(value => value + 1) }, [rangeKey])
   const loaded = loadedRange === rangeKey
-  useLayoutEffect(() => { setDetailsRevision(value => value + 1) }, [day, mode])
+  useLayoutEffect(() => { setDetailsRevision(value => value + 1) }, [day, mode, detailsOpen, focusedOccurrenceId, selected, ending, seriesRevision])
   useLayoutEffect(() => {
     agendaScopeRef.current?.setAttribute('data-voice-lifecycle', nextVoiceLifecycle())
-  }, [day, mode, loadedRange])
+  }, [day, mode, loadedRange, detailsOpen, focusedOccurrenceId, selected, ending, seriesRevision])
   const visibleDates = datesBetween(from, to)
   const sortedOccurrences = [...occurrences].sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start) || a.id.localeCompare(b.id))
   const occurrencesFor = date => sortedOccurrences.filter(occurrence => occurrence.date === date)
   const movePeriod = delta => setDay(current => mode === 'Dia' ? addCivilDays(current, delta) : mode === 'Semana' ? addCivilDays(current, delta * 7) : moveMonth(current, delta))
   const showOccurrenceActions = (occurrence, origin) => {
+    setDetailsRevision(value => value + 1)
     detailOriginRef.current = origin || null
     setFocusedOccurrenceId(occurrence.id)
     setDetailsOpen(true)
   }
   const closeDetails = () => {
     if (selected) return
+    setDetailsRevision(value => value + 1)
     setDetailsOpen(false)
     window.requestAnimationFrame(() => (detailOriginRef.current?.isConnected ? detailOriginRef.current : calendarRef.current)?.focus({ preventScroll: false }))
   }
@@ -207,6 +209,7 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, onC
     })
   }
   const load = async (rangeStart = from, rangeEnd = to) => {
+    setDetailsRevision(value => value + 1)
     const requestId = ++requestIdRef.current
     const requestedRange = `${rangeStart}|${rangeEnd}`
     const [nextSeries, nextOccurrences, nextHistory] = await Promise.all([
@@ -374,6 +377,20 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, onC
   const missingLabels = { patient: 'paciente', weekday: 'dia da semana', date: 'data', time: 'horário' }
   const focusedOccurrence = sortedOccurrences.find(item => item.id === focusedOccurrenceId)
   const detailOccurrences = focusedOccurrence ? [focusedOccurrence] : sortedOccurrences
+  const focusedDetail = detailsOpen && focusedOccurrenceId && !selected && !ending && loaded ? focusedOccurrence : null
+  const focusedActionControl = (occurrence, kind) => focusedDetail === occurrence ? {
+    'data-voice-focused-appointment-action': kind,
+    'data-voice-focused-appointment-id': occurrence.id,
+    'data-voice-focused-appointment-patient-id': occurrence.patientId,
+    'data-voice-focused-appointment-patient': patientName(occurrence.patientId),
+    'data-voice-focused-appointment-series-id': occurrence.seriesId ?? '',
+    'data-voice-focused-appointment-original-date': occurrence.originalDate,
+    'data-voice-focused-appointment-date': occurrence.date,
+    'data-voice-focused-appointment-start': occurrence.start,
+    'data-voice-focused-appointment-end': occurrence.end,
+    'data-voice-record': JSON.stringify(['occurrence', occurrence.id, occurrence.patientId, occurrence.seriesId ?? null, occurrence.originalDate]),
+    'data-voice-epoch': `${voiceInstance}:${seriesRevision}:${detailsRevision}`,
+  } : {}
 
   return <section ref={agendaScopeRef} className="vault-agenda" aria-label="Agenda persistente de sessões">
     <h2>Agenda de sessões</h2>
@@ -427,7 +444,7 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, onC
       {form.modality === 'Online' && <><label htmlFor="agenda-link">Referência online opcional (somente texto)</label><input id="agenda-link" type="url" value={form.meetingLink} onChange={event => setForm({ ...form, meetingLink: event.target.value })} /></>}
       <button type="submit" disabled={busy || !activePatients.length}>{quickStart ? 'Criar e iniciar sessão' : appointmentType === 'Avulsa' ? 'Criar compromisso avulso' : 'Criar série'}</button>
     </form></div>}</section>
-    {(selected || (loaded && sortedOccurrences.length > 0)) && <section className="agenda-drawer agenda-occurrence-details" aria-label="Detalhes e ações dos compromissos"><button type="button" className="agenda-drawer-toggle" aria-expanded={detailsOpen} aria-controls="agenda-details-panel" disabled={Boolean(selected)} onClick={event => { if (detailsOpen) closeDetails(); else { detailOriginRef.current = event.currentTarget; setFocusedOccurrenceId(null); setDetailsOpen(true) } }}>Detalhes e ações <span aria-hidden="true">{detailsOpen ? '▾' : '▸'}</span></button>{detailsOpen && <div id="agenda-details-panel"><ul className="vault-patients agenda-detail-list">{detailOccurrences.map(occurrence => <li key={occurrence.id} id={`agenda-detail-${occurrence.id}`} tabIndex={-1}><strong>{patientName(occurrence.patientId)}</strong><span>{occurrence.date} · {occurrence.start}–{occurrence.end}</span><small>{statusLabel(occurrence.status)} · {occurrence.modality}{occurrence.wasRescheduled ? ' · Remarcada' : ''}</small>{occurrence.originalDate !== occurrence.date && <small>Data original: {occurrence.originalDate}</small>}{occurrence.modality === 'Online' && occurrence.meetingLink && <small>Referência online (texto): {occurrence.meetingLink}</small>}<div className="agenda-detail-actions">{occurrence.status !== 'completed' && <button disabled={busy} className="vault-secondary" type="button" data-voice-action={`agenda:edit:${occurrence.id}`} aria-label={`Alterar ocorrência de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={event => selectOccurrence(occurrence, event.currentTarget)}>Alterar</button>}{occurrence.status !== 'completed' && allPatients.some(patient => patient.id === occurrence.patientId && patient.archivedAt == null) && <button disabled={busy} type="button" data-voice-action={`agenda:start:${occurrence.id}`} aria-label={`Iniciar sessão de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={() => onStartSession(occurrence)}>Iniciar sessão</button>}</div></li>)}</ul><button type="button" className="vault-secondary" disabled={Boolean(selected)} onClick={closeDetails}>Fechar detalhes</button></div>}</section>}
+    {(selected || (loaded && sortedOccurrences.length > 0)) && <section className="agenda-drawer agenda-occurrence-details" aria-label="Detalhes e ações dos compromissos" data-voice-lifecycle={`${voiceInstance}:${seriesRevision}:${detailsRevision}`} data-voice-focused-occurrence={focusedDetail?.id} data-voice-focused-patient={focusedDetail?.patientId}><button type="button" className="agenda-drawer-toggle" aria-expanded={detailsOpen} aria-controls="agenda-details-panel" disabled={Boolean(selected)} onClick={event => { if (detailsOpen) closeDetails(); else { detailOriginRef.current = event.currentTarget; setFocusedOccurrenceId(null); setDetailsOpen(true) } }}>Detalhes e ações <span aria-hidden="true">{detailsOpen ? '▾' : '▸'}</span></button>{detailsOpen && <div id="agenda-details-panel"><ul className="vault-patients agenda-detail-list">{detailOccurrences.map(occurrence => <li key={occurrence.id} id={`agenda-detail-${occurrence.id}`} tabIndex={-1}><strong>{patientName(occurrence.patientId)}</strong><span>{occurrence.date} · {occurrence.start}–{occurrence.end}</span><small>{statusLabel(occurrence.status)} · {occurrence.modality}{occurrence.wasRescheduled ? ' · Remarcada' : ''}</small>{occurrence.originalDate !== occurrence.date && <small>Data original: {occurrence.originalDate}</small>}{occurrence.modality === 'Online' && occurrence.meetingLink && <small>Referência online (texto): {occurrence.meetingLink}</small>}<div className="agenda-detail-actions">{occurrence.status !== 'completed' && <button disabled={busy} className="vault-secondary" type="button" data-voice-action={`agenda:edit:${occurrence.id}`} {...focusedActionControl(occurrence, 'edit')} aria-label={`Alterar ocorrência de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={event => selectOccurrence(occurrence, event.currentTarget)}>Alterar</button>}{occurrence.status !== 'completed' && allPatients.some(patient => patient.id === occurrence.patientId && patient.archivedAt == null) && <button disabled={busy} type="button" data-voice-action={`agenda:start:${occurrence.id}`} {...focusedActionControl(occurrence, 'start')} aria-label={`Iniciar sessão de ${patientName(occurrence.patientId)} em ${occurrence.date} às ${occurrence.start}–${occurrence.end}`} onClick={() => onStartSession(occurrence)}>Iniciar sessão</button>}</div></li>)}</ul><button type="button" className="vault-secondary" disabled={Boolean(selected)} onClick={closeDetails}>Fechar detalhes</button></div>}</section>}
     {selected && <form data-voice-lifecycle={JSON.stringify([selectedCycle, selected.id, selected.patientId, selected.seriesId, selected.originalDate, selected.date, selected.start, selected.end, action])} data-voice-record={`${selected.seriesId}:${selected.originalDate}`} ref={selectedFormRef} tabIndex={-1} onSubmit={applyChange} aria-label="Alterar ocorrência individual"><h3>Ocorrência selecionada</h3><p>{patientName(selected.patientId)} · série {selected.seriesId} · original {selected.originalDate} · efetiva {selected.date} às {selected.start}–{selected.end}</p><label htmlFor="agenda-action">Ação explícita</label><select id="agenda-action" value={action} onChange={event => setAction(event.target.value)}><option value="remarcar">Remarcar somente esta ocorrência</option><option value="cancelar">Cancelar esta ocorrência</option></select>{action === 'remarcar' && <><label htmlFor="agenda-new-date">Nova data efetiva</label><input id="agenda-new-date" type="date" required value={change.date} onChange={event => setChange({ ...change, date: event.target.value })} /><label htmlFor="agenda-new-start">Novo início</label><input id="agenda-new-start" type="time" required value={change.start} onChange={event => setChange({ ...change, start: event.target.value })} /><label htmlFor="agenda-new-end">Novo fim</label><input id="agenda-new-end" type="time" required value={change.end} onChange={event => setChange({ ...change, end: event.target.value })} /></>}<label htmlFor="agenda-reason">Motivo administrativo {action === 'cancelar' ? '(obrigatório)' : '(opcional)'}</label><textarea disabled={busy} id="agenda-reason" maxLength={240} required={action === 'cancelar'} value={change.reason} onChange={event => setChange({ ...change, reason: event.target.value })} /><p>Não inclua conteúdo clínico no motivo. O histórico administrativo preserva ações anteriores.</p><button disabled={busy} type="submit">Confirmar {action === 'cancelar' ? 'cancelamento' : 'remarcação individual'}</button><button className="vault-secondary" type="button" onClick={closeSelected}>Fechar</button></form>}
     <section className="agenda-drawer agenda-admin-section" aria-label="Compromissos persistidos"><button type="button" className="agenda-drawer-toggle" aria-expanded={persistedOpen} aria-controls="agenda-persisted-panel" disabled={Boolean(ending)} onClick={() => setPersistedOpen(value => !value)}>Compromissos persistidos <span aria-hidden="true">{persistedOpen ? '▾' : '▸'}</span></button>{persistedOpen && <div id="agenda-persisted-panel">{series.length ? <ul className="vault-patients">{series.map(item => {
       const option = recurringSeries.indexOf(item) + 1

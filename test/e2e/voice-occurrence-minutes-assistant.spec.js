@@ -35,6 +35,7 @@ async function openApp(page, clock = clocks[0], { allowStart = false, referenceD
     const fixture = window.occurrenceMinutes = {
       state: { patients, series, occurrences, history, drafts, sessions, addenda, contexts: [] },
       calls: [], writes: [], unexpected: [], catalogReady: false, transcript: '',
+      mediaRequests: 0, trackStops: 0, contextCloses: 0, sourceDisconnects: 0, processorDisconnects: 0, captureRefs: [],
     }
     const catalogReads = new Set()
     const catalog = (command, result) => {
@@ -42,29 +43,35 @@ async function openApp(page, clock = clocks[0], { allowStart = false, referenceD
       fixture.catalogReady = ['patient_list', 'behavior_list', 'indicator_catalog'].every(name => catalogReads.has(name))
       return clone(result)
     }
-    // Same synthetic media helper as the previous full-shell replay specs.
-    // This replays captured native transcripts through simulated media/IPC;
-    // it does not run Rust, play the captured WAV or use a real microphone.
+    // Short synthetic speech then >1100 ms of trailing silence, as in the 76
+    // replay fixtures. Continuous nonzero frames correctly reach the 12-second
+    // cap and require manual preparation. Preserved transcripts are replayed
+    // through simulated media/IPC, not Rust, captured WAVs or a real microphone.
     class SyntheticAudioContext {
       constructor() { this.sampleRate = 8_000; this.state = 'running'; this.destination = {} }
-      createMediaStreamSource() { return { connect() {}, disconnect() {} } }
+      createMediaStreamSource() { return { connect() {}, disconnect() { fixture.sourceDisconnects++ } } }
       createScriptProcessor() {
-        const processor = { onaudioprocess: null, disconnect() {} }
+        const processor = { onaudioprocess: null, disconnect() { fixture.processorDisconnects++ } }
         processor.connect = () => queueMicrotask(() => {
+          let frames = 0
           const emit = () => {
             if (!processor.onaudioprocess) return
-            processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(0.1) }, outputBuffer: { getChannelData: () => new Float32Array(4096) } })
-            if (processor.onaudioprocess) setTimeout(emit, 0)
+            const amplitude = frames++ < 2 ? 0.1 : 0
+            processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(amplitude) }, outputBuffer: { getChannelData: () => new Float32Array(4096) } })
+            if (processor.onaudioprocess) setTimeout(emit, 200)
           }
           emit()
         })
         return processor
       }
       resume() { return Promise.resolve() }
-      close() { this.state = 'closed'; return Promise.resolve() }
+      close() { this.state = 'closed'; fixture.contextCloses++; return Promise.resolve() }
     }
     Object.defineProperty(window, 'AudioContext', { configurable: true, value: SyntheticAudioContext })
-    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } })
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => {
+      fixture.mediaRequests++
+      return { getTracks: () => [{ stop() { fixture.trackStops++ } }] }
+    } } })
     window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
       fixture.calls.push(clone({ command, args }))
       if (command === 'vault_status') return { initialized: true, unlocked: true, profileState: 'ready' }
@@ -79,7 +86,7 @@ async function openApp(page, clock = clocks[0], { allowStart = false, referenceD
       if (command === 'session_timeline') return clone(sessions.filter(item => item.patientId === args.patientId))
       if (command === 'session_addendum_list') return clone(addenda.filter(item => item.patientId === args.patientId))
       if (command === 'case_context_list') return clone(fixture.state.contexts)
-      if (command === 'voice_transcribe') return fixture.transcript
+      if (command === 'voice_transcribe') { fixture.captureRefs.push(args); return fixture.transcript }
       if (command === 'session_draft_start' && allowStart) {
         // The sole authorized write must target the moved occurrence's original
         // identity, never the whole-hour decoy or its effective date as identity.
@@ -272,9 +279,21 @@ async function replayAudio(page, corpus, index) {
   await page.evaluate(text => { window.occurrenceMinutes.transcript = text }, recording.Transcript)
   const listen = assistant(page).getByRole('button', { name: 'Ouvir e transcrever' })
   await listen.click()
-  await page.clock.runFor(1000)
+  await page.clock.runFor(1600)
   await expect(listen).toBeEnabled()
   await expect(assistant(page).getByLabel('Seu comando')).toHaveValue(recording.Transcript)
+  await expect(assistant(page).getByText(/A captura atingiu .*segundos e pode estar incompleta/u)).toHaveCount(0)
+}
+
+async function expectReplayCleanup(page) {
+  expect(await page.evaluate(() => {
+    const fixture = window.occurrenceMinutes
+    return [fixture.mediaRequests, fixture.trackStops, fixture.contextCloses, fixture.sourceDisconnects, fixture.processorDisconnects]
+  })).toEqual([2, 2, 2, 2, 2])
+  expect(await page.evaluate(() => {
+    const refs = window.occurrenceMinutes.captureRefs
+    return refs.length === 2 && refs.every(args => args.samples.every(sample => sample === 0) && args.patientNames.every(name => name === ''))
+  })).toBe(true)
 }
 
 for (const [index, action] of [[0, 'iniciar'], [1, 'remarcar'], [2, 'cancelar'], [3, 'adendo']]) {
@@ -354,9 +373,11 @@ for (const [index, action] of [[0, 'iniciar'], [1, 'remarcar'], [2, 'cancelar'],
     }
     const captures = await page.evaluate(() => window.occurrenceMinutes.calls.filter(call => call.command === 'voice_transcribe'))
     expect(captures).toHaveLength(2)
+    await expectReplayCleanup(page)
     for (const { args } of captures) {
       expect(args.sampleRate).toBe(8000)
       expect(args.samples.length).toBeGreaterThan(0)
+      expect(args.samples.length / args.sampleRate).toBeLessThan(12)
       expect(args.samples.some(sample => sample !== 0)).toBe(true)
       expect(args.patientNames).toContain('Ana Clara')
     }
