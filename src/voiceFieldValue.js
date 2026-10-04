@@ -5,6 +5,7 @@ const pad = value => String(value).padStart(2, '0')
 const units = { zero: 0, um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, onze: 11, doze: 12, treze: 13, quatorze: 14, catorze: 14, quinze: 15, dezesseis: 16, dezessete: 17, dezoito: 18, dezenove: 19 }
 const tens = { vinte: 20, trinta: 30, quarenta: 40, cinquenta: 50, sessenta: 60, setenta: 70, oitenta: 80, noventa: 90 }
 const months = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+const weekdays = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado']
 
 function number(value) {
   if (/^\d{1,4}$/.test(value)) return Number(value)
@@ -14,11 +15,17 @@ function number(value) {
   return match ? tens[match[1]] + units[match[2]] : null
 }
 
-// Normalize date/time and explicitly marked age controls. Never rewrite free text.
+// Normalize date/time and explicitly marked age/weekday controls. Never rewrite free text.
 // No inferred year, relative dates, approximate time or ambiguous AM/PM.
 export function normalizeVoiceFieldValue(type, value) {
-  if (!['date', 'time', 'age'].includes(type) || value === '') return value
+  if (!['date', 'time', 'age', 'weekday'].includes(type) || value === '') return value
   const text = fold(value)
+  if (type === 'weekday') {
+    if (/^[0-6]$/.test(text)) return text
+    const day = text.replace(/^(segunda|terca|quarta|quinta|sexta)(?:-feira| feira)$/u, '$1')
+    const index = weekdays.indexOf(day)
+    return index >= 0 ? String(index) : null
+  }
   if (type === 'age') {
     const hundreds = /^cento e (.+)$/u.exec(text)
     const suffix = hundreds ? (hundreds[1] === 'dezassete' ? 17 : number(hundreds[1])) : null

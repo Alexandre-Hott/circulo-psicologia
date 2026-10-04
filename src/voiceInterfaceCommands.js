@@ -124,7 +124,9 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   if (operation === 'fill') {
     if (item.element.tagName === 'SELECT') {
       if (clearField) return refusal('Para mudar uma seleção, diga “selecionar” e o nome da opção.')
-      const options = [...item.element.options].filter(option => !option.disabled && (fold(option.textContent) === fold(value) || fold(option.value) === fold(value)))
+      const weekday = item.element.getAttribute('data-voice-value-type') === 'weekday'
+      const selectedValue = weekday ? normalizeVoiceFieldValue('weekday', value) : value
+      const options = selectedValue === null ? [] : [...item.element.options].filter(option => !option.disabled && (fold(option.textContent) === fold(selectedValue) || fold(option.value) === fold(selectedValue)))
       if (options.length !== 1) return refusal(`Para “${item.name}”, escolha: ${[...item.element.options].filter(option => !option.disabled).map(option => option.textContent).join(', ')}.`)
       value = options[0].value
       optionLabel = options[0].textContent

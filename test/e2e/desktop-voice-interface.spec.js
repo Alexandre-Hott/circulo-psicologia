@@ -918,6 +918,117 @@ test('retomada distingue dois rascunhos do mesmo dia e cancelamento preserva o o
   await expect.poll(() => page.evaluate(() => window.writes.filter(item => item.command === 'session_finalize').length)).toBe(0)
 })
 
+test('quinta-feira seleciona Quinta somente após confirmar e cria série somente ao salvar explicitamente', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Mostrar agenda de hoje')
+  await command(page, 'Clicar em Abrir formulário de novo compromisso')
+  const form = page.getByRole('form', { name: 'Novo compromisso', exact: true })
+  await command(page, 'Selecionar Tipo como Recorrente')
+  const weekday = form.getByLabel('Dia da semana', { exact: true })
+  await expect(weekday).toHaveAttribute('id', 'agenda-weekday')
+  await expect(weekday).toHaveValue('6')
+  await propose(page, 'Selecionar Dia da semana como quinta-feira')
+  await expect(page.locator('.voice-command-preview')).toContainText('Dia da semana: Quinta')
+  await expect(weekday).toHaveValue('6')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await propose(page, 'confirmar')
+  await expect(weekday).toHaveValue('4')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await propose(page, 'Clicar em Criar série')
+  await expect(page.locator('.voice-command-preview')).toContainText('Criar série')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await propose(page, 'confirmar')
+  await expect.poll(() => page.evaluate(() => window.writes)).toEqual([
+    { command: 'agenda_create_series', args: { input: {
+      patientId: 'ana', weekday: 4, frequency: 'Semanal', startDate: '2026-10-03', endDate: null,
+      start: '14:00', end: '14:50', modality: 'Presencial', meetingLink: null,
+    } } },
+  ])
+})
+
+for (const [label, value, variants] of [
+  ['Domingo', '0', ['Domingo', 'DOMINGO', '0']],
+  ['Segunda', '1', ['Segunda', 'segunda-feira', 'SEGUNDA FEIRA', '1']],
+  ['Terça', '2', ['Terça', 'terça-feira', 'TERCA FEIRA', '2']],
+  ['Quarta', '3', ['Quarta', 'quarta-feira', 'QUARTA FEIRA', '3']],
+  ['Quinta', '4', ['Quinta', 'quinta-feira', 'QUINTA FEIRA', '4']],
+  ['Sexta', '5', ['Sexta', 'sexta-feira', 'SEXTA FEIRA', '5']],
+  ['Sábado', '6', ['Sábado', 'SABADO', '6']],
+]) {
+  test(`dia da semana ${label} aceita nome, variantes e valor numérico sem gravar`, async ({ page }) => {
+    test.setTimeout(60000)
+    await openApp(page)
+    await command(page, 'Mostrar agenda de hoje')
+    await command(page, 'Clicar em Abrir formulário de novo compromisso')
+    const form = page.getByRole('form', { name: 'Novo compromisso', exact: true })
+    await command(page, 'Selecionar Tipo como Recorrente')
+    const weekday = form.getByLabel('Dia da semana', { exact: true })
+    await expect(weekday).toHaveAttribute('data-voice-value-type', 'weekday')
+    for (const variant of variants) {
+      // Use a different existing option so every confirmation must change the control.
+      const before = value === '0' ? '1' : '0'
+      await weekday.selectOption(before)
+      await propose(page, `Selecionar Dia da semana como ${variant}`)
+      await expect(page.locator('.voice-command-preview')).toContainText(`Dia da semana: ${label}`)
+      await expect(weekday).toHaveValue(before)
+      expect(await page.evaluate(() => window.writes)).toEqual([])
+      await propose(page, 'confirmar')
+      await expect(weekday).toHaveValue(value)
+      expect(await page.evaluate(() => window.writes)).toEqual([])
+    }
+  })
+}
+
+test('dia da semana recusa alternativas, data relativa e texto extra sem alterar a seleção', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Mostrar agenda de hoje')
+  await command(page, 'Clicar em Abrir formulário de novo compromisso')
+  const form = page.getByRole('form', { name: 'Novo compromisso', exact: true })
+  await command(page, 'Selecionar Tipo como Recorrente')
+  const weekday = form.getByLabel('Dia da semana', { exact: true })
+  await expect(weekday).toHaveValue('6')
+  for (const invalid of ['quinta ou sexta', 'proxima quinta', 'quinta-feira extra']) {
+    await propose(page, `Selecionar Dia da semana como ${invalid}`)
+    await expect(page.locator('.voice-command-error')).toBeVisible()
+    await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+    await expect(weekday).toHaveValue('6')
+    expect(await page.evaluate(() => window.writes)).toEqual([])
+  }
+})
+
+test('quinta-feira permanece texto literal ao preencher Nome na edição do paciente', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Editar paciente Ana Clara')
+  const form = page.getByRole('form', { name: 'Editar cadastro', exact: true })
+  const name = form.getByLabel('Nome', { exact: true })
+  await expect(name).toHaveValue('Ana Clara')
+  await propose(page, 'Preencher Nome com quinta-feira')
+  await expect(page.locator('.voice-command-preview')).toContainText('Nome: quinta-feira')
+  await expect(name).toHaveValue('Ana Clara')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await propose(page, 'confirmar')
+  await expect(name).toHaveValue('quinta-feira')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+})
+
+test('marcador de dia da semana alterado invalida proposta antiga sem aplicar ou gravar', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Mostrar agenda de hoje')
+  await command(page, 'Clicar em Abrir formulário de novo compromisso')
+  const form = page.getByRole('form', { name: 'Novo compromisso', exact: true })
+  await command(page, 'Selecionar Tipo como Recorrente')
+  const weekday = form.getByLabel('Dia da semana', { exact: true })
+  await expect(weekday).toHaveAttribute('data-voice-value-type', 'weekday')
+  await expect(weekday).toHaveValue('6')
+  await propose(page, 'Selecionar Dia da semana como quinta-feira')
+  await expect(page.locator('.voice-command-preview')).toContainText('Dia da semana: Quinta')
+  await weekday.evaluate(element => element.removeAttribute('data-voice-value-type'))
+  await propose(page, 'confirmar')
+  await expect(page.getByRole('alert')).toContainText('A tela mudou')
+  await expect(weekday).toHaveValue('6')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+})
+
 test('agenda avulsa e sessão com comportamento podem ser preenchidas e finalizadas por comando', async ({ page }) => {
   await openApp(page)
   await command(page, 'Agendar sessão para Ana Clara amanhã às três da tarde')

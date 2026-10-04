@@ -1,5 +1,15 @@
 # Melhoria contínua de voz
 
+## Entrega local0.2.58 — dias completos da semana
+
+Pacote `Círculo_0.2.58_x64-setup.exe`, **135.885.060 bytes**, SHA-256 `0d35da610025b857ebe695006471673a1691f2f60577e0b185960c9d1f93751b`. Build NSIS offline/locked exit0, release Rust58,90s; aviso anterior OpenSSL/PDB LNK4099. Override temporário removido após término; configuração oficial updater preservada. Manifest `%TEMP%\\circulo-0258-audit-20261004.json`: PE0.2.58/x64/NotSigned. Conteúdo interno não extraído; não instalado/aberto. Instalado52/perfil não alterados. Sem `.sig`, Authenticode ou Release; link local não oferece atualização pelo GitHub. Consistência de versão/tamanho/hash/docs aprovada; regressão66/66 em3,3min, sem transcrição/microfone físico novos. Meta ativa.
+
+## Incremento 0.2.58 — dia da semana com nome completo
+
+No formulário recorrente, “Selecionar Dia da semana como quinta-feira” deve selecionar a opção Quinta pela mesma proposta/confirmar do assistente. Normalização restrita ao select marcado como weekday; nomes/textos livres não mudam. Domingo/Sábado e dias úteis curtos/com -feira ou espaço feira são exatos. Datas relativas, alternativas e sufixos extras são recusados. Opções ausentes/desabilitadas/duplicadas continuam sujeitas às mesmas validações; fingerprint inclui o tipo do campo.
+
+Unidade256/256 após versionamento; revisão independente6/6 e verificações de literalidade sem achado acionável. Teste E2E sem marcação reproduziu ausência da proposta Quinta (0/1); marcação corrigida, grupo final11/11 em1,1min. Confere todos os dias/variantes/números, proposta antes de aplicar, nenhuma escrita antes do salvamento explícito e payload exato da série, recusas, Nome literal e fingerprint alterado. Primeira invocação de filtro inglês não encontrou testes e não é evidência de aprovação/falha funcional. Regressão final interface/identidade de seleção66/66 em3,3min, exit0. Lint sem erros/cinco avisos anteriores; guard/diff aprovados. Não há teste novo de transcrição nativa ou microfone físico nem suíte Rust nova (backend funcional não mudou). Perfil/aplicativo instalado não alterado; sem publicação de Release ou assinatura nesta etapa. Meta ativa.
+
 ## Entrega local0.2.57 — ajuda e prefixos locais
 
 Pacote final `Círculo_0.2.57_x64-setup.exe`, **135.888.988 bytes**, SHA-256 `feb92dcc168f6d293a5062d40f00d05cb2cf56ac434e30624372f52b85642a04`. Build NSIS offline/locked exit0, release Rust42,12s, aviso anterior OpenSSL/PDB LNK4099. Pacote anterior regenerado após isolamento do teste Rust. Override temporário updater removido após término; configuração oficial intacta. Manifest `%TEMP%\\circulo-0257-audit-20261004-final.json`: PE0.2.57/x64/NotSigned. Conteúdo interno não extraído, não instalado/aberto, instalado52. Nenhum perfil/senha alterado. Sem `.sig`, Authenticode, Release ou oferta automática pelo GitHub. Regressão final192/192 e Rust86 aprovados/1 ignorado; detalhes e primeira falha registrados abaixo. Meta ativa.

@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Complemento0.2.58 — dias completos no formulário recorrente
+
+Somente o select Dia da semana da Agenda recebe tipo explícito weekday. “Selecionar Dia da semana como quinta-feira” prepara Quinta; confirmar aplica; Criar série permanece separado. Abreviações visíveis e números0a6 continuam aceitos, assim como segunda/terça/quarta/quinta/sexta-feira (hífen ou espaço) e sábado/domingo. Não infere próxima data nem alternativas. Textos livres continuam literais. Unidade256/256; revisão independente sem achados; novos E2E11/11 em1,1min e regressão final interface/identidade de seleção66/66 em3,3min. Instalador58 gerado/auditado, não instalado/publicado. Sem nova prova de captura física ou transcrição nativa. [Evidências](melhoria-continua-voz.md).
+
 ## Auditoria atual e complemento0.2.57
 
 Ajuda “O que posso pedir?” era inacessível por voz: whitelist estreita de summary/data-voice-help, red0/2, green2/2 em19,9s, bloqueado/desbloqueado e sem IPC. Demais controles do assistente continuam excluídos; interpretar/aplicar/descartar já têm palavras equivalentes e início de captura exige botão/atalho. Fonte revisada sem outro grupo habilitado sem rota localizado, mas isso não equivale à prova de uso nativo.

@@ -24,6 +24,12 @@ test('textos livres não são convertidos e limpeza continua permitida', () => {
   for (const type of ['date', 'time']) assert.equal(normalize(type, ''), '')
 })
 
+test('dia da semana explícito aceita nomes completos sem inferir alternativas', () => {
+  for (const [input, output] of [['domingo', '0'], ['segunda-feira', '1'], ['terça feira', '2'], ['Quarta-Feira', '3'], ['quinta', '4'], ['quinta-feira', '4'], ['sexta feira', '5'], ['sábado', '6'], ['0', '0'], ['6', '6']]) assert.equal(normalize('weekday', input), output, input)
+  for (const input of ['domingo-feira', 'sábado feira', 'quinta ou sexta', 'próxima quinta', 'quinta-feira extra', '7', '-1', '04']) assert.equal(normalize('weekday', input), null, input)
+  assert.equal(normalize('text', 'quinta-feira'), 'quinta-feira')
+})
+
 test('horas e minutos explícitos e limites não viram horários aproximados', () => {
   assert.equal(normalize('time', 'quinze horas e trinta minutos'), '15:30')
   assert.equal(normalize('time', 'três horas e cinquenta minutos da tarde'), '15:50')
