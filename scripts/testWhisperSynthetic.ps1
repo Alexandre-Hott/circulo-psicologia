@@ -8,6 +8,7 @@
 
 $ErrorActionPreference = 'Stop'
 $Scenario = $Scenario.ToLowerInvariant()
+$strictUtf8 = New-Object Text.UTF8Encoding($false, $true)
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($VoiceDirectory)) {
@@ -15,9 +16,18 @@ if ([string]::IsNullOrWhiteSpace($VoiceDirectory)) {
 } else {
     $sourceVoiceDirectory = [IO.Path]::GetFullPath($VoiceDirectory)
 }
-foreach ($path in @((Join-Path $sourceVoiceDirectory 'whisper-cli.exe'), (Join-Path $sourceVoiceDirectory 'ggml-base.bin'))) {
+foreach ($path in @((Join-Path $sourceVoiceDirectory 'whisper-cli.exe'), (Join-Path $sourceVoiceDirectory 'ggml-small-q5_1.bin'))) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Recurso ausente: $path" }
 }
+
+# Match the app's current prompt and the opt-in Rust harness's fixed synthetic names.
+$nativeSource = [IO.File]::ReadAllText((Join-Path $repoRoot 'src-tauri\src\native_voice.rs'), $strictUtf8)
+$promptMatch = [regex]::Match($nativeSource, 'const INITIAL_PROMPT: &str = "([^"\r\n]*)";')
+if (-not $promptMatch.Success) { throw 'Production INITIAL_PROMPT is missing.' }
+$patientNames = @('Ana Clara', 'Bia Fictícia')
+$prompt = $promptMatch.Groups[1].Value
+foreach ($patientName in $patientNames) { $prompt += ' ' + $patientName + '.' }
+if ($strictUtf8.GetByteCount($prompt) -gt 1000 -or $prompt -match '[\r\n\x00]') { throw 'Invalid bounded production prompt.' }
 
 $tempBase = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
 $testDirectory = Join-Path $tempBase ('circulo-whisper-synthetic-' + [guid]::NewGuid().ToString('N'))
@@ -28,7 +38,7 @@ Get-ChildItem -LiteralPath $sourceVoiceDirectory -File | ForEach-Object {
     New-Item -ItemType HardLink -Path (Join-Path $voiceDirectory $_.Name) -Target $_.FullName | Out-Null
 }
 $whisper = Join-Path $voiceDirectory 'whisper-cli.exe'
-$model = Join-Path $voiceDirectory 'ggml-base.bin'
+$model = Join-Path $voiceDirectory 'ggml-small-q5_1.bin'
 
 try {
     $voice = New-Object -ComObject SAPI.SpVoice
@@ -185,9 +195,25 @@ try {
         $outputBase = Join-Path $testDirectory "transcription-$index"
         $stdoutPath = Join-Path $testDirectory "stdout-$index.txt"
         $stderrPath = Join-Path $testDirectory "stderr-$index.txt"
-        $arguments = '-m "{0}" -f "{1}" -l pt -ng -nt --prompt "Agenda de sessões. Cadastrar paciente. Sessão semanal. Registrar comportamento na sessão. Observação, evolução e indicador." -otxt -of "{2}"' -f $model, $wav, $outputBase
+        # Only the response filename reaches argv; all file arguments stay relative ASCII.
+        $responseName = "args-$index.txt"
+        $responsePath = Join-Path $voiceDirectory $responseName
+        $arguments = @('-m', [IO.Path]::GetFileName($model), '-f', "../synthetic-command-$index.wav", '-l', 'pt', '--prompt', $prompt, '-ng', '-nt', '-otxt', '-of', "../transcription-$index")
+        foreach ($argument in $arguments) {
+            if ($argument -match '[\r\n\x00]') { throw 'Invalid response argument.' }
+        }
+        $responseBytes = $strictUtf8.GetBytes(($arguments -join "`n") + "`n")
+        $responseStream = [IO.File]::Open($responsePath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write)
+        try { $responseStream.Write($responseBytes, 0, $responseBytes.Length) }
+        finally { $responseStream.Dispose() }
         $clock = [Diagnostics.Stopwatch]::StartNew()
-        $process = Start-Process -FilePath $whisper -ArgumentList $arguments -WorkingDirectory $voiceDirectory -WindowStyle Hidden -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -Wait -PassThru
+        $process = Start-Process -FilePath $whisper -ArgumentList ("@" + $responseName) -WorkingDirectory $voiceDirectory -WindowStyle Hidden -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru
+        [void]$process.Handle
+        if (-not $process.WaitForExit(60000)) {
+            $process.Kill()
+            $process.WaitForExit()
+            throw 'Synthetic CLI inference exceeded 60 seconds; no retry.'
+        }
         $clock.Stop()
         if ($process.ExitCode -ne 0) {
             $details = if (Test-Path -LiteralPath $stderrPath) { Get-Content -LiteralPath $stderrPath -Raw } else { '' }
@@ -195,9 +221,12 @@ try {
         }
         $transcriptPath = "$outputBase.txt"
         if (-not (Test-Path -LiteralPath $transcriptPath -PathType Leaf)) { throw 'whisper.cpp não produziu uma transcrição.' }
+        $rawTranscript = $strictUtf8.GetString([IO.File]::ReadAllBytes($transcriptPath))
+        if ([string]::IsNullOrWhiteSpace($rawTranscript)) { throw 'Empty synthetic transcript.' }
         [pscustomobject]@{
             IntendedCommand = $commands[$index]
-            Transcript = (Get-Content -LiteralPath $transcriptPath -Raw -Encoding UTF8).Trim()
+            RawTranscript = $rawTranscript
+            Transcript = $rawTranscript.Trim()
             InferenceSeconds = [math]::Round($clock.Elapsed.TotalSeconds, 2)
             AudioBytes = (Get-Item -LiteralPath $wav).Length
             ExitCode = $process.ExitCode
@@ -211,13 +240,13 @@ try {
         $nativeStdout = Join-Path $testDirectory 'native-stdout.txt'
         $nativeStderr = Join-Path $testDirectory 'native-stderr.txt'
         $nativeClock = [Diagnostics.Stopwatch]::StartNew()
-        $nativeProcess = Start-Process -FilePath 'cargo' -ArgumentList @('test', '--release', '--offline', '--locked', 'native_voice::tests::transcribes_synthetic_wav_through_the_same_local_backend_as_the_app', '--', '--ignored', '--nocapture') -WorkingDirectory (Join-Path $repoRoot 'src-tauri') -WindowStyle Hidden -RedirectStandardOutput $nativeStdout -RedirectStandardError $nativeStderr -PassThru
+        $nativeProcess = Start-Process -FilePath 'cargo' -ArgumentList @('test', '--release', '--offline', '--locked', 'native_voice::tests::transcribes_synthetic_wav_through_the_same_local_backend_as_the_app', '--', '--exact', '--ignored', '--nocapture', '--test-threads=1') -WorkingDirectory (Join-Path $repoRoot 'src-tauri') -WindowStyle Hidden -RedirectStandardOutput $nativeStdout -RedirectStandardError $nativeStderr -PassThru
         # Wait for cargo itself, avoiding PowerShell 5.1's descendant-job wait.
         [void]$nativeProcess.Handle # Retain the handle so ExitCode remains available.
         $nativeProcess.WaitForExit()
         $nativeClock.Stop()
         if ($nativeProcess.ExitCode -ne 0) { throw "Integração Rust com áudio sintético falhou (código $($nativeProcess.ExitCode)). $(Get-Content -LiteralPath $nativeStderr -Raw -Encoding UTF8)" }
-        $nativeOutput = @(Get-Content -LiteralPath $nativeStdout -Encoding UTF8)
+        $nativeOutput = @([IO.File]::ReadAllLines($nativeStdout, $strictUtf8))
         $marker = 'CIRCULO_SYNTHETIC_RESULT_JSON:'
         $nativeJsonLines = @($nativeOutput | Where-Object { $_.StartsWith($marker, [StringComparison]::Ordinal) })
         if ($nativeJsonLines.Count -ne 1) { throw 'Resultado estruturado nativo ausente ou duplicado.' }
@@ -234,7 +263,7 @@ try {
         $semanticArguments = '"{0}" --input "{1}" --scenario "{2}"' -f (Join-Path $PSScriptRoot 'evaluateSyntheticVoice.js'), $nativeCasesPath, $Scenario
         $semanticProcess = Start-Process -FilePath 'node' -ArgumentList $semanticArguments -WorkingDirectory $repoRoot -WindowStyle Hidden -RedirectStandardOutput $semanticStdout -RedirectStandardError $semanticStderr -Wait -PassThru
         if ($semanticProcess.ExitCode -ne 0) { throw "Falha ao avaliar o resultado semântico nativo. $(Get-Content -LiteralPath $semanticStderr -Raw -Encoding UTF8)" }
-        $semantic = Get-Content -LiteralPath $semanticStdout -Raw -Encoding UTF8 | ConvertFrom-Json
+        $semantic = [IO.File]::ReadAllText($semanticStdout, $strictUtf8) | ConvertFrom-Json
     }
     finally {
         Pop-Location

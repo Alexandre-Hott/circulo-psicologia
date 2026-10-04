@@ -4,7 +4,7 @@ fn main() {
         let voice_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/voice");
         for required in [
             "whisper-cli.exe",
-            "ggml-base.bin",
+            "ggml-small-q5_1.bin",
             "ggml.dll",
             "ggml-base.dll",
             "ggml-cpu-x64.dll",

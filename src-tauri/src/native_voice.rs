@@ -29,7 +29,7 @@ pub fn transcribe(
     patient_names: &[String],
 ) -> Result<String, String> {
     let pcm = Zeroizing::new(quantize_pcm(samples, sample_rate)?);
-    if !resources.join("whisper-cli.exe").is_file() || !resources.join("ggml-base.bin").is_file() {
+    if !resources.join("whisper-cli.exe").is_file() || !resources.join("ggml-small-q5_1.bin").is_file() {
         return Err("Reconhecimento local não preparado. Execute `npm run voice:prepare` e tente novamente.".into());
     }
 
@@ -66,7 +66,7 @@ pub fn transcribe(
 
 fn whisper_response_arguments(prompt: &str) -> Vec<&str> {
     vec![
-        "-m", "ggml-base.bin", "-f", "../input.wav", "-l", "pt", "--prompt", prompt,
+        "-m", "ggml-small-q5_1.bin", "-f", "../input.wav", "-l", "pt", "--prompt", prompt,
         "-ng", "-nt", "-otxt", "-of", "../transcription",
     ]
 }
@@ -202,7 +202,7 @@ fn stage_voice_resources_with(
                 }
             }
         }
-        // A cross-volume copy of ggml-base.bin costs about 148 MB per request.
+        // A cross-volume copy of ggml-small-q5_1.bin costs about 190 MB per request.
         // Only pay that cost when a hard link is impossible; other errors remain fatal.
         copy(&source, &target).map_err(|error| {
             format!("Não foi possível copiar um recurso local de voz entre volumes: {error}")

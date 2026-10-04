@@ -1,6 +1,10 @@
-# Matriz atual de voz — 0.2.67
+# Matriz de voz do Círculo
 
-## Entrega local 0.2.79
+## Entrega local 0.2.80
+
+Modelo local small Q5 e confirmação vinculada ao recurso exato do updater. [Resultados atuais](validacao-voz-0.2.80.md): JS1882/1882, Rust138 aprovados/1 ignorado; controles residuais/updater18/18, regressão64/64 e replay8/8 em rodadas separadas sem retries. As provas incluem pacientes/vínculos, biblioteca e registros de comportamento, agenda, sessões, análises, ajustes e recuperação nos cenários selecionados. Não equivalem a cobertura universal de fala ou teste do pacote instalado. Reconhecimento Rust real:5 corretos/2 falhos/1 não avaliado em oito áudios fictícios; recorrência e observação ainda foram recusadas. Senhas, arquivos e início de captura são manuais. Meta ativa para ampliar cobertura e reconhecimento; referências abaixo são históricas.
+
+## Referência 0.2.79
 
 O código atual preserva corpo literal single-line nos textareas já elegíveis e invalida confirmação de recuperação após edição da senha. [Resultados atuais](validacao-voz-0.2.79.md): JS1875/1875, Rust135 aprovados/1 ignorado; UI35/35 e regressão29/29 em rodadas distintas sem retries. Instalador gerado e auditado, sem instalação, assinatura ou publicação. As jornadas comprovam cadastro/edição, comportamentos, agenda avulsa/semanal, rascunho/finalização, contexto/adendo, análises e ajustes nos cenários selecionados. Uma matriz residual por captura ainda está em preparação; a medição nativa3 corretos/4 falhas/1 não avaliado impede afirmar precisão geral. Senhas, arquivos e início de captura são manuais. As referências abaixo são históricas.
 

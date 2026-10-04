@@ -107,8 +107,37 @@ export default function DesktopVault() {
   useEffect(() => () => confirmationRef.current?.resolve(false), [])
   const voiceCaptureRef = useRef(null)
   const voiceFocusTarget = useRef(null)
-  const [updateState, setUpdateState] = useState({ phase: 'checking' })
+  const [updateState, setUpdateStateValue] = useState({ phase: 'checking',
+    voiceRecord: JSON.stringify(['updater', null, null]), voiceEpoch: '0', voiceLifecycle: 'updater:0' })
   const updateRef = useRef(null)
+  const updateScopeRef = useRef(null)
+  const updateLifecycle = useRef(0)
+  const updateResourceRevision = useRef(0)
+  const updatePhase = useRef('checking')
+  const updateRecord = () => JSON.stringify(['updater', updateRef.current?.version ?? null, updateRef.current?.rid ?? null])
+  const updateVoiceMetadata = () => ({ voiceRecord: updateRecord(), voiceEpoch: String(updateResourceRevision.current),
+    voiceLifecycle: `updater:${updateLifecycle.current}` })
+  const advanceUpdateScope = () => {
+    updateLifecycle.current += 1
+    const metadata = updateVoiceMetadata()
+    // Invalidate existing DOM fingerprints before React commits a new phase.
+    updateScopeRef.current?.setAttribute('data-voice-lifecycle', metadata.voiceLifecycle)
+    updateScopeRef.current?.setAttribute('data-voice-record', metadata.voiceRecord)
+    updateScopeRef.current?.setAttribute('data-voice-epoch', metadata.voiceEpoch)
+    setUpdateStateValue(current => ({ ...current, ...metadata }))
+  }
+  const replaceUpdateResource = update => {
+    updateRef.current = update
+    updateResourceRevision.current += 1
+    advanceUpdateScope()
+  }
+  const setUpdateState = next => {
+    if (next.phase !== updatePhase.current) {
+      updatePhase.current = next.phase
+      advanceUpdateScope()
+    }
+    setUpdateStateValue({ ...next, ...updateVoiceMetadata() })
+  }
   const updateBusy = useRef(false)
   const updateCheckBusy = useRef(false)
   const updateCheckGeneration = useRef(0)
@@ -370,14 +399,14 @@ export default function DesktopVault() {
     let active = true
     checkDesktopUpdate().then(update => {
       if (!active) { void closeDesktopUpdate(update).catch(() => {}); return }
-      updateRef.current = update
+      replaceUpdateResource(update)
       setUpdateState(update ? { phase: 'available', version: update.version } : { phase: 'none' })
     }).catch(() => { if (active) setUpdateState({ phase: 'check-error' }) })
     const release = () => {
       active = false
       updateCheckGeneration.current += 1
       const held = updateRef.current
-      updateRef.current = null
+      replaceUpdateResource(null)
       void closeDesktopUpdate(held).catch(() => {})
     }
     window.addEventListener('pagehide', release)
@@ -388,6 +417,7 @@ export default function DesktopVault() {
     if (updateBusy.current || updateCheckBusy.current) return
     updateCheckBusy.current = true
     const generation = updateCheckGeneration.current
+    replaceUpdateResource(updateRef.current) // Recheck invalidates even an identical version/RID.
     setUpdateState({ phase: 'checking' })
     try {
       const update = await checkDesktopUpdate()
@@ -396,41 +426,50 @@ export default function DesktopVault() {
         return
       }
       const previous = updateRef.current
-      updateRef.current = update
+      replaceUpdateResource(update)
+      const revision = updateResourceRevision.current
       if (previous && previous !== update) await closeDesktopUpdate(previous).catch(() => {})
-      if (generation !== updateCheckGeneration.current) return
+      if (generation !== updateCheckGeneration.current || revision !== updateResourceRevision.current || updateRef.current !== update) return
       setUpdateState(update ? { phase: 'available', version: update.version } : { phase: 'none' })
     } catch { if (generation === updateCheckGeneration.current) setUpdateState({ phase: 'check-error' }) }
     finally { updateCheckBusy.current = false }
   }
 
   const applyUpdate = async () => {
-    if (updateBusy.current || !updateRef.current || busyRef.current) return
-    const version = updateRef.current.version
+    if (updateBusy.current || updateCheckBusy.current || !updateRef.current || busyRef.current) return
+    const held = updateRef.current
+    const token = updateResourceRevision.current
+    const version = held.version
+    const rid = held.rid
+    const current = () => updateRef.current === held && updateResourceRevision.current === token
+      && held.version === version && held.rid === rid
     if (updateFormsOpen.current || sessionsRef.current?.hasOtherUnsavedEditors()) {
       setUpdateState({ phase: 'forms-open', version })
       return
     }
     if (!await confirmAction(`Instalar Círculo ${version}? O aplicativo será fechado durante a instalação. Salve seu trabalho antes de continuar.`)) return
+    if (!current() || updateBusy.current || updateCheckBusy.current || busyRef.current) return
     updateBusy.current = true
     setUpdateState({ phase: 'saving', version })
     try {
       await sessionsRef.current?.waitForIdle()
+      if (!current()) return
       await sessionsRef.current?.savePending()
+      if (!current()) return
       if (updateFormsOpen.current || sessionsRef.current?.hasOtherUnsavedEditors()) {
         setUpdateState({ phase: 'forms-open', version })
         return
       }
       setUpdateState({ phase: 'downloading', version, downloaded: 0, total: null })
-      await installDesktopUpdate(updateRef.current, progress => setUpdateState({ ...progress, version }))
-      const installed = updateRef.current
-      updateRef.current = null
-      void closeDesktopUpdate(installed).catch(() => {})
+      await installDesktopUpdate(held, progress => { if (current()) setUpdateState({ ...progress, version }) })
+      if (!current()) return
+      replaceUpdateResource(null)
+      void closeDesktopUpdate(held).catch(() => {})
       setUpdateState({ phase: 'installed', version })
     } catch (reason) {
-      const failed = updateRef.current
-      updateRef.current = null
-      void closeDesktopUpdate(failed).catch(() => {})
+      if (!current()) return
+      replaceUpdateResource(null)
+      void closeDesktopUpdate(held).catch(() => {})
       setUpdateState({ phase: 'install-error', version, error: String(reason) })
     } finally { updateBusy.current = false }
   }
@@ -897,15 +936,17 @@ export default function DesktopVault() {
   }
 
   const nameOption = entityOptionSuffix
+  const updateVoiceScope = { ref: updateScopeRef, 'data-voice-record': updateState.voiceRecord,
+    'data-voice-epoch': updateState.voiceEpoch, 'data-voice-lifecycle': updateState.voiceLifecycle }
   return <main ref={voiceScopeRef} data-voice-epoch={`${status?.unlocked ? 'unlocked' : 'locked'}:${space}:${sessionPatientId}:${activeDraft?.id || ''}:${editing?.id || ''}:${partyPatientId}`} className={`vault-page ${status?.unlocked ? 'vault-page-unlocked' : ''}`}>
     <section className="vault-card">
       <header className="vault-header"><div><p className="vault-eyebrow">CÍRCULO</p><h1>Círculo</h1><p>Um lugar para organizar o cuidado.</p></div>{status?.unlocked && space !== 'settings' && <button disabled={busy} className="vault-secondary vault-header-lock" onClick={() => lock(false)}>Bloquear</button>}</header>
-      {updateState.phase === 'available' && <aside className="vault-updater" role="status"><strong>Atualização disponível: Círculo {updateState.version}</strong><p>Você pode continuar usando o aplicativo. A instalação só começa após sua confirmação.</p><button type="button" onClick={applyUpdate}>Baixar e instalar</button></aside>}
-      {['saving', 'downloading', 'installing'].includes(updateState.phase) && <aside className="vault-updater" role="status"><strong>Atualização {updateState.version}</strong><p>{updateState.phase === 'saving' ? 'Salvando rascunho pendente…' : updateState.phase === 'installing' ? 'Download concluído. Iniciando instalação…' : `Baixando atualização…${updateState.total ? ` ${Math.min(100, Math.round(updateState.downloaded / updateState.total * 100))}%` : ''}`}</p>{updateState.phase === 'downloading' && updateState.total && <progress value={updateState.downloaded} max={updateState.total} aria-label="Progresso do download" />}</aside>}
-      {updateState.phase === 'forms-open' && <aside className="vault-updater" role="alert"><strong>Feche os formulários antes de instalar Círculo {updateState.version}.</strong><p>Cadastro, vínculo, Agenda ou editores de Sessões podem conter alterações não salvas. Salve o que precisar; depois feche ou descarte as alterações explicitamente.</p><button type="button" onClick={async () => { if (!await confirmAction('Fechar cadastro, vínculo e Agenda e descartar contexto, adendo ou comportamento não salvos em Sessões?')) return; try { sessionsRef.current?.discardOtherUnsavedEditors(); setPatientFormOpen(false); setEditing(null); setForm(emptyPatientForm()); clearParties(); setAgendaOpen(false); setUpdateState({ phase: 'available', version: updateState.version }) } catch (reason) { setUpdateState({ phase: 'forms-open', version: updateState.version, error: String(reason) }) } }}>Descartar edições e fechar formulários</button><button type="button" className="vault-secondary" data-voice-alias="Tentar novamente" onClick={applyUpdate}>Tentar instalação novamente</button>{updateState.error && <p>{updateState.error}</p>}</aside>}
-      {updateState.phase === 'install-error' && <aside className="vault-updater" role="alert"><strong>Não foi possível instalar Círculo {updateState.version}.</strong><p>{updateState.error}</p><button type="button" data-voice-alias="Verificar e tentar novamente" onClick={retryUpdateCheck}>Verificar atualizações</button></aside>}
-      {updateState.phase === 'check-error' && <aside className="vault-updater" role="status"><p>Não foi possível verificar atualizações. Você pode continuar normalmente.</p><button type="button" data-voice-alias="Tentar novamente" onClick={retryUpdateCheck}>Verificar atualizações</button></aside>}
-      {updateState.phase === 'installed' && <aside className="vault-updater" role="status">Atualização {updateState.version} instalada. Reinicie o aplicativo para usar a nova versão.</aside>}
+      {updateState.phase === 'available' && <aside {...updateVoiceScope} className="vault-updater" role="status"><strong>Atualização disponível: Círculo {updateState.version}</strong><p>Você pode continuar usando o aplicativo. A instalação só começa após sua confirmação.</p><button type="button" onClick={applyUpdate}>Baixar e instalar</button></aside>}
+      {['saving', 'downloading', 'installing'].includes(updateState.phase) && <aside {...updateVoiceScope} className="vault-updater" role="status"><strong>Atualização {updateState.version}</strong><p>{updateState.phase === 'saving' ? 'Salvando rascunho pendente…' : updateState.phase === 'installing' ? 'Download concluído. Iniciando instalação…' : `Baixando atualização…${updateState.total ? ` ${Math.min(100, Math.round(updateState.downloaded / updateState.total * 100))}%` : ''}`}</p>{updateState.phase === 'downloading' && updateState.total && <progress value={updateState.downloaded} max={updateState.total} aria-label="Progresso do download" />}</aside>}
+      {updateState.phase === 'forms-open' && <aside {...updateVoiceScope} className="vault-updater" role="alert"><strong>Feche os formulários antes de instalar Círculo {updateState.version}.</strong><p>Cadastro, vínculo, Agenda ou editores de Sessões podem conter alterações não salvas. Salve o que precisar; depois feche ou descarte as alterações explicitamente.</p><button type="button" onClick={async () => { if (!await confirmAction('Fechar cadastro, vínculo e Agenda e descartar contexto, adendo ou comportamento não salvos em Sessões?')) return; try { sessionsRef.current?.discardOtherUnsavedEditors(); setPatientFormOpen(false); setEditing(null); setForm(emptyPatientForm()); clearParties(); setAgendaOpen(false); setUpdateState({ phase: 'available', version: updateState.version }) } catch (reason) { setUpdateState({ phase: 'forms-open', version: updateState.version, error: String(reason) }) } }}>Descartar edições e fechar formulários</button><button type="button" className="vault-secondary" data-voice-alias="Tentar novamente" onClick={applyUpdate}>Tentar instalação novamente</button>{updateState.error && <p>{updateState.error}</p>}</aside>}
+      {updateState.phase === 'install-error' && <aside {...updateVoiceScope} className="vault-updater" role="alert"><strong>Não foi possível instalar Círculo {updateState.version}.</strong><p>{updateState.error}</p><button type="button" data-voice-alias="Verificar e tentar novamente" onClick={retryUpdateCheck}>Verificar atualizações</button></aside>}
+      {updateState.phase === 'check-error' && <aside {...updateVoiceScope} className="vault-updater" role="status"><p>Não foi possível verificar atualizações. Você pode continuar normalmente.</p><button type="button" data-voice-alias="Tentar novamente" onClick={retryUpdateCheck}>Verificar atualizações</button></aside>}
+      {updateState.phase === 'installed' && <aside {...updateVoiceScope} className="vault-updater" role="status">Atualização {updateState.version} instalada. Reinicie o aplicativo para usar a nova versão.</aside>}
       {!status?.unlocked && <p>Entre com sua senha para acessar pacientes, agenda e sessões. A senha é solicitada na primeira abertura do dia.</p>}
       {error && <p className="vault-error" role="alert">{error}</p>}
       {message && <p className="vault-ok" role="status">{message}</p>}

@@ -2,15 +2,72 @@
 // until the author implements the three confirmed private functions. No test
 // launches Whisper, reads an audio/model resource, or performs inference.
 use super::{
-    build_initial_prompt, build_whisper_command, whisper_response_arguments,
+    build_initial_prompt, build_whisper_command, hard_link_voice_resources, whisper_response_arguments,
     write_response_arguments, INITIAL_PROMPT,
 };
 use std::{ffi::OsStr, fs, path::Path};
 
+// Candidate integration gate. Historical transport cases below are preserved;
+// their expected model filename is explicitly migrated with the real default.
+// These tests use existing functions only:
+// RED must be an assertion mismatch, not a missing-function compilation error.
+fn candidate_arguments(prompt: &str) -> Vec<&str> {
+    vec![
+        "-m", "ggml-small-q5_1.bin", "-f", "../input.wav", "-l", "pt", "--prompt", prompt,
+        "-ng", "-nt", "-otxt", "-of", "../transcription",
+    ]
+}
+
+#[test]
+fn candidate_small_q5_response_uses_explicit_filename_and_changes_no_other_setting() {
+    let prompt = build_initial_prompt(&["Ana Clara".into(), "Bia Fictícia".into()]);
+    assert_eq!(prompt, format!("{INITIAL_PROMPT} Ana Clara. Bia Fictícia."));
+    let actual = whisper_response_arguments(&prompt);
+    assert_eq!(actual[1], "ggml-small-q5_1.bin", "actual production model argument");
+    assert_eq!(actual, candidate_arguments(&prompt));
+}
+
+#[test]
+fn candidate_small_q5_response_bytes_preserve_unicode_prompt_and_relative_transport() {
+    let temp = tempfile::tempdir().unwrap();
+    let engine = temp.path().join("Área Fictícia").join("engine");
+    fs::create_dir_all(&engine).unwrap();
+    let path = engine.join("args.txt");
+    let prompt = build_initial_prompt(&["Ana Clara".into(), "Bia Fictícia".into()]);
+    write_response_arguments(&path, &whisper_response_arguments(&prompt)).unwrap();
+    let bytes = fs::read(&path).unwrap();
+    assert_eq!(bytes, (candidate_arguments(&prompt).join("\n") + "\n").as_bytes());
+    assert!(!bytes.starts_with(&[0xef, 0xbb, 0xbf]));
+    assert!(!bytes.contains(&b'\r'));
+    assert!(!bytes.contains(&0));
+    let command = build_whisper_command(&engine.join("whisper-cli.exe"), &engine);
+    assert_eq!(command.get_args().collect::<Vec<_>>(), vec![OsStr::new("@args.txt")]);
+    assert_eq!(command.get_current_dir(), Some(engine.as_path()));
+}
+
+#[test]
+fn candidate_small_q5_staging_keeps_explicit_model_bytes_and_historical_base_untouched() {
+    let source = tempfile::tempdir().unwrap();
+    let destination = tempfile::tempdir().unwrap();
+    let candidate = b"synthetic candidate model bytes; not an executable model";
+    let historical = b"synthetic historical base bytes";
+    fs::write(source.path().join("ggml-small-q5_1.bin"), candidate).unwrap();
+    fs::write(source.path().join("ggml-base.bin"), historical).unwrap();
+    fs::write(source.path().join("whisper-cli.exe"), b"synthetic non-executable CLI").unwrap();
+    fs::write(source.path().join("ggml-cpu-x64.dll"), b"synthetic backend").unwrap();
+    let engine = destination.path().join("engine");
+    hard_link_voice_resources(source.path(), &engine).unwrap();
+    assert_eq!(fs::read(engine.join("ggml-small-q5_1.bin")).unwrap(), candidate);
+    assert_eq!(fs::read(source.path().join("ggml-small-q5_1.bin")).unwrap(), candidate);
+    assert_eq!(fs::read(source.path().join("ggml-base.bin")).unwrap(), historical);
+    assert_eq!(fs::read(engine.join("whisper-cli.exe")).unwrap(), b"synthetic non-executable CLI");
+    assert_eq!(fs::read(engine.join("ggml-cpu-x64.dll")).unwrap(), b"synthetic backend");
+}
+
 fn expected_arguments(prompt: &str) -> Vec<&str> {
     // Preserve the existing flag order/settings; change only transport/paths.
     vec![
-        "-m", "ggml-base.bin", "-f", "../input.wav", "-l", "pt", "--prompt", prompt,
+        "-m", "ggml-small-q5_1.bin", "-f", "../input.wav", "-l", "pt", "--prompt", prompt,
         "-ng", "-nt", "-otxt", "-of", "../transcription",
     ]
 }
@@ -39,7 +96,7 @@ fn response_writer_emits_exact_utf8_order_without_bom_with_lf_and_final_lf() {
     write_response_arguments(&path, &whisper_response_arguments(prompt)).unwrap();
     let bytes = fs::read(&path).unwrap();
     let expected = format!(
-        "-m\nggml-base.bin\n-f\n../input.wav\n-l\npt\n--prompt\n{prompt}\n-ng\n-nt\n-otxt\n-of\n../transcription\n"
+        "-m\nggml-small-q5_1.bin\n-f\n../input.wav\n-l\npt\n--prompt\n{prompt}\n-ng\n-nt\n-otxt\n-of\n../transcription\n"
     );
     assert_eq!(bytes, expected.as_bytes());
     assert!(!bytes.starts_with(&[0xef, 0xbb, 0xbf]));
