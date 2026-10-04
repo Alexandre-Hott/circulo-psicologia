@@ -1,6 +1,10 @@
 # Matriz de voz do Círculo
 
-## Entrega local 0.2.82
+## Entrega local 0.2.83
+
+A [entrega83](validacao-voz-0.2.83.md) aceita uma pausa escrita como ponto ou vírgula após comportamento nos comandos existentes. Biblioteca9/9, JS1891/1891 e Rust138 aprovados/1 ignorado. O pacote foi gerado e auditado por metadados, não instalado, extraído, assinado ou publicado. Depois do build, uma prova adicional do fluxo rápido Registrar sessão → Criar e iniciar sessão passou no caso focal do autor; o principal passou14/14 no arquivo de calendário, incluindo falhas e retry, sem duplicação. Helpers PCM e IPC simulados, um worker e zero retries; não são nova ASR ou microfone físico. A opção exata na biblioteca homônima foi comprovada na UI, mas não se afirma cobertura universal. Meta ativa.
+
+## Referência local 0.2.82
 
 A [entrega82](validacao-voz-0.2.82.md) integra o ajuste beam8 após comparação fresca e rodada pelo backend Rust real:7 pedidos corretos,0 falhos e1 confirmação apenas textual nos oito WAVs conferidos. Os quatro corpos clínicos ficaram exatos. UI fresca8/8 e regressão selecionada14/14 passaram em rodadas separadas sem retries; metadados82 com JS1884/1884 e Rust138 aprovados/1 ignorado, com opt-in executado separadamente antes da atualização mecânica. Instalador x64 gerado e auditado por metadados, não instalado, extraído, assinado ou publicado. A amostra não comprova microfone físico nem reconhecimento de toda fala. Senhas, arquivos e início de captura continuam manuais. Meta ativa; próximo teste proposto: edição por áudio de opção exata na biblioteca homônima, ainda não executado.
 

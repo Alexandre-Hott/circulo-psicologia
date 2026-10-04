@@ -18,6 +18,12 @@ Hashes finais da mudança funcional e provas:
 - Unitários: `781221B01496BE5F42AF8EA75F59949FDD5F0C10251433CFDD11D77412867BC5`.
 - Interface da biblioteca: `F32D60FBBD35D5E15C2C47DBFDDB47C411B1B959C2182011953D34B2E11B9CDC`.
 
+## Prova adicional do fluxo rápido de sessão
+
+Depois do pacote 83, um caso novo de captura simulada verificou Registrar sessão → Criar e iniciar sessão. O autor passou 1/1 em 28,4 s, sem falhas preliminares. A conferência do principal de todo o arquivo de calendário passou 14/14 em 1,2 min, na porta 5259, com um worker e zero retries. São rodadas separadas. O comando e sua confirmação usam áudios distintos; os campos de data e horário também foram preenchidos por esse caminho. Preparar não grava nada. Após confirmar, exatamente uma criação de compromisso para Lia e um início de rascunho usam a série criada e a mesma data, sem duplicação. Pacientes, compromisso e rascunho concorrentes e histórico foram preservados.
+
+O helper é opt-in; os casos anteriores de falha, retry e contexto de desbloqueio permanecem intactos e passaram na mesma conferência. Revisão independente estática aprovou payloads, identidade e limpeza de recursos/buffers. SHA-256 do arquivo de testes: `C0C45F872E65BFF155972675800A147601A36CE8D2878D4A8997BBE099952BCB`. Isso não foi uma nova inferência de voz nem validação da janela instalada. Não houve alteração de produção ou outro build por causa dessa prova.
+
 ## Instalador para teste local
 
 O [instalador para Windows x64](../src-tauri/target/release/bundle/nsis/Círculo_0.2.83_x64-setup.exe) foi gerado com sucesso, com compilação release em 1 min 02 s e término do bundle NSIS com código zero. Tem 187.067.492 bytes e SHA-256 `ee04cfa4545e0dd07ca8c70aca6bec5dde801ee7f2ce6bc68fd0dcad4fb36c81`. A auditoria de metadados em `C:\Users\alexandre\AppData\Local\Temp\circulo-0283-audit-20261004.json` confirmou versão PE 0.2.83 e Authenticode NotSigned.

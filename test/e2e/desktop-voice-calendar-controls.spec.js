@@ -1,19 +1,72 @@
 import { expect, test } from '@playwright/test'
 
-async function openApp(page, { failStart = false, seed = false, failAuxiliary = '' } = {}) {
+async function openApp(page, { failStart = false, seed = false, failAuxiliary = '', pcm = false } = {}) {
   await page.clock.install({ time: new Date('2026-10-03T15:00:00Z') })
   await page.clock.pauseAt(new Date('2026-10-03T15:00:00Z'))
-  await page.addInitScript(({ failStart, seed, failAuxiliary }) => {
+  await page.addInitScript(({ failStart, seed, failAuxiliary, pcm }) => {
     const clone = value => structuredClone(value)
     const patient = { id: 'lia', name: 'Lia Exemplo', revision: 1, archivedAt: null }
     const series = seed ? [{ id: 'seed', patientId: 'lia', startDate: '2026-10-31', endDate: '2026-10-31', weekday: 6, frequency: 'Avulsa', start: '14:00', end: '14:50', modality: 'Presencial', meetingLink: null }] : []
     const drafts = []
     const sessions = []
+    const patients = [patient]
+    if (pcm) {
+      patients.push({ id: 'bia', name: 'Bia Fictícia', revision: 3, archivedAt: null })
+      series.push({ id: 'seed-bia', patientId: 'bia', startDate: '2026-11-15', endDate: '2026-11-15', weekday: 0, frequency: 'Avulsa', start: '15:45', end: '16:35', modality: 'Online', meetingLink: null })
+      drafts.push({ id: 'draft-bia', patientId: 'bia', seriesId: 'seed-bia', originalDate: '2026-11-15', observation: 'Concorrente preservado.', procedures: 'Procedimento concorrente.', outcomeDecision: 'Decisão concorrente.', referralClosure: '', behaviorIds: [], indicators: [] })
+      sessions.push({ id: 'finished-bia', patientId: 'bia', seriesId: 'history-bia', originalDate: '2026-10-02', sessionDate: '2026-10-02', observation: 'Snapshot histórico preservado.', procedures: 'Histórico sintético.', outcomeDecision: 'Histórico intacto.', behaviors: [], indicators: [] })
+    }
     let fail = failStart
     let auxiliaryFailed = false
     let refreshAfterStart = false
-    window.calendarVoice = { series, drafts, sessions, calls: [], unexpected: [], unlocked: true }
+    const fixture = window.calendarVoice = { patients, series, drafts, sessions, calls: [], unexpected: [], unlocked: true }
+    if (pcm) {
+      const media = fixture.pcm = { transcripts: [], captures: [], refs: [], mediaRequests: 0, trackStops: 0, contextCloses: 0, sourceDisconnects: 0, processorDisconnects: 0 }
+      class SyntheticAudioContext {
+        constructor() { this.sampleRate = 8000; this.state = 'running'; this.destination = {} }
+        createMediaStreamSource() { return { connect() {}, disconnect() { media.sourceDisconnects++ } } }
+        createScriptProcessor() {
+          const processor = { onaudioprocess: null, disconnect() { media.processorDisconnects++ } }
+          processor.connect = () => queueMicrotask(() => {
+            let frames = 0
+            const emit = () => {
+              if (!processor.onaudioprocess) return
+              const amplitude = frames++ < 2 ? 0.1 : 0
+              processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(amplitude) }, outputBuffer: { getChannelData: () => new Float32Array(4096) } })
+              if (processor.onaudioprocess) setTimeout(emit, 200)
+            }
+            emit()
+          })
+          return processor
+        }
+        resume() { return Promise.resolve() }
+        close() { this.state = 'closed'; media.contextCloses++; return Promise.resolve() }
+      }
+      Object.defineProperty(window, 'AudioContext', { configurable: true, value: SyntheticAudioContext })
+      Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => {
+        media.mediaRequests++
+        return { getTracks: () => [{ stop() { media.trackStops++ } }] }
+      } } })
+    }
     window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
+      if (pcm && command === 'voice_transcribe') {
+        const media = fixture.pcm
+        if (Object.keys(args).sort().join('|') !== 'patientNames|sampleRate|samples'
+          || args.sampleRate !== 8000 || !Array.isArray(args.samples) || !args.samples.length
+          || args.samples.length / args.sampleRate >= 12 || !args.samples.every(Number.isFinite)
+          || !args.samples.some(value => value !== 0) || !args.samples.some(value => value === 0)
+          || JSON.stringify(args.patientNames) !== JSON.stringify(patients.map(item => item.name))) {
+          fixture.unexpected.push('Invalid PCM payload'); throw new Error('Invalid PCM payload')
+        }
+        const transcript = media.transcripts.shift()
+        if (typeof transcript !== 'string' || !transcript.trim()) {
+          fixture.unexpected.push('Missing fixed transcript'); throw new Error('Missing fixed transcript')
+        }
+        media.captures.push({ transcript, sampleCount: args.samples.length, sampleRate: args.sampleRate })
+        media.refs.push(args)
+        fixture.calls.push({ command })
+        return transcript
+      }
       window.calendarVoice.calls.push(clone({ command, args }))
       if (command === 'behavior_list' && series.length && !drafts.length && window.calendarVoice.pauseCreationRefresh && !window.calendarVoice.deferredCreationRefresh) {
         window.calendarVoice.deferredCreationRefresh = true
@@ -32,11 +85,19 @@ async function openApp(page, { failStart = false, seed = false, failAuxiliary = 
       if (command === 'vault_lock') { window.calendarVoice.unlocked = false; return null }
       if (command === 'auto_backup_status') { if (drafts.length) refreshAfterStart = true; return { available: false, dirty: false } }
       if (command === 'plugin:updater|check') return null
-      if (command === 'patient_list') return [patient]
+      if (command === 'patient_list') return clone(patients)
       if (command === 'agenda_list_series') return clone(series)
       if (command === 'agenda_occurrences') return clone(series.filter(item => item.startDate >= args.from && item.startDate <= args.to).map(item => ({ id: `${item.id}:${item.startDate}`, seriesId: item.id, patientId: item.patientId, originalDate: item.startDate, date: item.startDate, start: item.start, end: item.end, frequency: item.frequency, modality: item.modality, status: 'scheduled' })))
-      if (command === 'agenda_create_series') { const saved = { ...clone(args.input), id: `series-${series.length + 1}` }; series.push(saved); return clone(saved) }
+      if (command === 'agenda_create_series') {
+        if (pcm && (Object.keys(args).join('|') !== 'input' || Object.keys(args.input).sort().join('|') !== 'end|endDate|frequency|meetingLink|modality|patientId|start|startDate|weekday')) {
+          fixture.unexpected.push('Invalid agenda payload'); throw new Error('Invalid agenda payload')
+        }
+        const saved = { ...clone(args.input), id: `series-${series.length + 1}` }; series.push(saved); return clone(saved)
+      }
       if (command === 'session_draft_start') {
+        if (pcm && (Object.keys(args).sort().join('|') !== 'originalDate|seriesId' || !series.some(item => item.id === args.seriesId && item.patientId === 'lia' && item.startDate === args.originalDate))) {
+          fixture.unexpected.push('Invalid draft start identity'); throw new Error('Invalid draft start identity')
+        }
         if (fail) { fail = false; throw new Error('Falha sintética ao iniciar') }
         const existing = drafts.find(item => item.seriesId === args.seriesId && item.originalDate === args.originalDate)
         if (existing) return clone(existing)
@@ -63,7 +124,7 @@ async function openApp(page, { failStart = false, seed = false, failAuxiliary = 
       window.calendarVoice.unexpected.push(command)
       throw new Error(`Invoke sem fixture: ${command}`)
     } }
-  }, { failStart, seed, failAuxiliary })
+  }, { failStart, seed, failAuxiliary, pcm })
   await page.goto('/')
   await expect(page.getByRole('region', { name: 'Comando do Círculo' })).toBeVisible()
 }
@@ -215,7 +276,101 @@ for (const failAuxiliary of ['after-create', 'after-start']) {
     expect(await page.evaluate(() => window.calendarVoice.drafts.map(item => item.id))).toEqual([original])
   })
 }
-test.afterEach(async ({ page }) => expect(await page.evaluate(() => window.calendarVoice?.unexpected || [])).toEqual([]))
+test.afterEach(async ({ page }) => {
+  expect(await page.evaluate(() => window.calendarVoice?.unexpected || [])).toEqual([])
+  if (page.calendarPCMBoundary) {
+    expect(page.calendarPCMBoundary).toEqual([])
+    const status = await page.evaluate(() => {
+      const media = window.calendarVoice.pcm
+      return { queued: media.transcripts, count: media.captures.length,
+        releases: [media.mediaRequests, media.trackStops, media.contextCloses, media.sourceDisconnects, media.processorDisconnects],
+        cleared: media.refs.every(args => args.samples.every(sample => sample === 0) && args.patientNames.every(name => name === '')) }
+    })
+    expect(status.queued).toEqual([])
+    expect(status.releases).toEqual(Array(5).fill(status.count))
+    expect(status.cleared).toBe(true)
+  }
+})
+
+async function calendarAudio(page, text) {
+  const assistant = page.getByRole('region', { name: 'Comando do Círculo', exact: true })
+  const before = await page.evaluate(() => window.calendarVoice.pcm.captures.length)
+  await page.evaluate(transcript => window.calendarVoice.pcm.transcripts.push(transcript), text)
+  const listen = assistant.getByRole('button', { name: 'Ouvir comando', exact: true })
+  await expect(listen).toBeEnabled()
+  await listen.click()
+  await expect(listen).toBeDisabled()
+  await page.clock.runFor(1600)
+  await expect(listen).toBeEnabled()
+  await expect.poll(() => page.evaluate(() => window.calendarVoice.pcm.captures.length)).toBe(before + 1)
+  await expect(assistant.getByLabel('Seu comando')).toHaveValue(text)
+  await expect(assistant).not.toContainText('pode estar incompleta')
+}
+
+test('PCM: Registrar sessão → Criar e iniciar sessão exige dois áudios e preserva concorrentes', async ({ page, baseURL }) => {
+  page.calendarPCMBoundary = []
+  page.on('dialog', async dialog => { page.calendarPCMBoundary.push(`native dialog: ${dialog.type()}`); await dialog.dismiss() })
+  await page.route('**/*', async route => {
+    if (new URL(route.request().url()).origin === new URL(baseURL).origin) await route.continue()
+    else { page.calendarPCMBoundary.push(route.request().url()); await route.abort() }
+  })
+  await openApp(page, { seed: true, pcm: true })
+  const snapshot = () => page.evaluate(() => {
+    const { patients, series, drafts, sessions } = window.calendarVoice
+    return structuredClone({ patients, series, drafts, sessions })
+  })
+  const writes = () => page.evaluate(() => window.calendarVoice.calls.filter(item => ['agenda_create_series', 'session_draft_start', 'session_draft_save', 'session_finalize'].includes(item.command)))
+  const original = await snapshot()
+  const preview = page.locator('.voice-command-preview')
+  const appointment = page.getByRole('form', { name: 'Novo compromisso', exact: true })
+  await calendarAudio(page, 'Clicar em Registrar sessão')
+  await expect(preview).toContainText('Confira a proposta')
+  await expect(appointment).toHaveCount(0)
+  expect(await snapshot()).toEqual(original)
+  expect(await writes()).toEqual([])
+  await calendarAudio(page, 'Confirmar')
+  await expect(preview).toHaveCount(0)
+  await expect(appointment).toBeVisible()
+  await expect(appointment.getByLabel('Paciente', { exact: true })).toHaveValue('lia')
+  await expect(appointment.getByRole('button', { name: 'Criar e iniciar sessão', exact: true })).toBeEnabled()
+  expect(await snapshot()).toEqual(original)
+  expect(await writes()).toEqual([])
+
+  for (const [label, value] of [['Data do compromisso', '2026-11-15'], ['Horário inicial', '15:45'], ['Horário final', '16:35']]) {
+    const before = await appointment.getByLabel(label, { exact: true }).inputValue()
+    await calendarAudio(page, `Preencher ${label} com ${value}`)
+    await expect(preview).toContainText('Confira a proposta')
+    await expect(appointment.getByLabel(label, { exact: true })).toHaveValue(before)
+    expect(await snapshot()).toEqual(original)
+    expect(await writes()).toEqual([])
+    await calendarAudio(page, 'Confirmar')
+    await expect(preview).toHaveCount(0)
+    await expect(appointment.getByLabel(label, { exact: true })).toHaveValue(value)
+    expect(await snapshot()).toEqual(original)
+    expect(await writes()).toEqual([])
+  }
+  await calendarAudio(page, 'Clicar em Criar e iniciar sessão')
+  await expect(preview).toContainText('Confira a proposta')
+  expect(await snapshot()).toEqual(original)
+  expect(await writes()).toEqual([])
+  await expect(page.getByRole('form', { name: 'Rascunho de sessão', exact: true })).toHaveCount(0)
+  await calendarAudio(page, 'Confirmar')
+  const input = { patientId: 'lia', weekday: 0, startDate: '2026-11-15', endDate: '2026-11-15', start: '15:45', end: '16:35', frequency: 'Avulsa', modality: 'Presencial', meetingLink: null }
+  await expect.poll(writes).toEqual([
+    { command: 'agenda_create_series', args: { input } },
+    { command: 'session_draft_start', args: { seriesId: 'series-3', originalDate: '2026-11-15' } },
+  ])
+  const draft = { id: 'draft-lia-2', patientId: 'lia', seriesId: 'series-3', originalDate: '2026-11-15', observation: '', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicators: [] }
+  await expect(page.getByRole('form', { name: 'Rascunho de sessão', exact: true })).toHaveAttribute('data-voice-record', draft.id)
+  await expect(page.getByRole('heading', { name: 'Rascunho da ocorrência 2026-11-15', exact: true })).toBeVisible()
+  await expect(page.getByLabel('Paciente para evolução e sessões')).toHaveValue('lia')
+  expect(await snapshot()).toEqual({ ...original, series: [...original.series, { ...input, id: 'series-3' }], drafts: [...original.drafts, draft] })
+  expect(await page.evaluate(() => window.calendarVoice.pcm.captures.map(item => item.transcript))).toEqual([
+    'Clicar em Registrar sessão', 'Confirmar', 'Preencher Data do compromisso com 2026-11-15', 'Confirmar',
+    'Preencher Horário inicial com 15:45', 'Confirmar', 'Preencher Horário final com 16:35', 'Confirmar',
+    'Clicar em Criar e iniciar sessão', 'Confirmar',
+  ])
+})
 
 test('calendário: controles mensais/diários, detalhes e fechamento por voz', async ({ page }) => {
   await openApp(page, { seed: true })
