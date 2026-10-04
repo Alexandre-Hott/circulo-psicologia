@@ -1,6 +1,10 @@
 # Matriz de voz do Círculo
 
-## Entrega local 0.2.83
+## Entrega local 0.2.84
+
+A [entrega84](validacao-voz-0.2.84.md) inclui a correção da confirmação digitada pontuada, com provas de25/25 do assistente e26/26 do ditado em rodadas separadas. Metadados84: JS1891/1891 e Rust138 aprovados/1 ignorado. Quatro WAVs adicionais passaram pelo backend Rust real:2 intents exatos,1 divergência literal de título e1 rota DOM ainda não avaliada. Não é acerto universal nem replay UI concluído desses quatro textos. Pacote local gerado e auditado, não instalado, extraído, assinado ou publicado. Meta ativa.
+
+## Referência local 0.2.83
 
 A [entrega83](validacao-voz-0.2.83.md) aceita uma pausa escrita como ponto ou vírgula após comportamento nos comandos existentes. Biblioteca9/9, JS1891/1891 e Rust138 aprovados/1 ignorado. O pacote foi gerado e auditado por metadados, não instalado, extraído, assinado ou publicado. Depois do build, uma prova adicional do fluxo rápido Registrar sessão → Criar e iniciar sessão passou no caso focal do autor; o principal passou14/14 no arquivo de calendário, incluindo falhas e retry, sem duplicação. Helpers PCM e IPC simulados, um worker e zero retries; não são nova ASR ou microfone físico. A opção exata na biblioteca homônima foi comprovada na UI, mas não se afirma cobertura universal. Meta ativa.
 
