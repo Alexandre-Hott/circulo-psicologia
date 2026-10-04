@@ -59,6 +59,32 @@ async function command(page, text) {
 
 test.afterEach(async ({ page }) => expect(await page.evaluate(() => window.libraryFixture?.unexpected || [])).toEqual([]))
 
+test('salvar comportamento recusa modos concorrentes sem escolher o primeiro botão', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Criar comportamento Solicita pausa')
+  await page.evaluate(() => {
+    const extra = document.createElement('button')
+    extra.type = 'button'; extra.textContent = 'Salvar versão do comportamento'
+    document.querySelector('#session-behaviors form').append(extra)
+  })
+  await propose(page, 'Salvar comportamento')
+  await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+  await expect(page.getByText(/Há mais de uma opção “Salvar comportamento”/u)).toBeVisible()
+  expect(await page.evaluate(() => window.libraryFixture.writes)).toEqual([])
+})
+
+test('salvar comportamento preparado para criação não salva o editor aberto depois', async ({ page }) => {
+  await openApp(page)
+  await command(page, 'Criar comportamento Solicita pausa')
+  await propose(page, 'Salvar comportamento')
+  await expect(page.locator('.voice-command-preview')).toBeVisible()
+  await page.getByRole('button', { name: 'Editar comportamento Pede ajuda · opção 1', exact: true }).click()
+  await propose(page, 'confirmar')
+  await expect(page.getByText('A tela mudou. Prepare o comando novamente antes de aplicar.')).toBeVisible()
+  await expect(page.getByLabel('Título descritivo')).toHaveValue('Pede ajuda')
+  expect(await page.evaluate(() => window.libraryFixture.writes)).toEqual([])
+})
+
 test('criar e editar comportamento por voz atualiza catálogo e exige salvar a seleção', async ({ page }) => {
   await openApp(page)
   const originalTimeline = await page.evaluate(() => window.libraryFixture.timeline)
@@ -69,7 +95,7 @@ test('criar e editar comportamento por voz atualiza catálogo e exige salvar a s
   await expect(page.getByLabel('Título descritivo')).toHaveValue('Solicita pausa')
   await expect(page.getByLabel('Descrição opcional')).toHaveValue('Pede um intervalo durante a atividade.')
   expect(await page.evaluate(() => window.libraryFixture.writes)).toEqual([])
-  await command(page, 'Clicar em Criar comportamento reutilizável')
+  await command(page, 'Salvar comportamento')
   expect(await page.evaluate(() => window.libraryFixture.writes)).toEqual([{ command: 'behavior_create', args: { title: 'Solicita pausa', description: 'Pede um intervalo durante a atividade.' } }])
   await propose(page, 'Editar comportamento Solicita pausa com descrição Pede um intervalo curto durante a atividade.')
   await expect(page.locator('.voice-command-preview')).toBeVisible()
@@ -77,7 +103,7 @@ test('criar e editar comportamento por voz atualiza catálogo e exige salvar a s
   await propose(page, 'confirmar')
   await expect(page.getByLabel('Descrição opcional')).toHaveValue('Pede um intervalo curto durante a atividade.')
   expect(await page.evaluate(() => window.libraryFixture.writes)).toHaveLength(1)
-  await command(page, 'Clicar em Salvar versão do comportamento')
+  await command(page, 'Salve o comportamento')
   expect(await page.evaluate(() => window.libraryFixture.writes[1])).toEqual({ command: 'behavior_update', args: { id: 'created-2', version: 1, title: 'Solicita pausa', description: 'Pede um intervalo curto durante a atividade.' } })
   await command(page, 'Clicar em Retomar sessão de 2026-10-03')
   await propose(page, 'Marcar comportamento Solicita pausa para Ana Clara na sessão')

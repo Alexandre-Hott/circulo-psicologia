@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Complemento 0.2.52: salvar comportamento
+
+Pedido curto “salvar comportamento”/“salve o comportamento” aciona criação ou salvamento de versão apenas após prévia/confirmar. Duas ações disponíveis são recusadas; trocar de editor invalida a proposta preparada. Jornada da biblioteca e regressão de alvos7/7 aprovada; regressão final interface/biblioteca49/49 em3,4min, JS245/245 aprovado e revisão estática sem achados. Incluído com alias de ocorrência no pacote52 PE/x64/hash auditado, não instalado/publicado; instalado permanece47. Componente/RPC sintético, não prova de fala física. [Empacotamento, tentativas e limites](melhoria-continua-voz.md).
+
 ## Complemento: jornada de biblioteca para registro em sessão
 
 Teste integrado novo em `desktop-voice-library.spec.js` cria comportamento por voz, salva, edita o item recém-criado por nome, salva v2 e registra na sessão por ID atualizado. Confirmar seleção não grava mesmo após800ms; salvar explicitamente por voz grava. Histórico renderizado de outra sessão é preservado, sem prova de snapshot nativo do mesmo comportamento. Somente homologação de componentes com RPC fictício, sem mudança funcional nem novo instalador. [Tentativas e limites](melhoria-continua-voz.md).

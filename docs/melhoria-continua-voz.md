@@ -1,5 +1,17 @@
 # Melhoria contínua de voz
 
+## Entrega local 0.2.52
+
+Pacote `Círculo_0.2.52_x64-setup.exe`, **135.884.912 bytes**, SHA-256 `8ad1b0ead57e6b8f6353506eb91abe14afb25e8429720849ff08ba57d6143c26`. Build NSIS offline/locked exit0, Rust release compilado em1m03s; override temporário removido após término e configuração oficial preservada. Auditoria `%TEMP%\\circulo-0252-audit-20261004.json`: PE0.2.52/x64/NotSigned. Sem extração do conteúdo interno, instalação, abertura ou microfone físico nesta rodada. Instalado conferido permanece0.2.47; nenhum perfil alterado. Sem `.sig`, Authenticode, Release ou atualização publicada pelo GitHub.
+
+Inclui o pedido curto de salvamento de comportamento e o alias “em DD/MM/AAAA” nas ações de ocorrência, além das correções anteriores de retomada/bloqueio. **245/245 testes JS** reexecutados após versionamento; **49/49 E2E interface/biblioteca em3,4min** finais aprovados na versão52. Revisão estática sem achado concreto. Backend Rust funcional não mudou, testes Rust anteriores86 aprovados/1 áudio opt-in ignorado não reexecutados nesta rodada. Compilação mantém avisos anteriores LNK4099/PDB OpenSSL e chunk>500KiB. Auditoria/consistência/guard aprovados. Testes de componentes/RPC fictícios não são jornada do instalador. Meta ativa.
+
+## Incremento 0.2.52 — salvar comportamento com pedido curto
+
+“Salvar comportamento”, “salve comportamento” e “salve o comportamento” preparam clique no botão disponível de criação ou de salvamento de versão da biblioteca. “Clicar em Salvar comportamento” também usa o alias. Continua exigida confirmação; duas ações correspondentes visíveis recusam ambiguidade. Fingerprint mantém o texto/registro/versão do botão real, não o alias: proposta feita em criação é recusada se o editor mudar antes da confirmação. Não há novo endpoint ou salvamento automático.
+
+Jornada anterior adaptada para os pedidos curtos: reprodução antes da mudança falhou1/1 por ausência da prévia; após correção **7/7 testes de biblioteca em47,0s** aprovados, depois **49/49 interface/biblioteca em3,4min** após versionamento. Inclui concorrência de botões, troca de editor e criação/edição/seleção/salvamento pelo ID correto. **245/245 JS**, lint/build/guard/diff aprovados (cinco avisos de lint e chunk>500KiB anteriores). Revisão independente estática sem achado concreto; nenhum teste executado pelo revisor. Backend/captura fictícios, sem comprovar microfone físico. Incluído no pacote52 auditado acima, não instalado/publicado.
+
 ## Homologação após 0.2.51 — criar, editar e registrar comportamento na mesma jornada
 
 Novo teste integrado atravessa criação natural do comportamento, confirmação da proposta sem escrita, salvamento pelo botão existente via voz, edição natural do item recém-criado, confirmação sem escrita e salvamento de versão. A retomada de sessão carrega v2; marcar pelo título resolve o ID recém-criado. Antes e depois de confirmar a seleção, o relógio avança800ms e exige nenhuma gravação do rascunho; “Clicar em Salvar rascunho” confirmado grava o ID. O histórico renderizado de outra sessão conserva o comportamento anterior e não recebe o novo item.

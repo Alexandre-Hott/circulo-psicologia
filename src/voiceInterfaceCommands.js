@@ -59,9 +59,13 @@ function inventory(root) {
 
 function matches(query, entries) {
   const normalized = fold(query)
+  // One short save request covers both modes of the existing library form.
+  // It still competes with every visible match and retains the actual button
+  // fingerprint, so a proposal cannot cross from creation to another editor.
+  const behaviorSave = normalized === 'salvar comportamento'
   // Explicit legacy aliases compete with all matching controls, never picking
   // the first retry when two operations share an old short command.
-  const exact = entries.filter(item => fold(item.name) === normalized || fold(item.element.getAttribute('data-voice-alias') || '') === normalized || fold(`${item.name} de ${item.context}`) === normalized || fold(`${item.name} em ${item.context}`) === normalized)
+  const exact = entries.filter(item => fold(item.name) === normalized || (behaviorSave && item.element.matches('button') && ['criar comportamento reutilizavel', 'salvar versao do comportamento'].includes(fold(item.name))) || fold(item.element.getAttribute('data-voice-alias') || '') === normalized || fold(`${item.name} de ${item.context}`) === normalized || fold(`${item.name} em ${item.context}`) === normalized)
   if (exact.length) return exact
   const aliases = entries.filter(item => fold(item.name.replace(/\s*·\s*v\d+\s*$/i, '').replace(/\s*\(opcional\)/i, '').replace(/\s*\(at[eé]\s+\d+\s+caracteres\)/iu, '').replace(/\s+em anos\b/i, '')) === normalized)
   if (aliases.length) return aliases
@@ -93,6 +97,7 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   else if (clearField) { operation = 'fill'; query = clearField[1]; value = '' }
   else if (check) { operation = /^des/i.test(check[1]) ? 'uncheck' : 'check'; query = check[2] }
   else if (click) { operation = 'click'; query = click[1] }
+  else if (/^(?:salvar|salve)(?: o)? comportamento$/.test(normalized)) { operation = 'click'; query = 'Salvar comportamento' }
   else if (/^(?:confirmar|confirma|confirmar acao|confirmar ação)$/.test(normalized)) { operation = 'click'; query = 'Confirmar ação' }
   else if (/^(?:salvar paciente|salvar alteracoes|salvar rascunho|finalizar sessao|cancelar rascunho|novo cadastro|novo compromisso|criar comportamento reutilizavel|criar compromisso|criar serie|atualizar lista|bloquear|voltar|confirmar cancelamento|confirmar remarcacao individual|confirmar encerramento)$/.test(normalized)) { operation = 'click'; query = raw }
   else return null
