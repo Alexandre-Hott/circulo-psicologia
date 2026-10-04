@@ -35,6 +35,20 @@ export default function DesktopVault() {
   const [recoveryInventory, setRecoveryInventory] = useState(null)
   const [localAutoPassword, setLocalAutoPassword] = useState('')
   const [localAutoValidated, setLocalAutoValidated] = useState(false)
+  const localAutoScopeRef = useRef(null)
+  const localAutoLifecycle = useRef(0)
+  const advanceLocalAutoLifecycle = () => {
+    localAutoLifecycle.current += 1
+    localAutoScopeRef.current?.setAttribute('data-voice-lifecycle', `locked-local-auto:${localAutoLifecycle.current}`)
+  }
+  const clearLocalAutoRecovery = () => {
+    advanceLocalAutoLifecycle()
+    setLocalAutoPassword('')
+    setLocalAutoValidated(false)
+  }
+  useLayoutEffect(() => {
+    advanceLocalAutoLifecycle()
+  }, [status?.unlocked, status?.initialized, status?.profileState, autoBackup?.present, autoBackup?.keyEnvelopePresent])
   const [localRestorePassword, setLocalRestorePassword] = useState('')
   const [preview, setPreview] = useState(null)
   const [freshRestoreOpen, setFreshRestoreOpen] = useState(false)
@@ -546,8 +560,7 @@ export default function DesktopVault() {
       vaultUnlocked.current = true
       unlockedDay.current = localDay()
       setPassword('')
-      setLocalAutoPassword('')
-      setLocalAutoValidated(false)
+      clearLocalAutoRecovery()
       setRecoveryInventory(null)
       setSessionsOpen(false)
       setAgendaRecordPatientId('')
@@ -639,8 +652,7 @@ export default function DesktopVault() {
     setFreshRestoreOpen(false)
     setBackupPassword('')
     setLocalRestorePassword('')
-    setLocalAutoPassword('')
-    setLocalAutoValidated(false)
+    clearLocalAutoRecovery()
     setRecoveryInventory(null)
     setPassword('')
     setStatus({ initialized: true, unlocked: false, profileState: 'ready' })
@@ -791,20 +803,20 @@ export default function DesktopVault() {
   }
 
   const validateLocalAutoBackup = async () => {
+    advanceLocalAutoLifecycle()
     setBusy(true); setError(''); setLocalAutoValidated(false)
     try {
       const valid = await invoke('auto_backup_validate', { password: localAutoPassword })
       if (!valid) throw new Error('Cópia automática local inválida.')
       setLocalAutoValidated(true)
-    } catch (reason) { setError(String(reason)); setLocalAutoPassword('') }
+    } catch (reason) { setError(String(reason)); clearLocalAutoRecovery() }
     finally { setBusy(false) }
   }
 
   const restoreLocalAutoBackup = async () => {
     if (!localAutoValidated) return
     if (!await confirmAction('Substituir o banco local pela última cópia automática cifrada? O banco anterior será preservado em arquivo local.')) {
-      setLocalAutoPassword('')
-      setLocalAutoValidated(false)
+      clearLocalAutoRecovery()
       return
     }
     setBusy(true); setError(''); setMessage('')
@@ -813,7 +825,7 @@ export default function DesktopVault() {
       await confirmRestoredVault()
       setMessage('Cópia automática local restaurada e verificada.')
     } catch (reason) { await recoverRestoreFailure(); setError(String(reason)) }
-    finally { setLocalAutoPassword(''); setLocalAutoValidated(false); setBusy(false) }
+    finally { clearLocalAutoRecovery(); setBusy(false) }
   }
 
   const startSessionFromAgenda = async occurrence => {
@@ -1021,11 +1033,11 @@ export default function DesktopVault() {
         <pre>{opensslLicense}</pre>
         <p>SQLite é disponibilizado em domínio público.</p>
       </details></section></div></div>}
-      {status && !status.unlocked && !(status.profileState === 'empty' && !status.initialized) && <details className="vault-advanced" open={status.profileState === 'incomplete' ? true : undefined}><summary>Opções avançadas de backup e restauração</summary><section className="vault-backup" aria-label="Backup e restauração">
+      {status && !status.unlocked && !(status.profileState === 'empty' && !status.initialized) && <details className="vault-advanced" onToggle={event => { if (event.target === event.currentTarget) advanceLocalAutoLifecycle() }} open={status.profileState === 'incomplete' ? true : undefined}><summary>Opções avançadas de backup e restauração</summary><section className="vault-backup" aria-label="Backup e restauração">
         <p>A restauração exige verificação da cópia e confirmação explícita.</p>
         {autoBackup?.dirty && <p role="alert" className="vault-error">Cópia automática pendente: {autoBackup.error || 'tente novamente'}. A última alteração pode não estar na cópia.</p>}
         {autoBackup?.present && !autoBackup?.available && <p>Cópia local encontrada, mas não validada enquanto o cofre está bloqueado.</p>}
-        {autoBackup?.present && autoBackup?.keyEnvelopePresent && <div><label htmlFor="local-auto-password">Senha local para verificar cópia automática</label><input id="local-auto-password" type="password" value={localAutoPassword} onChange={event => { setLocalAutoPassword(event.target.value); setLocalAutoValidated(false) }} /><button type="button" disabled={busy || !localAutoPassword} onClick={validateLocalAutoBackup}>Verificar cópia automática local</button>{localAutoValidated && <><p role="status">Cópia automática local validada.</p><button type="button" disabled={busy} onClick={restoreLocalAutoBackup}>Recuperar cópia automática local</button></>}</div>}
+        {autoBackup?.present && autoBackup?.keyEnvelopePresent && <div ref={localAutoScopeRef}><label htmlFor="local-auto-password">Senha local para verificar cópia automática</label><input id="local-auto-password" type="password" value={localAutoPassword} onChange={event => { advanceLocalAutoLifecycle(); setLocalAutoPassword(event.target.value); setLocalAutoValidated(false) }} /><button type="button" disabled={busy || !localAutoPassword} onClick={validateLocalAutoBackup}>Verificar cópia automática local</button>{localAutoValidated && <><p role="status">Cópia automática local validada.</p><button type="button" disabled={busy} onClick={restoreLocalAutoBackup}>Recuperar cópia automática local</button></>}</div>}
         <label htmlFor="backup-password">Senha independente do backup (mínimo de 12 caracteres)</label><input id="backup-password" type="password" autoComplete="new-password" minLength={12} value={backupPassword} onChange={event => setBackupPassword(event.target.value)} /><button disabled={busy || backupPassword.length < 12} className="vault-secondary" onClick={selectBackup}>Selecionar e verificar backup</button>
         {preview && <div className="vault-restore"><p>Backup verificado · formato v1 · banco v{preview.schemaVersion} · {new Date(preview.createdAt * 1000).toLocaleString('pt-BR')} · {Math.ceil(preview.sizeBytes / 1024)} KiB. Nenhum conteúdo clínico é mostrado.</p><p className="vault-warning">{preview.profileState === 'legacy-unsupported' ? 'Este backup usa um esquema legado cuja migração não foi validada. Ele foi preservado, não será restaurado e nenhum arquivo será alterado.' : preview.profileState === 'incomplete-profile-unsupported' ? 'O perfil local não está vazio ou está incompleto. A restauração portátil não foi validada para este estado; os arquivos serão preservados sem alteração.' : 'Desbloqueie o cofre local antes de restaurar sobre este perfil.'}</p><label htmlFor="local-restore-password">Senha atual do cofre local (mínimo de 12 caracteres)</label><input id="local-restore-password" type="password" autoComplete="current-password" value={localRestorePassword} onChange={event => setLocalRestorePassword(event.target.value)} /><button disabled>Confirmar restauração</button></div>}
       </section></details>}

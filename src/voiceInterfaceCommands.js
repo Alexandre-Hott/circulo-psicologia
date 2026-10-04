@@ -344,11 +344,13 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   // or field contents are repaired; this still produces a reviewable proposal.
   const sourceText = String(text ?? '')
   const multiline = clinicalLineBreak.test(sourceText)
-  const raw = (multiline ? sourceText.replace(/^[^\S\r\n\u2028\u2029]+/u, '') : clean(text)).replace(/^ficarem novo cadastro$/iu, 'Clicar em Novo cadastro')
+  const repairPrefix = value => value.replace(/^ficarem novo cadastro$/iu, 'Clicar em Novo cadastro')
     // Exact command-prefix variants captured from local Portuguese recognition.
     // Never repair the value, patient's name, indicator title or note content.
     .replace(/^princher(?=\s)/iu, 'Preencher')
     .replace(/^prinscheridade(?=\s+(?:com|como|para)\s)/iu, 'Preencher Idade')
+  const literalSource = repairPrefix(sourceText.replace(/^[^\S\r\n\u2028\u2029]+/u, ''))
+  const raw = repairPrefix(multiline ? sourceText.replace(/^[^\S\r\n\u2028\u2029]+/u, '') : clean(text))
   const normalized = fold(raw)
   if (!root || !normalized) return null
   if (/^(?:nao|nunca)\b/.test(normalized)) return refusal('Pedido negado. Nenhuma ação preparada.')
@@ -365,6 +367,13 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
     : /\s+(?:com|como|para)\s+/giu)].map(delimiter => ({ query: payload.slice(0, delimiter.index),
     value: multiline ? payload.slice(delimiter.index + delimiter[0].length) : clean(payload.slice(delimiter.index + delimiter[0].length)),
   }))).filter(item => item.query && item.value && !clinicalLineBreak.test(item.query))
+  // Keep an untouched body alongside the legacy field grammar. Matching still
+  // uses the same queries/candidates; only an already eligible textarea may use
+  // this slice instead of the cleaned single-line value.
+  const literalPayload = /^(?:preencher|preencha|preenche|definir|defina|selecionar|selecione|seleciona)[^\S\r\n\u2028\u2029]+([\s\S]+)$/iu.exec(literalSource)?.[1]
+  const literalPayloads = literalPayload ? [...new Set([literalPayload, literalPayload.replace(/^(?:o campo |a op[cç][aã]o |o |a )/iu, '')])] : []
+  const literalFields = literalPayloads.flatMap(payload => [...payload.matchAll(/[^\S\r\n\u2028\u2029]+(?:com|como|para)[^\S\r\n\u2028\u2029]+/giu)]
+    .map(delimiter => ({ query: payload.slice(0, delimiter.index), value: payload.slice(delimiter.index + delimiter[0].length) })))
   if (multiline && !fields.length) return refusal('Use uma única linha para o comando e o nome do campo. Quebras de linha são permitidas apenas no texto dos quatro campos clínicos.')
   const clearField = /^(?:limpar|limpe|esvaziar|esvazie)\s+(?:o campo |o |a )?(.+)$/iu.exec(raw)
   const check = /^(marcar|marque|desmarcar|desmarque)\s+(?:a op[cç][aã]o |o |a )?(.+)$/iu.exec(raw)
@@ -421,6 +430,11 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   if (operation === 'uncheck' && item.element.type === 'radio') return refusal('Escolha outra opção deste grupo para alterar a seleção.')
   if (operation === 'fill') {
     if (multiline && !multilineTextareaField(item.element)) return refusal('Quebras de linha são permitidas apenas nos campos de texto disponíveis do rascunho, contexto, biblioteca, adendo ou motivo administrativo.')
+    if (!multiline && fields.length && multilineTextareaField(item.element)) {
+      const literals = literalFields.filter(field => field.query === query)
+      if (literals.length !== 1) return refusal('Não consegui separar o comando do texto literal. Diga o comando sem aspas no cabeçalho; mantenha as aspas do conteúdo.')
+      value = literals[0].value
+    }
     if (item.element.tagName === 'SELECT') {
       if (clearField) return refusal('Para mudar uma seleção, diga “selecionar” e o nome da opção.')
       const weekday = item.element.getAttribute('data-voice-value-type') === 'weekday'

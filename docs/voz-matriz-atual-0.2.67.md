@@ -1,6 +1,10 @@
 # Matriz atual de voz — 0.2.67
 
-## Entrega local 0.2.78
+## Entrega local 0.2.79
+
+O código atual preserva corpo literal single-line nos textareas já elegíveis e invalida confirmação de recuperação após edição da senha. [Resultados atuais](validacao-voz-0.2.79.md): JS1875/1875, Rust135 aprovados/1 ignorado; UI35/35 e regressão29/29 em rodadas distintas sem retries. Instalador gerado e auditado, sem instalação, assinatura ou publicação. As jornadas comprovam cadastro/edição, comportamentos, agenda avulsa/semanal, rascunho/finalização, contexto/adendo, análises e ajustes nos cenários selecionados. Uma matriz residual por captura ainda está em preparação; a medição nativa3 corretos/4 falhas/1 não avaliado impede afirmar precisão geral. Senhas, arquivos e início de captura são manuais. As referências abaixo são históricas.
+
+## Referência 0.2.78
 
 O código atual separa Ouvir comando e Ouvir trecho. Os pedidos locais selecionam campo, preparam, confirmam ou descartam o acréscimo e saem do ditado; o corpo continua literal e o salvamento permanece separado. [Resultados da 0.2.78](validacao-voz-0.2.78.md): JS1766/1766 e Rust135 aprovados/1 ignorado; rodada final de interface209/209 em24,6min, sem retries. Pacote reconstruído e auditado, disponível para teste local, não instalado/publicado nem assinado. A dependência exclusiva de clique para esses controles descreve a versão anterior, não a implementação atual. A rodada separada de jornadas e recuperação terminou com20 aprovados/7 falhos entre27 casos em2,5min; confirmação após edição de senha, navegação diária e ponto final de textos estão em diagnóstico. Os209 casos não comprovam ASR, microfone físico ou cobertura universal. As referências abaixo são históricas.
 
