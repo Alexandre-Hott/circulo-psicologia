@@ -479,7 +479,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
             <option value="">Sem registro</option>{indicator.labels.map((label, index) => <option key={label} value={index}>{label}</option>)}
           </select>
           <label htmlFor={`indicator-note-${indicator.id}`}>Nota contextual opcional · {indicator.name}</label>
-          <textarea disabled={busy} id={`indicator-note-${indicator.id}`} maxLength={500} value={entry?.note || ''} onChange={event => setIndicator(indicator.id, { note: event.target.value })} />
+          <textarea disabled={busy} id={`indicator-note-${indicator.id}`} data-voice-alias={`Nota contextual de ${indicator.name}`} maxLength={500} value={entry?.note || ''} onChange={event => setIndicator(indicator.id, { note: event.target.value })} />
           <button type="button" disabled={busy} className="vault-secondary" onClick={() => setIndicator(indicator.id, { value: null, note: null })}>Limpar {indicator.name}</button>
         </div>
       })}</fieldset>

@@ -1,5 +1,17 @@
 # Melhoria contínua de voz
 
+## Entrega local 0.2.56 — nota contextual por comando natural
+
+Pacote final `Círculo_0.2.56_x64-setup.exe`, **135.890.282 bytes**, SHA-256 `3daf1b1b6b84f4b2628503bf0170ed410c442a97b9e303061ac79b4d11e78c4d`. Build NSIS offline/locked exit0, release Rust54,83s; aviso anterior OpenSSL/PDB LNK4099. Pacote inicial não entregue: regenerado após ajustar ajuda ao nome do catálogo nativo. Override temporário updater removido após término, configuração oficial preservada. Manifest `%TEMP%\\circulo-0256-audit-20261004.json`: PE0.2.56/x64/NotSigned; conteúdo interno não extraído. Não instalado/aberto, instalado52 conferido; perfil/senhas não alterados. Sem `.sig`, Authenticode, Release ou oferta automática pelo GitHub. Novo comando validado em componente real/RPC sintético, não transcrição deste pedido nem microfone físico. Meta ativa.
+
+## Incremento 0.2.56 — nota contextual sem ditar pontuação
+
+O campo “Nota contextual opcional · nome do indicador” mantém o rótulo visível e agora aceita `Preencher Nota contextual de nome do indicador com texto` e `Limpar Nota contextual de nome do indicador`. Alias ligado ao próprio textarea; mesmos gateway/fingerprint/formulário e confirmação. Não elimina seleção da escala, não cria observação nova fora da sessão e não grava imediatamente. Exemplo incluído apenas na ajuda recolhida.
+
+Agente de testes alterou somente `desktop-voice-workflows.spec.js`, com dois cenários: nota original preservada antes de confirmar; após aplicar, só nota muda, valor1 da escala permanece; nenhuma chamada de salvamento anterior; `Salvar rascunho` tem ID/payload exatos. Execução focada **2/2 em36,3s**, porta5197. Primeira tentativa teve duas falhas durante troca de produção; não é red isolado e não sustenta alegação de erro persistente. JS254/254 após versionamento, lint sem erro/cinco avisos anteriores, guard aprovado. Regressão combinada final **53/53 em3,2min**, exit0. Ajuda usa Regulação emocional, conferido no catálogo Rust; pacote regenerado após corrigir o exemplo sintético indisponível no catálogo padrão.
+
+Comandos digitados no assistente e RPC/armazenamento sintéticos; não comprovam captura física, transcrição deste alias ou persistência instalada. Backend Rust e contrato de dados não alterados. Instalação atual conferida por ProductVersion:52, nenhum perfil modificado. Meta ativa.
+
 ## Entrega local 0.2.55 — idade no formulário por fala
 
 Pacote final `Círculo_0.2.55_x64-setup.exe`, **135.881.924 bytes**, SHA-256 `4f26798742181808fed08026f4bd29286c85e84a3ff2b8e47960d8b9e0e90672`. Build NSIS offline/locked exit0, release Rust40,42s; aviso anterior OpenSSL/PDB LNK4099. Build inicial concluído, mas não entregue: regenerado após correção da variante “cento e dezassete”. Override temporário updater removido somente após término; configuração oficial preservada. Manifest `%TEMP%\\circulo-0255-audit-20261004.json`: PE0.2.55/x64/NotSigned. Conteúdo interno não extraído; não instalado/aberto nesta rodada. Nenhum perfil alterado, instalado permanece52. Sem `.sig`, Authenticode, Release ou oferta automática no GitHub. Pacote local para teste, não homologação de microfone.

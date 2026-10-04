@@ -194,6 +194,53 @@ test('indicador: selecionar, anotar, limpar e salvar por voz', async ({ page }) 
   expect(await page.evaluate(() => window.workflow.state.drafts[0].patientId)).toBe('ana')
 })
 
+for (const scenario of [
+  { action: 'preencher', text: 'Preencher Nota contextual de Participação sintética com Apoio durante jogo com turnos', note: 'Apoio durante jogo com turnos' },
+  { action: 'limpar', text: 'Limpar Nota contextual de Participação sintética', note: '' },
+]) {
+  test(`indicador: alias natural para ${scenario.action} somente a nota contextual`, async ({ page }) => {
+    await openApp(page)
+    await command(page, 'Iniciar sessão de Ana Clara hoje às 15 horas', 'session_draft_start')
+    const form = page.getByRole('form', { name: 'Rascunho de sessão' })
+    await expect(form).toBeVisible()
+    const indicator = form.getByLabel('Participação sintética · v1', { exact: true })
+    const note = form.getByLabel('Nota contextual opcional · Participação sintética', { exact: true })
+    await command(page, 'Selecionar Participação sintética como Com apoio')
+    await command(page, 'Preencher Nota contextual opcional · Participação sintética com Nota original sintética')
+    await expect(indicator).toHaveValue('1')
+    await expect(note).toHaveValue('Nota original sintética')
+    expect(await writes(page, 'session_draft_save')).toEqual([])
+
+    await propose(page, scenario.text)
+    // Preparing the natural alias must resolve the real, still legacy-labelled field.
+    await expect(note).toHaveValue('Nota original sintética')
+    await expect(indicator).toHaveValue('1')
+    expect(await writes(page, 'session_draft_save')).toEqual([])
+    await expect(page.locator('.voice-command-preview'), `Proposta para: ${scenario.text}`).toBeVisible()
+    await propose(page, 'confirmar')
+    await page.clock.runFor(32)
+    await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+    await expect(note).toHaveValue(scenario.note)
+    await expect(indicator).toHaveValue('1')
+    expect(await writes(page, 'session_draft_save')).toEqual([])
+
+    await command(page, 'Salvar rascunho', 'session_draft_save')
+    await expect.poll(() => writes(page, 'session_draft_save')).toEqual([{
+      command: 'session_draft_save',
+      args: {
+        id: 'draft-ana',
+        input: {
+          observation: '', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [],
+          indicators: [{ id: 'participacao', value: 1, note: scenario.note }],
+        },
+      },
+    }])
+    await expect(note).toHaveValue(scenario.note)
+    await expect(indicator).toHaveValue('1')
+    expect(await page.evaluate(() => window.workflow.state.drafts[0].patientId)).toBe('ana')
+  })
+}
+
 test('contexto: duas revisões preservam o conteúdo anterior', async ({ page }) => {
   await openApp(page)
   await openRecords(page)

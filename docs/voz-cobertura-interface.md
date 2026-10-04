@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Nota contextual sem pontuação — 0.2.56
+
+Mantido rótulo visível com separador; alias `Nota contextual de nome do indicador` permite preencher/limpar sem ditar “·”. Ajuda recolhida usa Regulação emocional, nome conferido no catálogo Rust. Dois E2E novos com comandos digitados:2/2 em36,3s; verificam prévia, confirmação, nota correta, escala inalterada, zero salvamento anterior e payload de rascunho exato. JS254/254; regressão conjunta53/53 em3,2min. Nenhuma nova prova de captura/transcrição física ou persistência instalada. Instalado52 conferido; não alterado. [Evidências e limites](melhoria-continua-voz.md).
+
 ## Idade cardinal no cadastro — 0.2.55
 
 Campo de idade explicitamente marcado aceita números falados0a120, com prévia numérica/confirmar; nomes e demais campos livres não são convertidos. Antes, a palavra era aplicada e impedia salvar. Teste reproduziu prévia incorreta antes do patch. Agora unidade254/254; regressãoE2E interface/pacientes51/51 e pacientes5/5 final em53,9s. Revisão detectou variante117, corrigida/testada; mudança de marcador recusa proposta antiga sem escrita. Incluído no pacote55 regenerado/auditado, não instalado/publicado. Mídia/STT/instalação nativa não reexecutadas; perfil instalado52 não alterado. [Evidências e limites](melhoria-continua-voz.md).
