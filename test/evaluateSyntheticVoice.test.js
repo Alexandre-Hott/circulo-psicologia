@@ -13,6 +13,26 @@ const phrases = [
   'Adicionar adendo à sessão de Ana Clara de três de outubro de dois mil e vinte e seis às quinze horas.', 'Mostrar agenda de hoje.',
 ]
 const corpus = () => phrases.map((Transcript, Index) => ({ Index, IntendedCommand: Transcript, Transcript }))
+
+test('corpus de salvar comportamento depende de interface e não recebe aprovação semântica antecipada', () => {
+  const cases = ['Salvar comportamento.', 'Salve o comportamento.', 'Confirmar comando.'].map((Transcript, Index) => ({ Index, Transcript }))
+  const result = evaluateSyntheticVoice(cases, { scenario: 'behavior-save' })
+  assert.equal(result.Passed, 0)
+  assert.equal(result.Failed, 0)
+  assert.equal(result.NotEvaluated, 3)
+  assert.throws(() => evaluateSyntheticVoice(cases))
+  assert.throws(() => evaluateSyntheticVoice(cases, { scenario: 'unknown' }))
+  assert.throws(() => evaluateSyntheticVoice(cases.slice(1), { scenario: 'behavior-save' }))
+  const duplicate = structuredClone(cases); duplicate[1].Index = 0
+  assert.throws(() => evaluateSyntheticVoice(duplicate, { scenario: 'behavior-save' }))
+})
+
+test('transcrições de salvamento coletadas no backend instalado continuam exigindo verificação de interface', () => {
+  const recorded = JSON.parse(readFileSync(new URL('./fixtures/native-voice-save-20261004.json', import.meta.url), 'utf8'))
+  const result = evaluateSyntheticVoice(recorded, { scenario: 'behavior-save' })
+  assert.equal(result.NotEvaluated, 3)
+  assert.equal(result.Passed, 0)
+})
 test('corpus realmente transcrito pelo backend Rust preserva quinze intents; dois exigem UI', () => {
   const recorded = JSON.parse(readFileSync(new URL('./fixtures/native-voice-20261003.json', import.meta.url), 'utf8'))
   const result = evaluateSyntheticVoice(recorded)

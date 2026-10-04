@@ -1,5 +1,13 @@
 # Áudio sintético offline — 03/10/2026
 
+## Cenário de salvamento de comportamento — 04/10/2026 UTC
+
+`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/testWhisperSynthetic.ps1 -VoiceDirectory "$env:LOCALAPPDATA\Círculo\voice" -Scenario behavior-save` gera três WAVs separados: “Salvar comportamento.”, “Salve o comportamento.” e “Confirmar comando.”. Recursos da instalação0.2.52, SAPI Microsoft Maria Desktop Portuguese(Brazil), sem rede. Backend Rust transcreveu exatamente essas três frases; fixture em `test/fixtures/native-voice-save-20261004.json`. Script exit0. Reexecução com `-Scenario Behavior-Save` também exit0, após normalização de caixa, com resultados idênticos.
+
+Evaluator retorna **Passed0/Failed0/NotEvaluated3**: todas dependem da interface e NÃO recebem aprovação por transcrição apenas. ReplayE2E em `desktop-voice-interface.spec.js`: **2/2 em25,6s**, criação e edição de versão, primeira transcrição sem escrita, segundo áudio de confirmação gera exatamente um invoke com argumentos completos. Mídia/RPC simulados no E2E; ele usa texto efetivamente capturado pelo backend, não executa novamente reconhecimento nativo. Não é prova de microfone físico nem da cadeia ininterrupta no aplicativo instalado. Setup dos formulários é digitado, não falado. Produção instalada continua0.2.52; só ferramentas/testes mudaram.
+
+Core17 permanece cenário padrão, com expectativas/fixture anteriores inalteradas. Novo modo tem contagem/índices/cenário estritos, BOMUTF8 preservado; 247 testesJS finais aprovados e revisão estática final sem achados novos. Limitações preexistentes do harness: hardlinks antes do `try/finally` podem deixar temporário se essa etapa falha; variáveis de ambiente são removidas sem restaurar valores anteriores; CLI do evaluator exige que consumidores leiam `Failed` (wrapper verifica). Nenhuma dessas melhorias foi implementada nesta etapa; sem investigação de recovery/legados.
+
 ## Avaliação semântica nativa de17 frases — consolidação0.2.49
 
 `npm run voice:test-synthetic` gera17 WAVs SAPI Microsoft Maria Desktop Portuguese(Brazil), executa a CLI com prompt legado para comparação e o teste opt-in Rust pelo mesmo `native_voice::transcribe` do aplicativo. A inferência nativa também executa `whisper-cli.exe`; não é um motor embutido. O Rust emite17 registros JSON indexados; `evaluateSyntheticVoice.js` compara as transcrições **nativas**, não `Cases` CLI, contra intents fictícias esperadas completas. Campos/chaves adicionais, IDs, tipos, datas e horários divergentes reprovam. Apenas nomes/títulos/labels de exibição toleram caixa, acento, espaços e pontuação terminal; isso não preserva grafia literal nem reescreve o cadastro. Revise o texto proposto.

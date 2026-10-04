@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 
 const nativeVoiceCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-20261003.json', import.meta.url), 'utf8'))
+const nativeSaveCorpus = JSON.parse(readFileSync(new URL('../fixtures/native-voice-save-20261004.json', import.meta.url), 'utf8'))
 
 async function openApp(page, { emptyLibrary = false, archivedPatient = false, specialCatalog = false } = {}) {
   await page.clock.install({ time: new Date('2026-10-03T15:00:00Z') })
@@ -726,6 +727,24 @@ test('iniciar sessão pela Agenda não reaplica consulta antiga de adendo', asyn
   await expect(page.locator('#addendum-previous-final')).toHaveCount(0)
   await expect(page.locator('details[aria-label="Evolução descritiva somente leitura"]')).not.toHaveAttribute('open', '')
   expect(await page.evaluate(() => window.writes)).toEqual([])
+})
+
+for (const editing of [false, true]) test(`transcrição nativa de salvar comportamento ${editing ? 'edita versão' : 'cria item'} somente após segundo áudio de confirmação`, async ({ page }) => {
+  await openApp(page)
+  await command(page, editing ? 'Editar comportamento Pede ajuda com descrição Descrição fictícia nova.' : 'Criar comportamento Solicita pausa')
+  const assistant = page.getByRole('region', { name: 'Comando do Círculo' })
+  await page.evaluate(text => { window.voiceTranscript = text }, nativeSaveCorpus.find(item => item.Index === (editing ? 1 : 0)).Transcript)
+  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await expect(page.locator('.voice-command-preview')).toContainText(editing ? 'Salvar versão do comportamento' : 'Criar comportamento reutilizável')
+  expect(await page.evaluate(() => window.writes)).toEqual([])
+  await page.evaluate(text => { window.voiceTranscript = text }, nativeSaveCorpus.find(item => item.Index === 2).Transcript)
+  await assistant.getByRole('button', { name: 'Ouvir e transcrever' }).click()
+  await expect.poll(() => page.evaluate(() => window.writes.length)).toBe(1)
+  expect(await page.evaluate(() => window.writes)).toEqual([editing
+    ? { command: 'behavior_update', args: { id: 'help', version: 1, title: 'Pede ajuda', description: 'Descrição fictícia nova.' } }
+    : { command: 'behavior_create', args: { title: 'Solicita pausa', description: '' } }])
+  expect(await page.evaluate(() => window.voiceNativeCalls.filter(item => item.command === 'voice_transcribe').length)).toBe(2)
+  await expect(page.locator('.voice-command-preview')).toHaveCount(0)
 })
 
 test('transcrição nativa observada abre biblioteca após confirmação sem gravar', async ({ page }) => {

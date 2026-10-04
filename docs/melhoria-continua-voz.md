@@ -1,5 +1,11 @@
 # Melhoria contínua de voz
 
+## Áudio sintético para os pedidos curtos de salvamento
+
+Novo cenário separado `behavior-save` no harness, mantendo core17 padrão. Três WAVs SAPI passaram pelo backend Rust com recursos da instalação52: “Salvar comportamento.”, “Salve o comportamento.”, “Confirmar comando.”, transcrições idênticas. Capturas preservadas em fixture. Evaluator declara0passados/0falhos/3nãoavaliados, pois todas as ações exigem UI/proposta; sucesso do script significa coleta concluída, não cobertura funcional total.
+
+Replay dos textos coletados na interface: **2/2 em25,6s** para criar/editar comportamento, dois pedidos de áudio simulados, nenhuma escrita antes de confirmar e exatamente um invoke de gravação com argumentos completos depois. **247/247 JS**, lint/guard/diff aprovados, cinco avisos de lint anteriores. Revisor identificou P2 do nome de cenário com maiúsculas (ValidateSet PowerShell aceita, evaluatorJS recusava); normalizado no início. Reexecução real `Behavior-Save`exit0, mesmas transcrições e contagens; revisão final sem achado concreto. Ferramentas/testes apenas: nenhum novo instalador necessário, produção e instalado52 permanecem idênticos. Microfone físico e host IPC instalado não comprovados. [Comando, corpus e limitações do harness](voz-audio-sintetico-20261003.md). Meta ativa.
+
 ## Instalação local e leitura nativa 0.2.52
 
 Instalador `Círculo_0.2.52_x64-setup.exe`, 135.884.912 bytes, SHA-256 `8ad1b0ead57e6b8f6353506eb91abe14afb25e8429720849ff08ba57d6143c26`, conferido antes de executar NSIS `/S` oculto. Círculo estava fechado. Cópia fresca de `circulo.db`, `auto-backup.db`, `vault.key` e `daily-unlock.dpapi` em `%LOCALAPPDATA%\\Círculo-update-backup-20261004-0252`; cópias verificadas por hash, sem sobrescrever backup anterior. Cache EBWebView não copiado. Instalação exit0; executável instalado ProductVersion0.2.52; quatro arquivos do cofre idênticos antes/depois da instalação. Whisper CLI/modelo instalados têm hashes iguais aos recursos empacotados. Nenhum conteúdo clínico ou chave foi lido/exposto.

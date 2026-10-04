@@ -38,13 +38,15 @@ function matches(actual, desired, key = '') {
   return actual === desired
 }
 
-export function evaluateSyntheticVoice(cases) {
-  if (!Array.isArray(cases) || cases.length !== expected.length) throw new Error('Corpus nativo deve conter exatamente17 casos.')
+export function evaluateSyntheticVoice(cases, { scenario = 'core' } = {}) {
+  if (!['core', 'behavior-save'].includes(scenario)) throw new Error('Cenário de áudio desconhecido.')
+  const expectations = scenario === 'core' ? expected : [null, null, null]
+  if (!Array.isArray(cases) || cases.length !== expectations.length) throw new Error(`Corpus nativo deve conter exatamente${expectations.length} casos.`)
   const seen = new Set()
   const results = cases.map(item => {
-    if (!Number.isInteger(item.Index) || item.Index < 0 || item.Index >= expected.length || seen.has(item.Index) || typeof item.Transcript !== 'string' || !item.Transcript.trim()) throw new Error('Índice/transcrição inválido ou duplicado no corpus nativo.')
+    if (!Number.isInteger(item.Index) || item.Index < 0 || item.Index >= expectations.length || seen.has(item.Index) || typeof item.Transcript !== 'string' || !item.Transcript.trim()) throw new Error('Índice/transcrição inválido ou duplicado no corpus nativo.')
     seen.add(item.Index)
-    const desired = expected[item.Index]
+    const desired = expectations[item.Index]
     if (!desired) return { ...item, Status: 'not-evaluated', Reason: 'Exige interface visível ou proposta pendente; não avaliado pelo parser central.' }
     const parsed = parseCentralCommand({ text: item.Transcript, context, referenceDate: '2026-10-03' })
     const passed = parsed.status === 'draft' && matches(parsed.intent, desired)
@@ -55,7 +57,13 @@ export function evaluateSyntheticVoice(cases) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    const input = process.argv.length === 4 && process.argv[2] === '--input' ? process.argv[3] : 0
-    process.stdout.write(JSON.stringify(evaluateSyntheticVoice(JSON.parse(readFileSync(input, 'utf8').replace(/^\uFEFF/, '')))) + '\n')
+    const options = {}
+    for (let index = 2; index < process.argv.length; index += 2) {
+      const key = process.argv[index]
+      if (!['--input', '--scenario'].includes(key) || !process.argv[index + 1] || Object.hasOwn(options, key)) throw new Error('Argumentos inválidos.')
+      options[key] = process.argv[index + 1]
+    }
+    const input = options['--input'] || 0
+    process.stdout.write(JSON.stringify(evaluateSyntheticVoice(JSON.parse(readFileSync(input, 'utf8').replace(/^\uFEFF/, '')), { scenario: options['--scenario'] || 'core' })) + '\n')
   } catch (error) { process.stderr.write(error.message + '\n'); process.exitCode = 1 }
 }

@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Pedidos curtos com transcrições capturadas
+
+“Salvar comportamento”, “salve o comportamento” e “confirmar comando” transcritos pelo backend Rust com recursos instalados52, usando3WAVs SAPI fictícios, sem rede. ReplayE2E2/2 verifica criação/edição com preview e segundo áudio de confirmação, zero escrita anterior e um invoke de gravação exato. Captura/RPC simulados no replay, sem validação de microfone físico. Evaluator0passados/3nãoavaliados propositalmente: não confundir transcrição com ação. JS247/247 final, revisão estática sem achado novo após canonicalizar cenário. Produção/pacote52 inalterados; só ferramentas/testes. [Corpus e limites](voz-audio-sintetico-20261003.md).
+
 ## Instalação local atual: 0.2.52
 
 Instalação silenciosa exit0, PEversão52, quatro arquivos do cofre preservados por hash e Whisper/modelo instalados conferidos. Aplicativo abriu; captura gráfica falhou por timeout, mas nova seleção/leitura de acessibilidade confirmou a tela de senha e o assistente. Desbloqueio manual solicitado, sem automação de senha. Harness17WAVs com recursos instalados terminouexit0, passando transcrição pelo backend Rust; não comprova host IPC instalado, microfone físico ou novo alias de salvamento (fora desse corpus). Sem prova das ações instaladas pós-desbloqueio. Notas anteriores “instalado47” passam a ser históricas; não indicam novo resultado negativo. [Evidência e preservação](melhoria-continua-voz.md).

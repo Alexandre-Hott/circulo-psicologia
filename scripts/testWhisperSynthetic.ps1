@@ -1,8 +1,12 @@
-﻿param([string]$VoiceDirectory)
+﻿param(
+    [string]$VoiceDirectory,
+    [ValidateSet('core', 'behavior-save')][string]$Scenario = 'core'
+)
 
 # Keep the UTF-8 BOM: Windows PowerShell 5.1 otherwise reads Portuguese text as ANSI.
 
 $ErrorActionPreference = 'Stop'
+$Scenario = $Scenario.ToLowerInvariant()
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($VoiceDirectory)) {
@@ -58,6 +62,9 @@ try {
         'Adicionar adendo à sessão de Ana Clara de três de outubro de dois mil e vinte e seis às quinze horas.',
         'Mostrar agenda de hoje.'
     )
+    if ($Scenario -eq 'behavior-save') {
+        $commands = @('Salvar comportamento.', 'Salve o comportamento.', 'Confirmar comando.')
+    }
     $results = foreach ($index in 0..($commands.Count - 1)) {
         $wav = Join-Path $testDirectory "synthetic-command-$index.wav"
         $stream = New-Object -ComObject SAPI.SpFileStream
@@ -110,7 +117,7 @@ try {
         [IO.File]::WriteAllText($nativeCasesPath, ($nativeCases | ConvertTo-Json -Depth 4 -Compress), (New-Object Text.UTF8Encoding($false)))
         $semanticStdout = Join-Path $testDirectory 'semantic-stdout.json'
         $semanticStderr = Join-Path $testDirectory 'semantic-stderr.txt'
-        $semanticArguments = '"{0}" --input "{1}"' -f (Join-Path $PSScriptRoot 'evaluateSyntheticVoice.js'), $nativeCasesPath
+        $semanticArguments = '"{0}" --input "{1}" --scenario "{2}"' -f (Join-Path $PSScriptRoot 'evaluateSyntheticVoice.js'), $nativeCasesPath, $Scenario
         $semanticProcess = Start-Process -FilePath 'node' -ArgumentList $semanticArguments -WorkingDirectory $repoRoot -WindowStyle Hidden -RedirectStandardOutput $semanticStdout -RedirectStandardError $semanticStderr -Wait -PassThru
         if ($semanticProcess.ExitCode -ne 0) { throw "Falha ao avaliar o resultado semântico nativo. $(Get-Content -LiteralPath $semanticStderr -Raw -Encoding UTF8)" }
         $semantic = Get-Content -LiteralPath $semanticStdout -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -121,7 +128,7 @@ try {
         Remove-Item Env:CIRCULO_TEST_VOICE_RESOURCES -ErrorAction SilentlyContinue
         Remove-Item Env:CIRCULO_SYNTHETIC_WAV_COUNT -ErrorAction SilentlyContinue
     }
-    [pscustomobject]@{ Voice = $voice.Voice.GetDescription(); NetworkUsed = $false; Cases = @($results); NativeCases = $nativeCases; Semantic = $semantic } | ConvertTo-Json -Depth 10 -Compress
+    [pscustomobject]@{ Scenario = $Scenario; Voice = $voice.Voice.GetDescription(); NetworkUsed = $false; Cases = @($results); NativeCases = $nativeCases; Semantic = $semantic } | ConvertTo-Json -Depth 10 -Compress
     if ($semantic.Failed -gt 0) { throw "$($semantic.Failed) comandos nativos não preservaram a ação e os campos esperados. Transcrição não vazia não significa funcionamento." }
 }
 finally {
