@@ -386,7 +386,7 @@ export function VoiceCommandCenter({
         const value = event.target.value
         setCommand(value)
         setCommandNotice('')
-        const word = value.toLowerCase().trim()
+        const word = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[.!?]/g, '').trim()
         if (!dictatingField && (!word || !['confirmar', 'confirmar comando', 'aplicar', 'cancelar comando', 'descartar comando'].some(phrase => phrase.startsWith(word)))) {
           setResult(null)
           onDraft?.(null)

@@ -65,6 +65,77 @@ const openHome = async (page, withSession = false, withMicrophone = false) => {
   await expect(page.getByRole('region', { name: 'Comando do Círculo' })).toBeVisible()
 }
 
+test.describe('typed confirmation preservation', () => {
+  test.beforeEach(async ({ page, baseURL }) => {
+    page.confirmationBoundary = []
+    page.on('dialog', async dialog => { page.confirmationBoundary.push(`native dialog: ${dialog.type()}`); await dialog.dismiss() })
+    await page.route('**/*', async route => {
+      if (new URL(route.request().url()).origin === new URL(baseURL).origin) await route.continue()
+      else { page.confirmationBoundary.push(route.request().url()); await route.abort() }
+    })
+    await openHome(page)
+  })
+
+  test.afterEach(async ({ page }) => {
+    expect(page.confirmationBoundary).toEqual([])
+    expect(await page.evaluate(() => [window.voiceSavedWrites, window.voiceVaultLocks])).toEqual([0, 0])
+    expect(await page.evaluate(() => window.voiceTranscribePayload)).toBeNull()
+  })
+
+  const prepareAgenda = async page => {
+    const assistant = page.getByRole('region', { name: 'Comando do Círculo', exact: true })
+    await assistant.getByLabel('Seu comando').fill('Abrir Agenda')
+    await assistant.getByRole('button', { name: 'Preparar rascunho', exact: true }).click()
+    await expect(page.locator('.voice-command-preview')).toContainText('Confira a proposta')
+    await expect(page.getByRole('button', { name: 'Início', exact: true })).toHaveAttribute('aria-current', 'page')
+    expect(await page.evaluate(() => window.voiceSavedWrites)).toBe(0)
+    return assistant
+  }
+
+  for (const confirmation of ['Confirmar', 'Confirmar.', 'Confirmar comando.']) {
+    test(`${confirmation}: typing preserves prepared Agenda until explicit interpretation`, async ({ page }) => {
+      const assistant = await prepareAgenda(page)
+      const before = await page.locator('.voice-command-preview').textContent()
+      await assistant.getByLabel('Seu comando').fill(confirmation)
+      await expect(page.locator('.voice-command-preview')).toHaveText(before)
+      await expect(page.getByRole('button', { name: 'Início', exact: true })).toHaveAttribute('aria-current', 'page')
+      await assistant.getByLabel('Seu comando').press('Control+Enter')
+      await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+      await expect(page.getByRole('button', { name: 'Fechar Agenda', exact: true })).toBeVisible()
+      await expect(page.getByRole('region', { name: 'Agenda', exact: true })).toBeVisible()
+    })
+  }
+
+  test('different command invalidates old proposal; bare confirmation cannot apply it', async ({ page }) => {
+    const assistant = await prepareAgenda(page)
+    await assistant.getByLabel('Seu comando').fill('Abrir pacientes')
+    await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Revisar no formulário', exact: true })).toHaveCount(0)
+    await assistant.getByLabel('Seu comando').fill('Confirmar')
+    await assistant.getByLabel('Seu comando').press('Control+Enter')
+    await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Início', exact: true })).toHaveAttribute('aria-current', 'page')
+    await expect(page.getByRole('region', { name: 'Agenda', exact: true })).toHaveCount(0)
+  })
+
+  test('protected interface proposal cannot survive actual workspace change', async ({ page }) => {
+    const assistant = page.getByRole('region', { name: 'Comando do Círculo', exact: true })
+    await assistant.getByLabel('Seu comando').fill('Clicar em Agenda')
+    await assistant.getByRole('button', { name: 'Preparar rascunho', exact: true }).click()
+    await expect(page.locator('.voice-command-preview')).toContainText('Confira a proposta')
+    await page.getByRole('navigation', { name: 'Espaços do Círculo', exact: true }).getByRole('button', { name: 'Pacientes', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Pacientes', exact: true })).toHaveAttribute('aria-current', 'page')
+    await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Aplicar comando', exact: true })).toHaveCount(0)
+    await assistant.getByLabel('Seu comando').fill('Confirmar')
+    await assistant.getByLabel('Seu comando').press('Control+Enter')
+    await expect(page.locator('.voice-command-error')).toContainText('Não encontrei “Confirmar ação” disponível nesta tela.')
+    await expect(page.getByRole('button', { name: 'Pacientes', exact: true })).toHaveAttribute('aria-current', 'page')
+    await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+    await expect(page.getByRole('region', { name: 'Agenda', exact: true })).toHaveCount(0)
+  })
+})
+
 test('Home captura áudio, chama o backend local, mostra texto editável e limpa buffers sem salvar', async ({ page }) => {
   await openHome(page, false, true)
   const command = page.getByRole('region', { name: 'Comando do Círculo' })
