@@ -42,4 +42,3 @@ export function Harness() {
 }
 window.cutoffRoot = createRoot(host)
 window.cutoffRoot.render(React.createElement(Harness))
-
