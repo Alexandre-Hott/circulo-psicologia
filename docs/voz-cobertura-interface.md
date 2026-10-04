@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Consolidação instalada0.2.61
+
+[Instalação e limites](validacao-voz-0.2.61.md): pacote61 instalado exit0, versão61, quatro arquivos preservados e18recursos de voz conferidos; primeira tela bloqueada observada. Comparação binária só difere nos3bytes do marcador NSIS documentado pelo Tauri. Não homologar os comandos instalados: duas tentativas de teclado falharam na ativação, senha manual/microfone físico permanecem sem prova nova. Substitui apenas os estados históricos de instalado59, não transforma testes simulados em nativos.
+
 ## Consolidação de reconhecimento e regressão0.2.61 —04/10/2026
 
 Três WAVs SAPI transcritos corretamente no backend Rust real: Abrir novo compromisso/Recolher detalhes e ações/Confirmar comando. Parser central não aprova comandos dependentes da UI (0Passed/0Failed/3NotEvaluated). Fixture exata e replay na interface, com prévia/segundo áudio/zero escritas. Regresso final113/113 em8,6min, exit0, incluindo Agenda corrigida; reforço de preservação solicitado na revisão repetido1/1 em18,5s após a rodada integral. JS259/259; Rust86passaram/0falhas/1ignorado, opt-in de áudio executado separado. Substitui somente o estado histórico de regressão111com erro de seletor; não é prova de microfone físico, cadeia de captura instalada ou persistência clínica por voz. Pacote61 anterior, instalado59, sem novo build/publicação/alteração de perfil. [Evidências](voz-audio-sintetico-20261003.md).
