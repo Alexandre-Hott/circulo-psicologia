@@ -2,6 +2,10 @@
 
 ## Estado atual — 04/10/2026
 
+A 0.2.71 amplia multiline aos seis padrões adicionais de textarea e invalida propostas antigas após trocar ou reabrir editores. [Entrega e evidência](validacao-voz-0.2.71.md): JS773/773, Rust86 aprovados/1 ignorado, regressão147/148 e focal28/28 em execuções distintas; o único teste antigo foi alinhado ao novo contrato da descrição. Instalador local auditado, não instalado/publicado nem assinado; instalado61 e perfil preservados. Multiline destes campos já não é lacuna atual. Probe sem ASR aponta conversão do argv para CP1252; transporte por response file é candidato futuro, não implementação do pacote71. Microfone físico segue sem comprovação. Meta ativa.
+
+O estado da 0.2.70 abaixo é histórico.
+
 A 0.2.70 estende preenchimento/acréscimo a texto multilinha nos quatro campos de sessão, preservando limite e confirmação. [Entrega e pendências](validacao-voz-0.2.70.md): JS467/467, Rust86 aprovados/1 ignorado, intermediário136/136 e final51/51 em execuções separadas. Instalador local auditado, não instalado/publicado nem assinado; instalado61 e perfil preservados. Vocabulário Whisper experimental não adotado por saídas inválidas. Próxima lacuna comprovada: demais textareas da interface ainda não têm paridade multiline por voz. Meta ativa.
 
 Os estados de versões abaixo são históricos, incluindo0.2.69 e0.2.68.

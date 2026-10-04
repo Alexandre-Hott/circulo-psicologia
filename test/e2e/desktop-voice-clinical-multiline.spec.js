@@ -260,27 +260,47 @@ test('LF no cabeçalho/nome/query e ação composta fora do payload são recusad
   await expectNoVoiceAutosave(page, before)
 })
 
-test('multiline genérico continua proibido nos controles não clínicos título e descrição da biblioteca', async ({ page }) => {
+test('biblioteca: título INPUT recusa multiline e descrição aceita literal somente após confirmar sem writes', async ({ page }) => {
   await openApp(page)
   const before = await snapshot(page)
   await page.locator('#session-behaviors > summary').click()
-  for (const [label, selector] of [
-    ['Título descritivo', '#behavior-title'],
-    ['Descrição opcional', '#behavior-description'],
-  ]) {
-    const target = page.locator(selector)
-    await expect(target).toBeVisible()
-    const original = await target.inputValue()
-    await propose(page, `Preencher ${label} com Texto fictício\nSegunda linha`)
-    await expect(page.locator('.voice-command-preview')).toHaveCount(0)
-    await expect(page.locator('.voice-command-error')).toBeVisible()
-    await expect(target).toHaveValue(original)
-    await expectNoWrites(page, before)
-    await confirm(page)
-    await expect(target).toHaveValue(original)
-    await expectValues(page, before.drafts[0])
-    await expect(pending(page)).toHaveCount(0)
-  }
+  const title = page.locator('#behavior-title')
+  const description = page.locator('#behavior-description')
+  await expect(title).toBeVisible()
+  await expect(description).toBeVisible()
+  const originalTitle = await title.inputValue()
+  const originalDescription = await description.inputValue()
+  const literal = 'Texto fictício\nnão abrir Agenda\nSegunda linha'
+
+  await propose(page, `Preencher Título descritivo com ${literal}`)
+  await expect(page.locator('.voice-command-preview')).toHaveCount(0)
+  await expect(page.locator('.voice-command-error')).toBeVisible()
+  await expect(title).toHaveValue(originalTitle)
+  await expect(description).toHaveValue(originalDescription)
+  await expectNoWrites(page, before)
+  await confirm(page)
+  await expect(title).toHaveValue(originalTitle)
+  await expect(description).toHaveValue(originalDescription)
+  await expectValues(page, before.drafts[0])
+  await expect(pending(page)).toHaveCount(0)
   await expectNoVoiceAutosave(page, before)
+
+  await propose(page, `Preencher Descrição opcional com ${literal}`)
+  await expect(page.locator('.voice-command-preview')).toBeVisible()
+  expect(await page.locator('.voice-command-preview').textContent()).toContain(literal)
+  await expect(description).toHaveValue(originalDescription)
+  await expect(title).toHaveValue(originalTitle)
+  await expectValues(page, before.drafts[0])
+  await expect(pending(page)).toHaveCount(0)
+  await expectNoWrites(page, before)
+  await confirm(page)
+  await expect(description).toHaveValue(literal)
+  await expect(title).toHaveValue(originalTitle)
+  await expectValues(page, before.drafts[0])
+  await expect(pending(page)).toHaveCount(0)
+  await expectNoVoiceAutosave(page, before)
+  await expect(description).toHaveValue(literal)
+  await expect(title).toHaveValue(originalTitle)
+  await expectValues(page, before.drafts[0])
 })
 

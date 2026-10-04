@@ -1,6 +1,9 @@
 # Matriz atual de voz — 0.2.67
 
-## Atualização de referência — 0.2.70
+## Atualização de referência — 0.2.71
+
+A [validação 0.2.71](validacao-voz-0.2.71.md) amplia multiline aos campos de biblioteca, contexto, indicador, adendo e motivo administrativo, com invalidação por ciclo do editor. JS773/773, Rust86 aprovados/1 ignorado; regressão147/148 e focal28/28 em rodadas distintas, após ajustar uma expectativa histórica de recusa. Pacote local não instalado/publicado nem assinado; microfone físico não comprovado. As lacunas desses textareas no parágrafo da 0.2.70 abaixo descrevem aquela versão, não o estado atual. A matriz de oito áreas continua sendo auditoria histórica, não declaração de cobertura universal.
+
 
 Esta matriz preserva a auditoria estática da 0.2.67; os números de linha e a lacuna G1 abaixo são históricos. [Validação 0.2.68](validacao-voz-0.2.68.md) alinhou os quatro campos a 4000 unidades UTF-16 e o comando a 4600. [Validação 0.2.69](validacao-voz-0.2.69.md) acrescentou ditado por trechos com base viva, confirmação e validação contra mudanças do formulário. Regresso selecionado43/43 aprovado; não comprova universalmente todas as ações desta tabela nem microfone físico.
 

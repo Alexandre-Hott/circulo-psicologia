@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import { entityOptionSuffix } from './voiceEntityLabels.js'
 import { clinicalTextFields, validateClinicalTextAppend } from './clinicalTextAppend.js'
+import { nextVoiceLifecycle } from './voiceInterfaceCommands.js'
 import { invoke } from '@tauri-apps/api/core'
 import { groupIndicatorHistory } from './desktopIndicatorEvolution.js'
 import './DesktopSessions.css'
@@ -18,7 +19,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   const [caseContexts, setCaseContexts] = useState([])
   const [caseDemand, setCaseDemand] = useState('')
   const [caseObjectives, setCaseObjectives] = useState('')
-  const [addendumSessionId, setAddendumSessionId] = useState('')
+  const [addendumSessionId, setAddendumSessionIdState] = useState('')
   const [addendumContent, setAddendumContent] = useState('')
   const [loadedPatientId, setLoadedPatientId] = useState('')
   const [resumeInstance] = useState(() => ++resumeVoiceInstance)
@@ -31,7 +32,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   const [indicatorEntries, setIndicatorEntries] = useState(activeDraft?.indicators || [])
   const [templateTitle, setTemplateTitle] = useState('')
   const [templateDescription, setTemplateDescription] = useState('')
-  const [editingTemplate, setEditingTemplate] = useState(null)
+  const [editingTemplate, setEditingTemplateState] = useState(null)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusyState] = useState(false)
@@ -39,6 +40,31 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   const revisionRef = useRef(0)
   const clinicalEpochRef = useRef(0)
   const clinicalFormRef = useRef(null)
+  const workspaceRef = useRef(null)
+  const [editorCycles, setEditorCycles] = useState({ library: 0, context: 0, addendum: 0 })
+  const panelOpenRef = useRef({ library: false, context: false, addendum: false })
+  const libraryFormRef = useRef(null)
+  const contextFormRef = useRef(null)
+  const addendumFormRef = useRef(null)
+  const advanceEditorCycle = useCallback(kind => {
+    const cycle = nextVoiceLifecycle()
+    const form = { library: libraryFormRef, context: contextFormRef, addendum: addendumFormRef }[kind].current
+    form?.setAttribute('data-voice-lifecycle', `${resumeInstance}:${kind}:${cycle}`)
+    setEditorCycles(previous => ({ ...previous, [kind]: cycle }))
+  }, [resumeInstance])
+  const transitionPanel = useCallback((kind, open) => {
+    if (panelOpenRef.current[kind] === open) return
+    panelOpenRef.current[kind] = open
+    advanceEditorCycle(kind)
+  }, [advanceEditorCycle])
+  const setEditingTemplate = useCallback(value => {
+    advanceEditorCycle('library')
+    setEditingTemplateState(value)
+  }, [advanceEditorCycle])
+  const setAddendumSessionId = useCallback(value => {
+    advanceEditorCycle('addendum')
+    setAddendumSessionIdState(value)
+  }, [advanceEditorCycle])
   const dirtyRef = useRef(false)
   const savePromiseRef = useRef(null)
   const saveRef = useRef(null)
@@ -74,6 +100,9 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
   useLayoutEffect(() => {
     sectionRequestEpochRef.current++
   }, [workspaceActive, patientId])
+  useLayoutEffect(() => {
+    workspaceRef.current?.setAttribute('data-voice-lifecycle', `${resumeInstance}:sessions:${nextVoiceLifecycle()}`)
+  }, [resumeInstance, workspaceActive, patientId, activeDraft?.id, loadedPatientId, resumeRevision])
   useLayoutEffect(() => { setResumeRevision(value => value + 1) }, [workspaceActive, patientId, activeDraft?.id, activeDraft?.patientId])
   useLayoutEffect(() => { clinicalEpochRef.current = ++clinicalSnapshotEpoch }, [workspaceActive, patientId, activeDraft?.id, activeDraft?.patientId, loadedPatientId, resumeRevision])
   useLayoutEffect(() => {
@@ -166,7 +195,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
         if (editor.id !== matches[0].id) setAddendumContent('')
         setError('')
         const panel = document.querySelector('details[aria-label="Evolução descritiva somente leitura"]')
-        if (panel) panel.open = true
+        if (panel) { transitionPanel('addendum', true); panel.open = true }
         window.requestAnimationFrame(() => {
           if (!stillCurrent()) return
           const field = document.getElementById(`addendum-${matches[0].id}`)
@@ -190,6 +219,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
         : document.querySelector('form[aria-label="Nova revisão do contexto do caso"]')?.closest('details')
       if (!panel) return
       appliedVoiceDraftRef.current = intent.commandId
+      transitionPanel(section === 'library' ? 'library' : 'context', true)
       panel.open = true
       panel.scrollIntoView({ block: 'center' })
       panel.querySelector('summary')?.focus({ preventScroll: true })
@@ -215,6 +245,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
         setTemplateDescription(draft.description ?? template?.description ?? '')
         setError(''); setMessage('')
         const details = document.getElementById('session-behaviors')
+        transitionPanel('library', true)
         details?.setAttribute('open', '')
         details?.scrollIntoView({ block: 'center' })
         document.getElementById('behavior-title')?.focus({ preventScroll: true })
@@ -266,7 +297,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       onSessionMessage?.(`Indicador preenchido. Confira o formulário e clique em “Salvar rascunho” para gravar.`)
     } else onSessionMessage?.('Não apliquei o comando: o campo ou a operação não é compatível com este rascunho.')
     onVoiceDraftApplied?.(intent.commandId)
-  }, [voiceCommandDraft, activeDraft, patientId, loadedPatientId, workspaceActive, addendumSessionId, addendumContent, onVoiceDraftApplied, onSessionMessage, updateValues, getClinicalTextSnapshot])
+  }, [voiceCommandDraft, activeDraft, patientId, loadedPatientId, workspaceActive, addendumSessionId, addendumContent, onVoiceDraftApplied, onSessionMessage, updateValues, getClinicalTextSnapshot, setEditingTemplate, setAddendumSessionId, transitionPanel])
   const save = useCallback(() => {
     clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = null
@@ -332,6 +363,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     ),
     discardOtherUnsavedEditors: () => {
       if (busyRef.current) throw new Error('Aguarde o salvamento em andamento antes de descartar edições.')
+      advanceEditorCycle('context')
       setCaseDemand(''); setCaseObjectives('')
       setAddendumSessionId(''); setAddendumContent('')
       setTemplateTitle(''); setTemplateDescription(''); setEditingTemplate(null)
@@ -448,6 +480,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     try {
       saved = await invoke('case_context_create', { patientId, demand: caseDemand, objectives: caseObjectives })
     } catch (reason) { setError(String(reason)); setBusy(false); return }
+    advanceEditorCycle('context')
     setCaseDemand(''); setCaseObjectives('')
     setCaseContexts(previous => [saved, ...previous])
     setMessage('Nova revisão datada do contexto salva; revisões anteriores preservadas.')
@@ -497,7 +530,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     updateValues({ indicatorEntries: next })
   }
 
-  return <section className="vault-backup session-workspace" aria-label="Sessões e registros">
+  return <section ref={workspaceRef} className="vault-backup session-workspace" aria-label="Sessões e registros">
     <h2>Registros do paciente</h2>
     {error && <p role="alert" className="vault-error">{error}</p>}
     {message && <p role="status" className="vault-ok">{message}</p>}
@@ -515,7 +548,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
     {activeDraft && activeDraft.patientId === patientId && <form ref={clinicalFormRef} id="session-draft" data-voice-record={activeDraft.id} onSubmit={saveDraft} aria-label="Rascunho de sessão">
       <h3>Rascunho da ocorrência {activeDraft.originalDate}</h3>
       <p>Paciente: <strong>{patients.find(patient => patient.id === patientId)?.name || patientId}</strong> · {activeDraft.originalDate}</p>
-      <fieldset id="draft-behaviors" className="session-behavior-choices" tabIndex={-1} disabled={busy}><legend>Comportamentos desta sessão</legend>{templates.length ? templates.map(template => <label key={template.id} data-voice-record={`${activeDraft.id}:behavior:${template.id}`} data-voice-epoch={template.version} className="vault-checkbox"><input type="checkbox" checked={behaviorIds.includes(template.id)} onChange={event => { const next = event.target.checked ? [...behaviorIds, template.id] : behaviorIds.filter(id => id !== template.id); setBehaviorIds(next); updateValues({ behaviorIds: next }) }} /> {template.title} · v{template.version}{templateOption(template)}</label>) : <p>Nenhum comportamento disponível. <a href="#session-behaviors" onClick={() => document.getElementById('session-behaviors')?.setAttribute('open', '')}>Criar na biblioteca</a>.</p>}</fieldset>
+      <fieldset id="draft-behaviors" className="session-behavior-choices" tabIndex={-1} disabled={busy}><legend>Comportamentos desta sessão</legend>{templates.length ? templates.map(template => <label key={template.id} data-voice-record={`${activeDraft.id}:behavior:${template.id}`} data-voice-epoch={template.version} className="vault-checkbox"><input type="checkbox" checked={behaviorIds.includes(template.id)} onChange={event => { const next = event.target.checked ? [...behaviorIds, template.id] : behaviorIds.filter(id => id !== template.id); setBehaviorIds(next); updateValues({ behaviorIds: next }) }} /> {template.title} · v{template.version}{templateOption(template)}</label>) : <p>Nenhum comportamento disponível. <a href="#session-behaviors" onClick={() => (transitionPanel('library', true), document.getElementById('session-behaviors')?.setAttribute('open', ''))}>Criar na biblioteca</a>.</p>}</fieldset>
       {voiceConfirmationPending && <p role="status">Alteração de voz ainda não salva. Revise os campos e clique em “Salvar rascunho”.</p>}
       <div id="draft-actions" className="session-draft-actions"><button type="submit" disabled={busy}>Salvar rascunho</button><button type="button" disabled={busy || activeDraft.patientId !== patientId || missingFinalizationFields.length > 0} aria-describedby={missingFinalizationFields.length ? 'session-finalize-requirements' : undefined} onClick={finalize}>Finalizar sessão</button></div>
       <p id="session-finalize-requirements" className="session-finalize-requirements" role="status" aria-live="polite">{missingFinalizationFields.length ? `Para finalizar, preencha: ${missingFinalizationFields.join(', ')}.` : 'Campos necessários preenchidos; a sessão pode ser finalizada.'}</p>
@@ -541,11 +574,11 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
       <button type="button" className="vault-secondary" disabled={busy} onClick={cancel}>Cancelar rascunho</button>
     </form>}
     {patientId && <details id="session-other-drafts" className="session-secondary"><summary>Outros rascunhos do paciente</summary>{visibleDrafts.length ? <ul className="vault-patients">{visibleDrafts.map((draft, index) => <li key={draft.id} data-voice-record={`draft:${draft.id}`}>Ocorrência original {draft.originalDate}<button type="button" {...resumeControl(draft, index)} className="vault-secondary" onClick={() => selectDraft(draft)}>Retomar rascunho {draft.originalDate} · opção {index + 1}</button></li>)}</ul> : <p>Nenhum rascunho deste paciente.</p>}</details>}
-    <details id="session-behaviors" className="session-secondary"><summary>Biblioteca de comportamentos reutilizáveis</summary><p>Crie ou edite opções para usar em sessões. A biblioteca não vincula o item ao paciente.</p><form data-voice-record={editingTemplate ? `behavior:${editingTemplate.id}` : 'behavior:new'} data-voice-epoch={editingTemplate?.version || 0} onSubmit={saveTemplate} aria-label="Comportamento reutilizável"><label htmlFor="behavior-title">Título descritivo</label><input disabled={busy} id="behavior-title" maxLength={160} required value={templateTitle} onChange={event => setTemplateTitle(event.target.value)} /><label htmlFor="behavior-description">Descrição opcional</label><textarea disabled={busy} id="behavior-description" maxLength={1000} value={templateDescription} onChange={event => setTemplateDescription(event.target.value)} /><button disabled={busy} type="submit">{editingTemplate ? 'Salvar versão do comportamento' : 'Criar comportamento reutilizável'}</button>{editingTemplate && <button type="button" className="vault-secondary" onClick={() => { setEditingTemplate(null); setTemplateTitle(''); setTemplateDescription('') }}>Cancelar edição</button>}</form>{templates.length > 0 && <ul className="vault-patients">{templates.map(template => <li key={template.id} data-voice-record={`behavior:${template.id}`} data-voice-epoch={template.version}>{template.title} · v{template.version}<small>{template.description}</small><button type="button" disabled={busy} className="vault-secondary" onClick={() => { setEditingTemplate(template); setTemplateTitle(template.title); setTemplateDescription(template.description); document.getElementById('session-behaviors')?.setAttribute('open', '') }}>Editar comportamento {template.title}{templateOption(template)}</button></li>)}</ul>}</details>
-    {patientId && <details className="session-secondary"><summary>Contexto do caso</summary>{visibleContexts.length ? <><h4>Contexto atual</h4><p>Registrado em <time dateTime={visibleContexts[0].recordedAt}>{new Date(visibleContexts[0].recordedAt).toLocaleString('pt-BR')}</time>{visibleContexts[0].author && ` · Identidade local declarada: ${visibleContexts[0].author.displayName} · ${visibleContexts[0].author.registration}`}</p><dl><dt>Demanda avaliada</dt><dd>{visibleContexts[0].demand}</dd><dt>Objetivos de trabalho</dt><dd>{visibleContexts[0].objectives}</dd></dl><h4>Revisões anteriores</h4>{visibleContexts.length > 1 ? <ol>{visibleContexts.slice(1).map(item => <li key={item.id}><time dateTime={item.recordedAt}>{new Date(item.recordedAt).toLocaleString('pt-BR')}</time>{item.author && ` · ${item.author.displayName} · ${item.author.registration}`}<dl><dt>Demanda avaliada</dt><dd>{item.demand}</dd><dt>Objetivos de trabalho</dt><dd>{item.objectives}</dd></dl></li>)}</ol> : <p>Nenhuma revisão anterior.</p>}</> : <p role="status">Contexto do caso não registrado para este paciente.</p>}<form onSubmit={saveCaseContext} aria-label="Nova revisão do contexto do caso"><p>Cada envio cria uma revisão datada; anteriores são preservadas.</p><label htmlFor="case-demand">Demanda avaliada</label><textarea id="case-demand" disabled={busy} required maxLength={4000} value={caseDemand} onChange={event => setCaseDemand(event.target.value)} /><label htmlFor="case-objectives">Objetivos de trabalho</label><textarea id="case-objectives" disabled={busy} required maxLength={4000} value={caseObjectives} onChange={event => setCaseObjectives(event.target.value)} /><button type="submit" disabled={busy || !caseDemand.trim() || !caseObjectives.trim()}>Salvar nova revisão do contexto</button></form></details>}
+    <details onToggle={event => transitionPanel('library', event.currentTarget.open)} id="session-behaviors" className="session-secondary"><summary onClick={event => transitionPanel('library', !event.currentTarget.parentElement.open)}>Biblioteca de comportamentos reutilizáveis</summary><p>Crie ou edite opções para usar em sessões. A biblioteca não vincula o item ao paciente.</p><form ref={libraryFormRef} data-voice-lifecycle={`${resumeInstance}:library:${editorCycles.library}`} data-voice-record={editingTemplate ? `behavior:${editingTemplate.id}` : 'behavior:new'} data-voice-epoch={editingTemplate?.version || 0} onSubmit={saveTemplate} aria-label="Comportamento reutilizável"><label htmlFor="behavior-title">Título descritivo</label><input disabled={busy} id="behavior-title" maxLength={160} required value={templateTitle} onChange={event => setTemplateTitle(event.target.value)} /><label htmlFor="behavior-description">Descrição opcional</label><textarea disabled={busy} id="behavior-description" maxLength={1000} value={templateDescription} onChange={event => setTemplateDescription(event.target.value)} /><button disabled={busy} type="submit">{editingTemplate ? 'Salvar versão do comportamento' : 'Criar comportamento reutilizável'}</button>{editingTemplate && <button type="button" className="vault-secondary" onClick={() => { setEditingTemplate(null); setTemplateTitle(''); setTemplateDescription('') }}>Cancelar edição</button>}</form>{templates.length > 0 && <ul className="vault-patients">{templates.map(template => <li key={template.id} data-voice-record={`behavior:${template.id}`} data-voice-epoch={template.version}>{template.title} · v{template.version}<small>{template.description}</small><button type="button" disabled={busy} className="vault-secondary" onClick={() => { setEditingTemplate(template); setTemplateTitle(template.title); setTemplateDescription(template.description); transitionPanel('library', true); document.getElementById('session-behaviors')?.setAttribute('open', '') }}>Editar comportamento {template.title}{templateOption(template)}</button></li>)}</ul>}</details>
+    {patientId && <details onToggle={event => transitionPanel('context', event.currentTarget.open)} className="session-secondary"><summary onClick={event => transitionPanel('context', !event.currentTarget.parentElement.open)}>Contexto do caso</summary>{visibleContexts.length ? <><h4>Contexto atual</h4><p>Registrado em <time dateTime={visibleContexts[0].recordedAt}>{new Date(visibleContexts[0].recordedAt).toLocaleString('pt-BR')}</time>{visibleContexts[0].author && ` · Identidade local declarada: ${visibleContexts[0].author.displayName} · ${visibleContexts[0].author.registration}`}</p><dl><dt>Demanda avaliada</dt><dd>{visibleContexts[0].demand}</dd><dt>Objetivos de trabalho</dt><dd>{visibleContexts[0].objectives}</dd></dl><h4>Revisões anteriores</h4>{visibleContexts.length > 1 ? <ol>{visibleContexts.slice(1).map(item => <li key={item.id}><time dateTime={item.recordedAt}>{new Date(item.recordedAt).toLocaleString('pt-BR')}</time>{item.author && ` · ${item.author.displayName} · ${item.author.registration}`}<dl><dt>Demanda avaliada</dt><dd>{item.demand}</dd><dt>Objetivos de trabalho</dt><dd>{item.objectives}</dd></dl></li>)}</ol> : <p>Nenhuma revisão anterior.</p>}</> : <p role="status">Contexto do caso não registrado para este paciente.</p>}<form ref={contextFormRef} data-voice-record={`context:${patientId}`} data-voice-epoch={`${resumeInstance}:${resumeRevision}`} data-voice-lifecycle={`${resumeInstance}:context:${editorCycles.context}`} onSubmit={saveCaseContext} aria-label="Nova revisão do contexto do caso"><p>Cada envio cria uma revisão datada; anteriores são preservadas.</p><label htmlFor="case-demand">Demanda avaliada</label><textarea id="case-demand" disabled={busy || loadedPatientId !== patientId} required maxLength={4000} value={caseDemand} onChange={event => setCaseDemand(event.target.value)} /><label htmlFor="case-objectives">Objetivos de trabalho</label><textarea id="case-objectives" disabled={busy || loadedPatientId !== patientId} required maxLength={4000} value={caseObjectives} onChange={event => setCaseObjectives(event.target.value)} /><button type="submit" disabled={busy || loadedPatientId !== patientId || !caseDemand.trim() || !caseObjectives.trim()}>Salvar nova revisão do contexto</button></form></details>}
     {patientId && <details className="session-secondary"><summary>Exportar cópia legível</summary><p className="vault-warning">A cópia .txt não é cifrada. Escolha destino local seguro e revise o conteúdo. Uma queda durante a exportação pode deixar arquivo temporário em texto puro.</p><button type="button" disabled={busy} onClick={exportRecord}>Exportar cópia legível deste paciente</button></details>}
-    <details id="session-evolution" className="desktop-evolution session-secondary" aria-label="Evolução descritiva somente leitura">
-      <summary>Evolução e escalas registradas · Adicionar adendo</summary>
+    <details onToggle={event => transitionPanel('addendum', event.currentTarget.open)} id="session-evolution" className="desktop-evolution session-secondary" aria-label="Evolução descritiva somente leitura">
+      <summary onClick={event => transitionPanel('addendum', !event.currentTarget.parentElement.open)}>Evolução e escalas registradas · Adicionar adendo</summary>
       {patientId && <button type="button" disabled={busy || (!onStartRecord && !activeDraft && !visibleDrafts.length)} onClick={() => activeDraft?.patientId === patientId ? document.getElementById('session-draft')?.scrollIntoView() : visibleDrafts.length ? chooseDraftToResume() : onStartRecord?.(patientId)}>Registrar nova sessão ou continuar rascunho</button>}
       <p>Registros persistidos em ordem de data da sessão. Esta visualização apenas descreve o que foi anotado; não é avaliação clínica e não calcula tendências.</p>
       {visibleTimeline.length ? <ol className="desktop-evolution-list">{visibleTimeline.map(session => <li key={session.id} data-voice-record={`session:${session.id}`}>
@@ -555,7 +588,7 @@ export default function DesktopSessions({ ref, patientId, onPatientChange, activ
         <dl><dt>Procedimentos realizados</dt><dd>{session.procedures?.trim() || 'não registrado'}</dd><dt>Resultado e decisão</dt><dd>{session.outcomeDecision?.trim() || 'não registrado'}</dd><dt>Encaminhamento ou encerramento</dt><dd>{session.referralClosure?.trim() || 'não registrado'}</dd></dl>
         <h4>Adendos datados</h4>
         {visibleAddenda.filter(item => item.sessionId === session.id).length ? <ol>{visibleAddenda.filter(item => item.sessionId === session.id).map(item => <li key={item.id}><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString('pt-BR')}</time> · {item.content}</li>)}</ol> : <p>Sem adendos.</p>}
-        {addendumSessionId === session.id ? <form onSubmit={saveAddendum}><label htmlFor={`addendum-${session.id}`}>Texto do adendo (até 4000 caracteres)</label><textarea id={`addendum-${session.id}`} disabled={busy} required maxLength={4000} value={addendumContent} onChange={event => setAddendumContent(event.target.value)} /><button type="submit" disabled={busy || !addendumContent.trim()}>Salvar adendo imutável</button><button type="button" className="vault-secondary" disabled={busy} onClick={cancelAddendum}>Cancelar</button></form> : <button type="button" className="vault-secondary" data-voice-alias="Adicionar adendo" data-voice-label={`Adicionar adendo de ${patients.find(patient => patient.id === patientId)?.name || 'Paciente'} em ${session.sessionDate} às ${session.start}–${session.end}`} disabled={busy} onClick={() => { setAddendumSessionId(session.id); setAddendumContent('') }}>Adicionar adendo</button>}
+        {addendumSessionId === session.id ? <form ref={addendumFormRef} data-voice-lifecycle={`${resumeInstance}:addendum:${editorCycles.addendum}`} onSubmit={saveAddendum}><label htmlFor={`addendum-${session.id}`}>Texto do adendo (até 4000 caracteres)</label><textarea id={`addendum-${session.id}`} disabled={busy} required maxLength={4000} value={addendumContent} onChange={event => setAddendumContent(event.target.value)} /><button type="submit" disabled={busy || !addendumContent.trim()}>Salvar adendo imutável</button><button type="button" className="vault-secondary" disabled={busy} onClick={cancelAddendum}>Cancelar</button></form> : <button type="button" className="vault-secondary" data-voice-alias="Adicionar adendo" data-voice-label={`Adicionar adendo de ${patients.find(patient => patient.id === patientId)?.name || 'Paciente'} em ${session.sessionDate} às ${session.start}–${session.end}`} disabled={busy} onClick={() => { setAddendumSessionId(session.id); setAddendumContent('') }}>Adicionar adendo</button>}
       </li>)}</ol> : <p>Nenhuma sessão finalizada deste paciente.</p>}
       <h4>Registros longitudinais por escala compatível</h4>
       <p>Comparação apenas quando ID, versão e rótulos do snapshot coincidem exatamente. Escalas incompatíveis ficam separadas; não há média nem tendência calculada.</p>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { entityOptionSuffix } from './voiceEntityLabels.js'
 import { invoke } from '@tauri-apps/api/core'
 import DesktopAgenda from './DesktopAgenda.jsx'
@@ -7,7 +7,7 @@ import DesktopSessions from './DesktopSessions.jsx'
 import VoiceCommandCenter from './VoiceCommandCenter.jsx'
 import { parseCentralCommand } from './centralCommandRouter.js'
 import { validateClinicalTextAppend } from './clinicalTextAppend.js'
-import { applyVoiceInterfaceCommand, parseVoiceInterfaceCommand } from './voiceInterfaceCommands.js'
+import { applyVoiceInterfaceCommand, nextVoiceLifecycle, parseVoiceInterfaceCommand } from './voiceInterfaceCommands.js'
 import { captureCommandAudio } from './localVoiceCapture.js'
 import { seedSyntheticDemo } from './desktopDemoSeed.js'
 import { checkDesktopUpdate, closeDesktopUpdate, installDesktopUpdate } from './desktopUpdater.js'
@@ -63,6 +63,10 @@ export default function DesktopVault() {
   const [sessionsOpen, setSessionsOpen] = useState(false)
   const [sessionPatientId, setSessionPatientId] = useState('')
   const [activeDraft, setActiveDraft] = useState(null)
+  const voiceScopeRef = useRef(null)
+  useLayoutEffect(() => {
+    voiceScopeRef.current?.setAttribute('data-voice-lifecycle', nextVoiceLifecycle())
+  }, [space, status?.unlocked, sessionPatientId, activeDraft?.id, editing?.id, partyPatientId, agendaOpen, sessionsOpen])
   const [voiceBehaviors, setVoiceBehaviors] = useState([])
   const [voiceIndicators, setVoiceIndicators] = useState([])
   const [voiceIntent, setVoiceIntent] = useState(null)
@@ -865,7 +869,7 @@ export default function DesktopVault() {
   }
 
   const nameOption = entityOptionSuffix
-  return <main data-voice-epoch={`${status?.unlocked ? 'unlocked' : 'locked'}:${space}:${sessionPatientId}:${activeDraft?.id || ''}:${editing?.id || ''}:${partyPatientId}`} className={`vault-page ${status?.unlocked ? 'vault-page-unlocked' : ''}`}>
+  return <main ref={voiceScopeRef} data-voice-epoch={`${status?.unlocked ? 'unlocked' : 'locked'}:${space}:${sessionPatientId}:${activeDraft?.id || ''}:${editing?.id || ''}:${partyPatientId}`} className={`vault-page ${status?.unlocked ? 'vault-page-unlocked' : ''}`}>
     <section className="vault-card">
       <header className="vault-header"><div><p className="vault-eyebrow">CÍRCULO</p><h1>Círculo</h1><p>Um lugar para organizar o cuidado.</p></div>{status?.unlocked && space !== 'settings' && <button disabled={busy} className="vault-secondary vault-header-lock" onClick={() => lock(false)}>Bloquear</button>}</header>
       {updateState.phase === 'available' && <aside className="vault-updater" role="status"><strong>Atualização disponível: Círculo {updateState.version}</strong><p>Você pode continuar usando o aplicativo. A instalação só começa após sua confirmação.</p><button type="button" onClick={applyUpdate}>Baixar e instalar</button></aside>}

@@ -160,7 +160,10 @@ test('nova linha falada permanece texto literal, nunca infere uma quebra', () =>
 for (const [description, options] of [
   ['ID errado mesmo com rótulo clínico', { id: 'unrelated-observation' }],
   ['mesmo ID/rótulo em outro formulário', { formId: 'unrelated-form' }],
-  ['textarea não clínico de descrição', { id: 'behavior-description' }],
+  // Intentional semantic change in 71: library description now accepts literal
+  // multiline in its eligible behavior form (covered by the separate suite).
+  // Retain refusal here only for the copied ID outside that eligible form.
+  ['descrição da biblioteca fora do formulário elegível', { id: 'behavior-description', formId: 'unrelated-form' }],
   ['input com ID/rótulo clínico', { tagName: 'INPUT' }],
   ['select com ID/rótulo clínico', { tagName: 'SELECT' }],
 ]) {

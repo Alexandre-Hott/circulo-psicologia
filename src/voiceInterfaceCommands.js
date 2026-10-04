@@ -9,10 +9,34 @@ const fold = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u03
   .replace(/\s+/g, ' ').replace(/[.!?]+$/g, '').trim()
 const clean = value => String(value ?? '').trim().replace(/[.!?]+$/g, '').replace(/^["“]|["”]$/g, '').trim()
 const refusal = message => ({ status: 'clarification', message })
+let voiceLifecycleCounter = 0
+export function nextVoiceLifecycle() {
+  if (voiceLifecycleCounter >= Number.MAX_SAFE_INTEGER) throw new Error('Ciclo de interface esgotado. Reabra o aplicativo.')
+  return String(++voiceLifecycleCounter)
+}
 const clinicalLineBreak = /[\r\n\u2028\u2029]/u
-const multilineClinicalField = element => element.tagName === 'TEXTAREA'
-  && ['session-observation', 'session-procedures', 'session-outcome-decision', 'session-referral-closure'].includes(element.id)
-  && Boolean(element.closest('form#session-draft')?.getAttribute('data-voice-record'))
+function multilineTextareaField(element) {
+  if (element.tagName !== 'TEXTAREA') return false
+  const form = element.closest('form#session-draft') || element.closest('form')
+  const record = form?.getAttribute('data-voice-record')
+  if (['session-observation', 'session-procedures', 'session-outcome-decision', 'session-referral-closure'].includes(element.id)
+    || /^indicator-note-.+$/u.test(element.id)) return form?.id === 'session-draft' && Boolean(record)
+  if (element.id === 'behavior-description') return form?.getAttribute('aria-label') === 'Comportamento reutilizável' && /^behavior:.+$/u.test(record || '')
+  if (['case-demand', 'case-objectives'].includes(element.id)) return form?.getAttribute('aria-label') === 'Nova revisão do contexto do caso'
+    && /^context:.+$/u.test(record || '') && Boolean(form.getAttribute('data-voice-epoch'))
+  if (element.id === 'agenda-reason') return form?.getAttribute('aria-label') === 'Alterar ocorrência individual' && /^.+:\d{4}-\d{2}-\d{2}$/u.test(record || '')
+  if (/^addendum-.+$/u.test(element.id)) return Boolean(form) && element.closest('li[data-voice-record]')?.getAttribute('data-voice-record') === `session:${element.id.slice('addendum-'.length)}`
+  return false
+}
+
+function lifecycleChain(element) {
+  const chain = []
+  for (let ancestor = element; ancestor; ancestor = ancestor.parentElement) {
+    const epoch = ancestor.getAttribute('data-voice-lifecycle')
+    if (epoch !== null) chain.push(epoch)
+  }
+  return chain.length ? JSON.stringify(chain) : null
+}
 
 function visible(element) {
   if (!element.isConnected || element.closest('[hidden], [inert], [aria-hidden="true"]')) return false
@@ -152,7 +176,7 @@ function matches(query, entries) {
 }
 
 function fingerprint(item, drawer = false) {
-  return { id: item.element.id || null, tag: item.element.tagName, inputType: item.element.type || null, valueType: item.element.getAttribute('data-voice-value-type') || null, name: drawer ? textContent(item.element) : item.name, context: item.context, action: item.element.getAttribute('data-voice-action') || null, record: item.element.closest('[data-voice-record]')?.getAttribute('data-voice-record') || null, epoch: item.element.closest('[data-voice-epoch]')?.getAttribute('data-voice-epoch') || null, series: item.element.hasAttribute('data-voice-series-kind') ? [item.element.getAttribute('data-voice-series-kind'), item.element.getAttribute('data-voice-series-patient'), item.element.getAttribute('data-voice-series-weekday'), item.element.getAttribute('data-voice-series-time'), item.element.getAttribute('data-voice-series-ambiguous')].join('|') : null }
+  return { lifecycle: lifecycleChain(item.element), id: item.element.id || null, tag: item.element.tagName, inputType: item.element.type || null, valueType: item.element.getAttribute('data-voice-value-type') || null, name: drawer ? textContent(item.element) : item.name, context: item.context, action: item.element.getAttribute('data-voice-action') || null, record: item.element.closest('[data-voice-record]')?.getAttribute('data-voice-record') || null, epoch: item.element.closest('[data-voice-epoch]')?.getAttribute('data-voice-epoch') || null, series: item.element.hasAttribute('data-voice-series-kind') ? [item.element.getAttribute('data-voice-series-kind'), item.element.getAttribute('data-voice-series-patient'), item.element.getAttribute('data-voice-series-weekday'), item.element.getAttribute('data-voice-series-time'), item.element.getAttribute('data-voice-series-ambiguous')].join('|') : null }
 }
 
 function isDrawer(element) {
@@ -235,7 +259,7 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   if (/^anticipar termino de /u.test(fold(query)) && !seriesLabelMatches(query, item)) return refusal(`Não encontrei “${query}” em um controle de série disponível.`)
   if (operation === 'uncheck' && item.element.type === 'radio') return refusal('Escolha outra opção deste grupo para alterar a seleção.')
   if (operation === 'fill') {
-    if (multiline && !multilineClinicalField(item.element)) return refusal('Quebras de linha são permitidas apenas nos quatro campos clínicos do rascunho de sessão aberto.')
+    if (multiline && !multilineTextareaField(item.element)) return refusal('Quebras de linha são permitidas apenas nos campos de texto disponíveis do rascunho, contexto, biblioteca, adendo ou motivo administrativo.')
     if (item.element.tagName === 'SELECT') {
       if (clearField) return refusal('Para mudar uma seleção, diga “selecionar” e o nome da opção.')
       const weekday = item.element.getAttribute('data-voice-value-type') === 'weekday'
@@ -284,12 +308,12 @@ export function applyVoiceInterfaceCommand(intent, root = globalThis.document) {
     if (resumeMetadata(item.element) !== (target.resume ?? null)) return false
     if (appointmentMetadata(item.element) !== (target.appointment ?? null)) return false
     if (['open', 'close'].includes(intent.operation) && (!isDrawer(item.element) || target.drawerId !== (item.element.matches('summary') ? item.element.parentElement.id : item.element.getAttribute('aria-controls')))) return false
-    return current.id === target.id && current.tag === target.tag && current.inputType === target.inputType && current.valueType === target.valueType && current.name === target.name && current.context === target.context && current.action === target.action && current.record === target.record && current.epoch === target.epoch && current.series === target.series
+    return current.lifecycle === (target.lifecycle ?? null) && current.id === target.id && current.tag === target.tag && current.inputType === target.inputType && current.valueType === target.valueType && current.name === target.name && current.context === target.context && current.action === target.action && current.record === target.record && current.epoch === target.epoch && current.series === target.series
   })
   if (found.length !== 1) throw new Error('A tela mudou. Prepare o comando novamente antes de aplicar.')
   const element = found[0].element
   if (intent.operation === 'fill' && clinicalLineBreak.test(intent.value)) {
-    if (!multilineClinicalField(element) || element.readOnly || (element.maxLength > 0 && intent.value.length > element.maxLength)) {
+    if (!multilineTextareaField(element) || element.readOnly || (element.maxLength > 0 && intent.value.length > element.maxLength)) {
       throw new Error('O campo clínico mudou. Prepare o comando novamente antes de aplicar.')
     }
   }
