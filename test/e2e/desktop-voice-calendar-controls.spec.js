@@ -1,20 +1,27 @@
 import { expect, test } from '@playwright/test'
 
-async function openApp(page, { failStart = false, seed = false } = {}) {
+async function openApp(page, { failStart = false, seed = false, failAuxiliary = '' } = {}) {
   await page.clock.install({ time: new Date('2026-10-03T15:00:00Z') })
   await page.clock.pauseAt(new Date('2026-10-03T15:00:00Z'))
-  await page.addInitScript(({ failStart, seed }) => {
+  await page.addInitScript(({ failStart, seed, failAuxiliary }) => {
     const clone = value => structuredClone(value)
     const patient = { id: 'lia', name: 'Lia Exemplo', revision: 1, archivedAt: null }
     const series = seed ? [{ id: 'seed', patientId: 'lia', startDate: '2026-10-31', endDate: '2026-10-31', weekday: 6, frequency: 'Avulsa', start: '14:00', end: '14:50', modality: 'Presencial', meetingLink: null }] : []
     const drafts = []
     const sessions = []
     let fail = failStart
+    let auxiliaryFailed = false
+    let refreshAfterStart = false
     window.calendarVoice = { series, drafts, sessions, calls: [], unexpected: [] }
     window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
       window.calendarVoice.calls.push(clone({ command, args }))
+      if ((!auxiliaryFailed && failAuxiliary === 'after-create' && command === 'behavior_list' && series.length > 0 && drafts.length === 0) || (failAuxiliary === 'after-start' && command === 'indicator_catalog' && refreshAfterStart && !window.calendarVoice.releaseAuxiliary)) {
+        auxiliaryFailed = true
+        window.calendarVoice.auxiliaryFailure = command
+        throw new Error('Falha sintética na atualização auxiliar')
+      }
       if (command === 'vault_status') return { initialized: true, unlocked: true, profileState: 'ready' }
-      if (command === 'auto_backup_status') return { available: false, dirty: false }
+      if (command === 'auto_backup_status') { if (drafts.length) refreshAfterStart = true; return { available: false, dirty: false } }
       if (command === 'plugin:updater|check') return null
       if (command === 'patient_list') return [patient]
       if (command === 'agenda_list_series') return clone(series)
@@ -24,7 +31,7 @@ async function openApp(page, { failStart = false, seed = false } = {}) {
         if (fail) { fail = false; throw new Error('Falha sintética ao iniciar') }
         const existing = drafts.find(item => item.seriesId === args.seriesId && item.originalDate === args.originalDate)
         if (existing) return clone(existing)
-        const draft = { id: 'draft-lia', patientId: 'lia', seriesId: args.seriesId, originalDate: args.originalDate, observation: '', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicators: [] }
+        const draft = { id: `draft-lia-${drafts.length + 1}`, patientId: 'lia', seriesId: args.seriesId, originalDate: args.originalDate, observation: '', procedures: '', outcomeDecision: '', referralClosure: '', behaviorIds: [], indicators: [] }
         drafts.push(draft); return clone(draft)
       }
       if (command === 'session_draft_list') return clone(drafts.filter(item => item.patientId === args.patientId))
@@ -45,7 +52,7 @@ async function openApp(page, { failStart = false, seed = false } = {}) {
       window.calendarVoice.unexpected.push(command)
       throw new Error(`Invoke sem fixture: ${command}`)
     } }
-  }, { failStart, seed })
+  }, { failStart, seed, failAuxiliary })
   await page.goto('/')
   await expect(page.getByRole('region', { name: 'Comando do Círculo' })).toBeVisible()
 }
@@ -94,6 +101,33 @@ async function command(page, text) {
 }
 
 const calls = (page, commandName) => page.evaluate(name => window.calendarVoice.calls.filter(item => item.command === name), commandName)
+
+for (const failAuxiliary of ['after-create', 'after-start']) {
+  test(`sessão por voz preserva sucesso parcial e ID no retry: ${failAuxiliary}`, async ({ page }) => {
+    await openApp(page, { failAuxiliary })
+    await command(page, 'Clicar em Registrar sessão')
+    await command(page, 'Preencher Data do compromisso com 15/11/2026')
+    await command(page, 'Clicar em Criar e iniciar sessão')
+    await expect(page.getByRole('heading', { name: 'Rascunho da ocorrência 2026-11-15' })).toBeVisible()
+    expect(await page.evaluate(() => window.calendarVoice.auxiliaryFailure)).toBe(failAuxiliary === 'after-create' ? 'behavior_list' : 'indicator_catalog')
+    if (failAuxiliary === 'after-start') {
+      await expect(page.getByText(/Sessão aberta\. Não foi possível atualizar informações auxiliares:/)).toBeVisible()
+      await page.evaluate(() => { window.calendarVoice.releaseAuxiliary = true })
+    }
+    await expect(page.getByText('Compromisso criado, mas a sessão não iniciou. Use Iniciar sessão no compromisso exibido abaixo.')).toHaveCount(0)
+    await command(page, 'Preencher Observações descritivas com Conteúdo fictício preservado')
+    await command(page, 'Clicar em Salvar rascunho')
+    const original = await page.evaluate(() => window.calendarVoice.drafts[0].id)
+    await command(page, 'Clicar em Fechar sessões')
+    await command(page, 'Mostrar agenda do dia 15/11/2026')
+    await command(page, 'Clicar em Detalhes e ações')
+    await command(page, 'Clicar em Iniciar sessão de Lia Exemplo em 2026-11-15 às 14:00–14:50')
+    await expect(page.getByLabel('Observações descritivas')).toHaveValue('Conteúdo fictício preservado')
+    expect(await calls(page, 'agenda_create_series')).toHaveLength(1)
+    expect(await calls(page, 'session_draft_start')).toHaveLength(2)
+    expect(await page.evaluate(() => window.calendarVoice.drafts.map(item => item.id))).toEqual([original])
+  })
+}
 test.afterEach(async ({ page }) => expect(await page.evaluate(() => window.calendarVoice?.unexpected || [])).toEqual([]))
 
 test('calendário: controles mensais/diários, detalhes e fechamento por voz', async ({ page }) => {

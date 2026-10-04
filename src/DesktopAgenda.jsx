@@ -220,13 +220,15 @@ export default function DesktopAgenda({ patients, onChanged, onStartSession, onC
       const created = await invoke('agenda_create_series', { input })
       const startNow = quickStart && appointmentType === 'Avulsa'
       if (startNow) onQuickStartConsumed?.()
-      await onChanged()
       setMessage(appointmentType === 'Avulsa' ? 'Compromisso avulso salvo no cofre cifrado.' : 'Série recorrente salva no cofre cifrado.')
       if (appointmentType === 'Avulsa') setDay(form.startDate)
       setForm(emptyForm(patients, input.startDate))
       setCommandReview(null)
       setCommandText('')
-      await load(...rangeFor(input.startDate, mode))
+      try { await onChanged() }
+      catch (reason) { setError(`Compromisso salvo. Não foi possível atualizar informações auxiliares: ${String(reason)}`) }
+      try { await load(...rangeFor(input.startDate, mode)) }
+      catch (reason) { setError(`Compromisso salvo. Não foi possível atualizar o calendário: ${String(reason)}`) }
       if (startNow) {
         const started = await onStartSession({ seriesId: created.id, originalDate: input.startDate })
         if (!started) setMessage('Compromisso criado, mas a sessão não iniciou. Use Iniciar sessão no compromisso exibido abaixo.')

@@ -5,6 +5,41 @@ use std::sync::{Arc, mpsc};
 use std::time::Duration;
 
 #[test]
+fn retry_start_is_serialized_and_preserved_after_encrypted_reopen() {
+    let root = TempDir::new().unwrap();
+    let vault = Vault::new(root.path().into());
+    vault.create("synthetic-password-123".into()).unwrap();
+    let patient = vault.patient_create(PatientInput {
+        name: "Synthetic retry".into(), life_cycle: "Adulto".into(), age: None,
+        birth_date: None, self_requester: None, preferred_modality: "Presencial".into(),
+    }).unwrap();
+    let series = vault.agenda_create_series(AgendaSeriesInput {
+        patient_id: patient.id.clone(), weekday: 0, start: "14:00".into(), end: "14:50".into(),
+        frequency: "Avulsa".into(), start_date: "2026-09-27".into(), end_date: Some("2026-09-27".into()),
+        modality: "Presencial".into(), meeting_link: None,
+    }).unwrap();
+    let ids = std::thread::scope(|scope| {
+        let a = scope.spawn(|| vault.session_draft_start(&series.id, "2026-09-27").unwrap().id);
+        let b = scope.spawn(|| vault.session_draft_start(&series.id, "2026-09-27").unwrap().id);
+        (a.join().unwrap(), b.join().unwrap())
+    });
+    assert_eq!(ids.0, ids.1);
+    vault.session_draft_save(&ids.0, SessionDraftInput {
+        observation: "Synthetic persisted text".into(), procedures: "Synthetic procedure".into(),
+        outcome_decision: "Synthetic outcome".into(), referral_closure: None,
+        behavior_ids: vec![], indicators: vec![],
+    }).unwrap();
+    vault.lock().unwrap();
+    drop(vault);
+    let reopened = Vault::new(root.path().into());
+    reopened.unlock("synthetic-password-123".into()).unwrap();
+    let retried = reopened.session_draft_start(&series.id, "2026-09-27").unwrap();
+    assert_eq!(retried.id, ids.0);
+    assert_eq!(retried.observation, "Synthetic persisted text");
+    assert_eq!(reopened.session_draft_list(&patient.id).unwrap().len(), 1);
+}
+
+#[test]
 fn identification_roundtrip_is_scoped_and_explicit() {
     let root = TempDir::new().unwrap();
     let source_root = root.path().join("synthetic-identification");

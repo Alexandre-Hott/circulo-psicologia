@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Complemento após0.2.50: retry de Registrar sessão
+
+Banco nativo reutiliza um rascunho único/compatível da ocorrência, preservando ID/texto; duplicados anteriores exigem retomada explícita sem limpeza. Falhas de refresh após criação/início não fazem o fluxo anunciar que a sessão não foi criada. **243JS,86Rust release aprovados/1 áudio opt-in ignorado**; novo teste cifrado verifica chamadas simultâneas e reabertura. E2E ampliados101/102 (falha em fixtureafter-start); fixture tornada determinística, dois focados2/2 e arquivo calendário final6/6 em49,8s. Não declarar102/102. Incremento posterior ao instalador50, sem microfone humano/perfil real. Revisão final estática sem bloqueante; P2 candidato de resposta antiga após bloqueio/desbloqueio registrado para reprodução integrada. [Detalhes](melhoria-continua-voz.md). Meta ativa.
+
 ## Consolidação local0.2.50
 
 Incremento de alvos/texto completo incluído no instalador50, compilado offline/locked e auditado PE/x64/hash; sem instalação, microfone físico ou Release.243/243JS e guard reexecutados após versionamento;57/57E2E do snapshot funcional antes da mudança somente de versão. Aplicativo instalado continua0.2.47. [Artefato e limitações](melhoria-continua-voz.md). As notas “ainda não empacotado” abaixo são históricas deste incremento, agora consolidado.

@@ -788,7 +788,8 @@ export default function DesktopVault() {
       setAgendaRecordPatientId('')
       setSessionsOpen(true)
       setSpace('sessions')
-      await refreshWorkspace()
+      try { await refreshWorkspace() }
+      catch (reason) { setError(`Sessão aberta. Não foi possível atualizar informações auxiliares: ${String(reason)}`) }
       return true
     } catch (reason) { setError(String(reason)); return false }
     finally { setBusy(false) }
