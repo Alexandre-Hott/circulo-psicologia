@@ -9,6 +9,10 @@ const fold = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u03
   .replace(/\s+/g, ' ').replace(/[.!?]+$/g, '').trim()
 const clean = value => String(value ?? '').trim().replace(/[.!?]+$/g, '').replace(/^["“]|["”]$/g, '').trim()
 const refusal = message => ({ status: 'clarification', message })
+const clinicalLineBreak = /[\r\n\u2028\u2029]/u
+const multilineClinicalField = element => element.tagName === 'TEXTAREA'
+  && ['session-observation', 'session-procedures', 'session-outcome-decision', 'session-referral-closure'].includes(element.id)
+  && Boolean(element.closest('form#session-draft')?.getAttribute('data-voice-record'))
 
 function visible(element) {
   if (!element.isConnected || element.closest('[hidden], [inert], [aria-hidden="true"]')) return false
@@ -159,7 +163,9 @@ function isDrawer(element) {
 export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   // Exact variant observed in the synthetic Portuguese Whisper test. No names
   // or field contents are repaired; this still produces a reviewable proposal.
-  const raw = clean(text).replace(/^ficarem novo cadastro$/iu, 'Clicar em Novo cadastro')
+  const sourceText = String(text ?? '')
+  const multiline = clinicalLineBreak.test(sourceText)
+  const raw = (multiline ? sourceText.replace(/^[^\S\r\n\u2028\u2029]+/u, '') : clean(text)).replace(/^ficarem novo cadastro$/iu, 'Clicar em Novo cadastro')
     // Exact command-prefix variants captured from local Portuguese recognition.
     // Never repair the value, patient's name, indicator title or note content.
     .replace(/^princher(?=\s)/iu, 'Preencher')
@@ -169,11 +175,18 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   if (/^(?:nao|nunca)\b/.test(normalized)) return refusal('Pedido negado. Nenhuma ação preparada.')
   let operation, query, value, optionLabel
   let directSeries = false
-  const fieldPayload = /^(?:preencher|preencha|preenche|definir|defina|selecionar|selecione|seleciona)\s+(.+)$/iu.exec(raw)?.[1]
+  const fieldPayload = (multiline
+    ? /^(?:preencher|preencha|preenche|definir|defina|selecionar|selecione|seleciona)[^\S\r\n\u2028\u2029]+([\s\S]+)$/iu
+    : /^(?:preencher|preencha|preenche|definir|defina|selecionar|selecione|seleciona)\s+(.+)$/iu).exec(raw)?.[1]
   // An article can be part of the actual label ("O próprio paciente...").
   // Resolve both forms against visible controls instead of stripping it blindly.
   const payloads = fieldPayload ? [...new Set([fieldPayload, fieldPayload.replace(/^(?:o campo |a op[cç][aã]o |o |a )/iu, '')])] : []
-  const fields = payloads.flatMap(payload => [...payload.matchAll(/\s+(?:com|como|para)\s+/giu)].map(delimiter => ({ query: payload.slice(0, delimiter.index), value: clean(payload.slice(delimiter.index + delimiter[0].length)) }))).filter(item => item.query && item.value)
+  const fields = payloads.flatMap(payload => [...payload.matchAll(multiline
+    ? /[^\S\r\n\u2028\u2029]+(?:com|como|para)[^\S\r\n\u2028\u2029]+/giu
+    : /\s+(?:com|como|para)\s+/giu)].map(delimiter => ({ query: payload.slice(0, delimiter.index),
+    value: multiline ? payload.slice(delimiter.index + delimiter[0].length) : clean(payload.slice(delimiter.index + delimiter[0].length)),
+  }))).filter(item => item.query && item.value && !clinicalLineBreak.test(item.query))
+  if (multiline && !fields.length) return refusal('Use uma única linha para o comando e o nome do campo. Quebras de linha são permitidas apenas no texto dos quatro campos clínicos.')
   const clearField = /^(?:limpar|limpe|esvaziar|esvazie)\s+(?:o campo |o |a )?(.+)$/iu.exec(raw)
   const check = /^(marcar|marque|desmarcar|desmarque)\s+(?:a op[cç][aã]o |o |a )?(.+)$/iu.exec(raw)
   const click = /^(?:clicar|clique|clica|acionar|acione|apertar|aperte)\s+(?:no bot[aã]o |na opc[aã]o |no |na |em )?(.+)$/iu.exec(raw)
@@ -222,6 +235,7 @@ export function parseVoiceInterfaceCommand(text, root = globalThis.document) {
   if (/^anticipar termino de /u.test(fold(query)) && !seriesLabelMatches(query, item)) return refusal(`Não encontrei “${query}” em um controle de série disponível.`)
   if (operation === 'uncheck' && item.element.type === 'radio') return refusal('Escolha outra opção deste grupo para alterar a seleção.')
   if (operation === 'fill') {
+    if (multiline && !multilineClinicalField(item.element)) return refusal('Quebras de linha são permitidas apenas nos quatro campos clínicos do rascunho de sessão aberto.')
     if (item.element.tagName === 'SELECT') {
       if (clearField) return refusal('Para mudar uma seleção, diga “selecionar” e o nome da opção.')
       const weekday = item.element.getAttribute('data-voice-value-type') === 'weekday'
@@ -274,6 +288,11 @@ export function applyVoiceInterfaceCommand(intent, root = globalThis.document) {
   })
   if (found.length !== 1) throw new Error('A tela mudou. Prepare o comando novamente antes de aplicar.')
   const element = found[0].element
+  if (intent.operation === 'fill' && clinicalLineBreak.test(intent.value)) {
+    if (!multilineClinicalField(element) || element.readOnly || (element.maxLength > 0 && intent.value.length > element.maxLength)) {
+      throw new Error('O campo clínico mudou. Prepare o comando novamente antes de aplicar.')
+    }
+  }
   if (intent.operation === 'fill' && element.tagName === 'SELECT') {
     const options = [...element.options].filter(option => !option.disabled && option.value === intent.value)
     if (options.length !== 1 || (intent.optionLabel !== undefined && options[0].textContent !== intent.optionLabel)) {

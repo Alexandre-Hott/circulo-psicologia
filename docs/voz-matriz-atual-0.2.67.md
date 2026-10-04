@@ -1,5 +1,11 @@
 # Matriz atual de voz — 0.2.67
 
+## Atualização de referência — 0.2.70
+
+Esta matriz preserva a auditoria estática da 0.2.67; os números de linha e a lacuna G1 abaixo são históricos. [Validação 0.2.68](validacao-voz-0.2.68.md) alinhou os quatro campos a 4000 unidades UTF-16 e o comando a 4600. [Validação 0.2.69](validacao-voz-0.2.69.md) acrescentou ditado por trechos com base viva, confirmação e validação contra mudanças do formulário. Regresso selecionado43/43 aprovado; não comprova universalmente todas as ações desta tabela nem microfone físico.
+
+Reprodução posterior ao pacote69: “Acrescentar observação da sessão de Ana Clara com Pediu ajuda.” seguido de uma quebra LF real e “Participou com apoio.” era recusado pelo parser, enquanto o mesmo texto sem quebra preparava append. A [validação0.2.70](validacao-voz-0.2.70.md) corrigiu a paridade nos quatro campos clínicos:467/467 unidades,136/136 intermediários e51/51 finais em rodadas separadas. Outros textareas (biblioteca, contexto, indicador, adendo e motivo) ainda aguardam extensão; não afirmar cobertura universal. A escolha de senha e arquivo continua manual; limpeza de recovery continua fora do escopo.
+
 Leitura estática de produção e testes atuais; nenhuma suíte, build, captura ou probe foi executada nesta auditoria. Código e testes são a referência, não pendências históricas. Escopo: oito áreas funcionais, sem alegação de cobertura total.
 
 **Contrato:** N = pedido natural; G = comando genérico sobre controle visível/habilitado. Preparar não equivale a aplicar: confirmação e validação do destino continuam obrigatórias. Rotas N/G não tornam todos os controles ou valores reconhecíveis por áudio.

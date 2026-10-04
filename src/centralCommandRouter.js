@@ -637,6 +637,12 @@ const chooseSessionCandidate = (candidates, context, fallback) => {
 
 const catalogPattern = name => `(?:["“])?${escapeRegExp(normalize(name, true))}(?:["”])?`
 
+const clinicalLineBreak = /[\r\n\u2028\u2029]/u
+const clinicalDelimiter = /[^\S\r\n\u2028\u2029]+com[^\S\r\n\u2028\u2029]+/giu
+// Only the payload may span lines. Horizontal whitespace keeps headers literal.
+const clinicalFieldCommand = raw => /^(?:preencher|anotar|registrar)[^\S\r\n\u2028\u2029]+(observa(?:ção|cao)|evolu(?:ção|cao)|procedimentos?|resultado|decis(?:ão|ao)|encaminhamento|fechamento)[^\S\r\n\u2028\u2029]+(?:da|do)[^\S\r\n\u2028\u2029]+sess(?:ão|ao)[^\S\r\n\u2028\u2029]+de[^\S\r\n\u2028\u2029]+([\s\S]+)$/iu.exec(raw)
+  || /^(?:acrescentar|acrescente|acrescenta|acrecentar)[^\S\r\n\u2028\u2029]+(observa(?:ção|cao)|evolu(?:ção|cao)|procedimentos?|resultado|decis(?:ão|ao)|encaminhamento|fechamento)[^\S\r\n\u2028\u2029]+(?:da|do)[^\S\r\n\u2028\u2029]+(?:sess(?:ão|ao)|se(?:ção|cao))[^\S\r\n\u2028\u2029]+de[^\S\r\n\u2028\u2029]+([\s\S]+)$/iu.exec(raw)
+
 const parseSessionDraft = ({ text, rawText, context }) => {
   if (!/\b(?:sessao|rascunho)\b/u.test(text) || !/\b(?:comportamento|indicador|observacao|evolucao|procedimentos?|resultado|encaminhamento|fechamento|decisao)\b/u.test(text)) return null
   const removeBehavior = /^(?:retirar|retire|remover|remova|desmarcar|desmarque)\s+(?:o\s+)?comportamento\s+(.+)$/u.exec(text)
@@ -686,23 +692,22 @@ const parseSessionDraft = ({ text, rawText, context }) => {
     )
   }
 
-  const fieldCommand = /^(?:preencher|anotar|registrar)\s+(observa(?:ção|cao)|evolu(?:ção|cao)|procedimentos?|resultado|decis(?:ão|ao)|encaminhamento|fechamento)\s+(?:da|do)\s+sess(?:ão|ao)\s+de\s+(.+)$/iu.exec(rawText)
-    || /^(?:acrescentar|acrescente|acrescenta|acrecentar)\s+(observa(?:ção|cao)|evolu(?:ção|cao)|procedimentos?|resultado|decis(?:ão|ao)|encaminhamento|fechamento)\s+(?:da|do)\s+(?:sess(?:ão|ao)|se(?:ção|cao))\s+de\s+(.+)$/iu.exec(rawText)
+  const fieldCommand = clinicalFieldCommand(rawText)
   if (fieldCommand) {
     const field = normalize(fieldCommand[1])
     const fieldMap = {
       observacao: 'observation', evolucao: 'observation', procedimento: 'procedures', procedimentos: 'procedures',
       resultado: 'outcomeDecision', decisao: 'outcomeDecision', encaminhamento: 'referralClosure', fechamento: 'referralClosure',
     }
-    const candidates = [...fieldCommand[2].matchAll(/\s+com\s+/giu)].map(separator => ({
+    const candidates = [...fieldCommand[2].matchAll(clinicalDelimiter)].map(separator => ({
       patientQuery: fieldCommand[2].slice(0, separator.index),
       content: fieldCommand[2].slice(separator.index + separator[0].length),
-    }))
+    })).filter(candidate => !clinicalLineBreak.test(candidate.patientQuery))
     const result = chooseSessionCandidate(candidates, context, 'Informe o paciente exato da sessão e o texto após “com”.')
     if (result.error) return refuse(result.error)
     const { target } = result
     const sessionTarget = sessionTargetFrom(target)
-    const exactText = unwrapArgument(result.content)
+    const exactText = clinicalLineBreak.test(result.content) ? result.content : unwrapArgument(result.content)
     if (!exactText) return refuse(`O texto do campo deve ter entre 1 e ${VOICE_CLINICAL_TEXT_MAX_LENGTH} caracteres.`)
     const key = fieldMap[field]
     if (/^(?:acrescent(?:ar|e|a)|acrecentar)\s/iu.test(rawText)) {
@@ -732,12 +737,27 @@ const parseSessionDraft = ({ text, rawText, context }) => {
  * context: { patients, behaviors, indicators, activeSessionDraft: { id, patientId, originalDate? } }
  */
 export function parseCentralCommand({ text, context = {}, referenceDate } = {}) {
-  const rawText = String(text ?? '').trim()
+  const sourceText = String(text ?? '')
+  const trimmedText = sourceText.trim()
+  const clinicalSource = sourceText.trimStart()
+  // Preserve legacy outer command whitespace, but retain a clinical payload's ending verbatim.
+  const multiline = clinicalLineBreak.test(trimmedText)
+    || (Boolean(clinicalFieldCommand(clinicalSource)) && clinicalLineBreak.test(clinicalSource))
+  const rawText = multiline ? clinicalSource : trimmedText
   if (rawText.length > VOICE_COMMAND_MAX_LENGTH) return refuse(`O comando passou do limite de ${VOICE_COMMAND_MAX_LENGTH} caracteres. Divida-o em comandos menores.`)
+  let literalHeader = null
+  if (multiline) {
+    const fieldCommand = clinicalFieldCommand(rawText)
+    const delimiter = fieldCommand && [...fieldCommand[2].matchAll(clinicalDelimiter)][0]
+    if (!delimiter || clinicalLineBreak.test(fieldCommand[2].slice(0, delimiter.index))) {
+      return refuse('Use uma única linha para o comando e o nome do paciente. Quebras de linha são permitidas apenas no texto dos quatro campos clínicos.')
+    }
+    literalHeader = rawText.slice(0, rawText.length - fieldCommand[2].length + delimiter.index)
+  }
   const normalized = normalize(rawText)
   if (!normalized) return refuse('Digite um comando para continuar.')
   // Descriptions and session field text are literal payloads, not commands.
-  const commandRegion = normalized.split(/\s+com\s+descricao\s+/u)[0]
+  const commandRegion = literalHeader !== null ? normalize(literalHeader) : normalized.split(/\s+com\s+descricao\s+/u)[0]
     .replace(/^(?:preencher|anotar|registrar|acrescentar|acrescente|acrescenta|acrecentar)\s+(?:observacao|evolucao|procedimentos?|resultado|decisao|encaminhamento|fechamento)\s+(?:da|do)\s+sessao\s+de\s+(.+?)\s+com\s+.+$/u, '$1')
   if (/\b(?:nao|nunca|jamais)\s+(?:acrescent(?:ar|e|a)|acrecentar)\b/u.test(commandRegion)) return refuse('O pedido contém uma negação. Informe um único comando afirmativo.')
   if (/(?:\s+e\s+|;\s*|\s+depois\s+|\s+ou\s+|,\s*|\s+em seguida\s+)(?:acrescent(?:ar|e|a)|acrecentar)\b/u.test(commandRegion)) return refuse('Informe apenas uma ação por comando.')

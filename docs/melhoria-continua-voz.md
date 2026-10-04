@@ -2,6 +2,10 @@
 
 ## Estado atual — 04/10/2026
 
+A 0.2.70 estende preenchimento/acréscimo a texto multilinha nos quatro campos de sessão, preservando limite e confirmação. [Entrega e pendências](validacao-voz-0.2.70.md): JS467/467, Rust86 aprovados/1 ignorado, intermediário136/136 e final51/51 em execuções separadas. Instalador local auditado, não instalado/publicado nem assinado; instalado61 e perfil preservados. Vocabulário Whisper experimental não adotado por saídas inválidas. Próxima lacuna comprovada: demais textareas da interface ainda não têm paridade multiline por voz. Meta ativa.
+
+Os estados de versões abaixo são históricos, incluindo0.2.69 e0.2.68.
+
 A 0.2.69 acrescenta trechos aos quatro textos do rascunho sem apagar a base viva. [Entrega, instalador e limites](validacao-voz-0.2.69.md): JS393/393, Rust86 aprovados/1 ignorado; rodada final selecionada43/43 em2,9min, exit0. Áudio real sintético preservado: parser final2 aprovados/2 falhos/1 não avaliado contra o pedido original; erros clínicos não corrigidos. Pacote local gerado/auditado, não instalado/publicado nem assinado; instalado61/perfil preservados. Meta ativa.
 
 As entregas abaixo são históricas, incluindo o estado anterior0.2.68.
