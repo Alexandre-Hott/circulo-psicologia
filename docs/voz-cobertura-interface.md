@@ -1,5 +1,9 @@
 # Cobertura de voz da interface — auditoria de fontes, 03/10/2026
 
+## Minutos completos nas ações/adendo —0.2.67
+
+Iniciar/remarcar/cancelar sessão e abrir adendo aceitam hora/minuto falados completos, sem truncar15:45ou21:35. Reutiliza normalizer, lookup23:59 não herda duração50min; mantém horários legados inequívocos e recusa extras/alternativas/AM-PM ambíguo. Prévia/confirmar e handlers existentes intactos. FINAL26/26selecionados em1,7min e4/4replays em27,8s, rodadas separadas; JS344/344, Rust86aprovados/1ignorado e revisão estática aprovados. Replay utiliza corpusSAPI0real+confirmação real, duas transcrições simuladas por caso, alvo original/efetivo exato e snapshots preservados. Teste sintético rate-2 excedeu12snoadendo, mantido sem aprovação; rate0 reconheceuquatroações. [Pacote e limites](melhoria-continua-voz.md). Não é microfone físico/jornada instalada; instalado61 mantido.
+
 ## Retomada de sessão por opção —0.2.66
 
 Com paciente selecionado/gaveta de rascunhos aberta, “Continuar sessão opção dois” prepara o botão de opção2; confirmar retoma o rascunho existente. Opção aparece em todas as datas e continua vinculada ao ID, nunca à primeira sessão encontrada. Data completa falada/ISO também aceita; duplicadas exigem opção. Revalida paciente, draft, data, opção, disponibilidade e epoch após mudanças/remontagem. Handler/autosave existentes intactos. Três cenários nativos: dois falharam na data/prefixo, sem reparo do ano; terceiro preservou opção1/2 com prefixo seção, aceito apenas nessa ação. Replay no shell confirmou d1/d2 sem writes em rascunhos limpos. FINAL44/44 selecionados, JS334/334, Rust86aprovados/1ignorado, revisão estática aprovada. [Pacote e limites](melhoria-continua-voz.md). Não comprova microfone físico/persistência instalada; instalado61 mantido.

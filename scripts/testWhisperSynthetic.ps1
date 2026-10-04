@@ -1,6 +1,6 @@
 ﻿param(
     [string]$VoiceDirectory,
-    [ValidateSet('core', 'behavior-save', 'behavior-remove', 'occurrence-date', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer', 'interface-series', 'interface-details', 'interface-draft-resume', 'interface-draft-continue', 'interface-draft-choice')][string]$Scenario = 'core',
+    [ValidateSet('core', 'behavior-save', 'behavior-remove', 'occurrence-date', 'occurrence-minutes', 'analytics-range', 'interface-fields', 'interface-weekday', 'interface-party', 'interface-drawer', 'interface-series', 'interface-details', 'interface-draft-resume', 'interface-draft-continue', 'interface-draft-choice')][string]$Scenario = 'core',
     [switch]$KeepArtifacts
 )
 
@@ -141,6 +141,17 @@ try {
         $commands = @(
             'Continuar sessão opção um.',
             'Continuar sessão opção dois.',
+            'Confirmar comando.'
+        )
+    }
+    if ($Scenario -eq 'occurrence-minutes') {
+        # The absolute-date addendum exceeds 12 seconds at the core rate (-2).
+        $voice.Rate = 0
+        $commands = @(
+            'Iniciar sessão de Ana Clara hoje às quinze horas e quarenta e cinco minutos.',
+            'Remarcar sessão de Ana Clara hoje às quinze horas e quarenta e cinco minutos.',
+            'Cancelar sessão de Ana Clara hoje às quinze horas e quarenta e cinco minutos.',
+            'Abrir adendo da sessão de Ana Clara em três de outubro de 2026 às quinze horas e quarenta e cinco minutos.',
             'Confirmar comando.'
         )
     }

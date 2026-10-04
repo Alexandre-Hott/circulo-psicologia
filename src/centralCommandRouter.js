@@ -337,25 +337,19 @@ const parseAgendaNavigation = (text, referenceDate) => {
     `Mostrar agenda ${label} ${day}/${month}/${year}.`)
 }
 
-// Occurrence lookup has no duration: accept the full clock range and consume
-// every time token rather than using the scheduling parser's spoken prefix.
+// Occurrence lookup has no duration. Adapt complete legacy spellings, then
+// let the shared normalizer consume every time token without inferring AM/PM.
 const parseOccurrenceTime = phrase => {
-  const match = /^(.*?)\s*(?:\s+(?:da|de|pela)\s+(manha|tarde|noite))?$/u.exec(phrase)
-  const clock = /^(\d{1,2}):([0-5]\d)$/u.exec(match[1])
-  const hourPhrase = /^(.*?)(?:\s+horas?)?(\s+e\s+meia)?$/u.exec(match[1])
-  const hourText = hourPhrase[1]
-  let hour = clock ? Number(clock[1]) : /^\d{1,2}$/u.test(hourText) ? Number(hourText) : spokenHours.get(hourText)
-  const minute = clock ? Number(clock[2]) : hourPhrase[2] ? 30 : 0
-  if (hour == null || hour > 23) return null
-  const period = match[2]
-  if (period) {
-    if (hour < 1 || hour > 12 || (period === 'manha' && hour === 12)) return null
-    if (period !== 'manha' && hour < 12) hour += 12
-    if (period === 'noite' && hour === 12) hour = 0
-  } else if (!clock && hour >= 1 && hour <= 12) {
-    return null
-  }
-  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+  let value = phrase.trim().replace(/\s+(?:de|pela)\s+(manha|tarde|noite)$/u, ' da $1')
+    .replace(/\bdezassete\b/gu, 'dezessete')
+  // Preserve the lookup's refusal of “12 da manhã”, rather than reinterpret
+  // that legacy input as midnight through the shared field normalizer.
+  if (/^(?:12(?::[0-5]\d)?|doze)(?: horas?)?(?: e .+)? da manha$/u.test(value)) return null
+  value = value.replace(/^(\d{1,2}):([0-5]\d)(?:\s+da\s+(manha|tarde|noite))?$/u,
+    (_, hour, minute, period) => period ? `${hour} horas e ${minute} minutos da ${period}` : `${hour.padStart(2, '0')}:${minute}`)
+    .replace(/^meia[- ]noite(?: horas?)?( e meia)?$/u, (_, half) => half ? '00:30' : '00:00')
+  const start = normalizeVoiceFieldValue('time', value)
+  return start !== null && /^\d{2}:\d{2}$/u.test(start) ? start : null
 }
 
 const parseAddendumNavigation = (text, context) => {

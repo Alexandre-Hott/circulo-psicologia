@@ -1033,6 +1033,57 @@ test('ocorrência resolve datas civis relativas e explícitas sem consultar sess
   assert.equal(parseCentralCommand({ text: 'Iniciar sessão de Ana Clara amanhã às 15:00', context, referenceDate: '9999-12-31' }).status, 'clarification')
 })
 
+const occurrenceTimeRequests = [
+  ['iniciar', 'Iniciar sessão de Ana Clara em 03/10/2026 às', 'agenda.occurrence.action'],
+  ['remarcar', 'Remarcar sessão de Ana Clara em 03/10/2026 às', 'agenda.occurrence.action'],
+  ['cancelar', 'Cancelar sessão de Ana Clara em 03/10/2026 às', 'agenda.occurrence.action'],
+  ['adendo', 'Adicionar adendo à sessão de Ana Clara de 03/10/2026 às', 'session.addendum.open'],
+]
+
+for (const [action, prefix, type] of occurrenceTimeRequests) {
+  test(`${action}: minutos compostos completos e formatos legados no horário da ocorrência`, () => {
+    for (const [time, start] of [
+      ['quinze horas e quarenta e cinco minutos', '15:45'],
+      ['quinze e quarenta e cinco', '15:45'],
+      ['vinte e uma horas e cinquenta e nove minutos', '21:59'],
+      ['três horas e quarenta e cinco minutos da tarde', '15:45'],
+      ['três e quinze da tarde', '15:15'],
+      ['9:05', '09:05'], ['9:45 de manhã', '09:45'], ['3:45 pela tarde', '15:45'],
+      ['nove e meia de manhã', '09:30'], ['três horas e meia pela tarde', '15:30'],
+      ['oito e meia pela noite', '20:30'], ['dezassete horas', '17:00'],
+      ['meia-noite e meia', '00:30'], ['00:00', '00:00'], ['meia-noite', '00:00'],
+      ['23:45', '23:45'], ['23:59', '23:59'], ['vinte e três horas e cinquenta e nove minutos', '23:59'],
+    ]) {
+      const result = parseCentralCommand({ text: `${prefix} ${time}`, context })
+      assert.equal(result.status, 'draft', time)
+      assert.equal(result.intent.type, type, time)
+      assert.equal(result.intent.target.patientId, 'patient-ana')
+      assert.equal(result.intent.target.date, '2026-10-03')
+      assert.equal(result.intent.target.start, start, time)
+      if (action !== 'adendo') assert.equal(result.intent.target.action, action === 'iniciar' ? 'start' : action)
+      assert.match(result.preview, new RegExp(`às ${start}`, 'u'))
+    }
+  })
+}
+
+test('ocorrência/adendo recusam minutos inválidos, extras, alternativas e AM/PM ambíguo', () => {
+  for (const [, prefix] of occurrenceTimeRequests) {
+    for (const time of [
+      'três horas e quarenta e cinco minutos', 'doze horas e quinze minutos',
+      'quinze horas e sessenta minutos', 'quinze horas e quarenta e cinco minutos bananas',
+      'quinze horas e quarenta e cinco minutos ou dezesseis horas',
+      'quinze horas e quarenta e cinco minutos e abrir agenda',
+      'quinze e quarenta e cinco e cinco', 'quinze horas e quarenta e cinco minutos depois',
+      '15:45:30', '15:45 e meia', '12 da manhã', '12:05 de manhã', 'doze e meia pela manhã', 'três da noite', '3:45 da noite',
+      '24:00', '9:45 da manhã extras', 'quinze horas e quarenta e cinco minutos da tarde',
+    ]) {
+      const result = parseCentralCommand({ text: `${prefix} ${time}`, context })
+      assert.equal(result.status, 'clarification', `${prefix} ${time}`)
+      assert.equal(result.intent, undefined)
+    }
+  }
+})
+
 test('ocorrência consome horário completo sem impor duração e exige interpretação única', () => {
   for (const [time, start] of [
     ['15 horas', '15:00'], ['quinze horas', '15:00'], ['quinze', '15:00'],
@@ -1045,7 +1096,7 @@ test('ocorrência consome horário completo sem impor duração e exige interpre
   }
   for (const time of [
     '3', 'três', 'três horas', '12 horas', '24:00', '25 horas', '15:60', '-1', '15.30',
-    '13 da tarde', 'zero da manhã', '12 da manhã', 'três e quinze da tarde',
+    '13 da tarde', 'zero da manhã', '12 da manhã',
     'três e qualquer coisa da tarde', 'quinze bananas', '15:00 e meia',
     '15 horas ou 16 horas', '15:00 e 16:00', '15 horas não', '15:00 por favor',
   ]) {

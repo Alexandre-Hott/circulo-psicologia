@@ -3,6 +3,113 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { evaluateSyntheticVoice } from '../scripts/evaluateSyntheticVoice.js'
 
+test('minutos SAPI normal preservam saídas Rust exatas e quatro intents às 15:45', () => {
+  const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-occurrence-minutes-normal-20261004.json', import.meta.url), 'utf8'))
+  assert.deepEqual(cases.map(item => item.Transcript), [
+    'Iniciar sessão de Ana Clara hoje às 15 horas e 45 minutos.',
+    'Remarcar seção de Ana Clara hoje às 15 horas e 45 minutos.',
+    'Cancelar seção de Ana Clara hoje às 15 horas e 45 minutos.',
+    'Abrir adendo da sessão de Ana Clara em 3 de outubro de dois mil e vinte e seis às quinze horas e quarenta e cinco minutos.',
+    'Confirmar comando.',
+  ])
+  const result = evaluateSyntheticVoice(cases, { scenario: 'occurrence-minutes' })
+  assert.equal(result.Passed, 4, JSON.stringify(result.Results.filter(item => item.Status === 'failed')))
+  assert.equal(result.Failed, 0)
+  assert.equal(result.NotEvaluated, 1)
+  assert.deepEqual(result.Results.map(item => item.Status), ['passed', 'passed', 'passed', 'passed', 'not-evaluated'])
+  assert.deepEqual(result.Results.slice(0, 4).map(item => item.ActualIntent), [
+    ...['start', 'remarcar', 'cancelar'].map(action => ({ type: 'agenda.occurrence.action', target: { patientId: 'ana', date: '2026-10-03', start: '15:45', action } })),
+    { type: 'session.addendum.open', target: { patientId: 'ana', date: '2026-10-03', start: '15:45' } },
+  ])
+  assert.deepEqual(result.Results.map(item => item.Transcript), cases.map(item => item.Transcript))
+})
+
+test('minutos SAPI normal mantêm validação estrita de corpus, data e horário', () => {
+  const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-occurrence-minutes-normal-20261004.json', import.meta.url), 'utf8'))
+  for (const invalidCorpus of [null, [], cases.slice(1), [...cases, cases[0]]]) {
+    assert.throws(() => evaluateSyntheticVoice(invalidCorpus, { scenario: 'occurrence-minutes' }))
+  }
+  for (const invalid of [
+    { Index: 0, Transcript: '' }, { Index: 0, Transcript: '   ' },
+    { Index: 0, Transcript: null }, { Index: 0, Transcript: 42 },
+    { Index: 1, Transcript: 'Confirmar comando.' },
+    { Index: -1, Transcript: 'Confirmar comando.' }, { Index: 5, Transcript: 'Confirmar comando.' },
+    { Index: 0.5, Transcript: 'Confirmar comando.' }, { Index: '0', Transcript: 'Confirmar comando.' },
+    { Transcript: 'Confirmar comando.' },
+  ]) {
+    assert.throws(() => evaluateSyntheticVoice([invalid, ...cases.slice(1)], { scenario: 'occurrence-minutes' }))
+  }
+  const wrongTime = structuredClone(cases)
+  wrongTime[0].Transcript = wrongTime[0].Transcript.replace('45 minutos', '30 minutos')
+  assert.equal(evaluateSyntheticVoice(wrongTime, { scenario: 'occurrence-minutes' }).Results[0].Status, 'failed')
+  const wrongDate = structuredClone(cases)
+  wrongDate[3].Transcript = wrongDate[3].Transcript.replace('3 de outubro', '4 de outubro')
+  assert.equal(evaluateSyntheticVoice(wrongDate, { scenario: 'occurrence-minutes' }).Results[3].Status, 'failed')
+  const reordered = evaluateSyntheticVoice([...cases].reverse(), { scenario: 'occurrence-minutes' })
+  assert.equal(reordered.Passed, 4)
+  assert.equal(reordered.Failed, 0)
+  assert.equal(reordered.NotEvaluated, 1)
+})
+
+test('minutos nativos exigem corpus estrito de cinco índices e expectativas exatas', () => {
+  const recorded = JSON.parse(readFileSync(new URL('./fixtures/native-voice-occurrence-minutes-20261004.json', import.meta.url), 'utf8'))
+  const cases = recorded.map(item => ({ Index: item.Index, Transcript: item.IntendedCommand }))
+  const result = evaluateSyntheticVoice(cases, { scenario: 'occurrence-minutes' })
+  assert.equal(result.Results.length, 5)
+  assert.equal(result.Passed + result.Failed, 4)
+  assert.equal(result.NotEvaluated, 1)
+  assert.deepEqual(result.Results.slice(0, 3).map(item => item.ExpectedIntent), ['start', 'remarcar', 'cancelar'].map(action => ({
+    type: 'agenda.occurrence.action', target: { patientId: 'ana', date: '2026-10-03', start: '15:45', action },
+  })))
+  assert.deepEqual(result.Results[3].ExpectedIntent, { type: 'session.addendum.open', target: { patientId: 'ana', date: '2026-10-03', start: '15:45' } })
+  assert.equal(result.Results[4].Status, 'not-evaluated')
+  assert.deepEqual(result.Results.map(item => item.Transcript), cases.map(item => item.Transcript))
+  for (const invalidCorpus of [null, [], cases.slice(1), [...cases, cases[0]]]) {
+    assert.throws(() => evaluateSyntheticVoice(invalidCorpus, { scenario: 'occurrence-minutes' }))
+  }
+  for (const invalid of [
+    { Index: 0, Transcript: '' }, { Index: 0, Transcript: '   ' },
+    { Index: 0, Transcript: null }, { Index: 0, Transcript: 42 },
+    { Index: 1, Transcript: 'Confirmar comando.' },
+    { Index: -1, Transcript: 'Confirmar comando.' }, { Index: 5, Transcript: 'Confirmar comando.' },
+    { Index: 0.5, Transcript: 'Confirmar comando.' }, { Index: '0', Transcript: 'Confirmar comando.' },
+    { Transcript: 'Confirmar comando.' },
+  ]) {
+    assert.throws(() => evaluateSyntheticVoice([invalid, ...cases.slice(1)], { scenario: 'occurrence-minutes' }))
+  }
+  const reordered = evaluateSyntheticVoice([...cases].reverse(), { scenario: 'occurrence-minutes' })
+  assert.equal(reordered.Passed, result.Passed)
+  assert.equal(reordered.Failed, result.Failed)
+  assert.equal(reordered.NotEvaluated, 1)
+})
+
+test('minutos digitados exigem três ações e adendo às 15:45 sem aprovar confirmação', () => {
+  const recorded = JSON.parse(readFileSync(new URL('./fixtures/native-voice-occurrence-minutes-20261004.json', import.meta.url), 'utf8'))
+  const cases = recorded.map(item => ({ Index: item.Index, Transcript: item.IntendedCommand }))
+  const result = evaluateSyntheticVoice(cases, { scenario: 'occurrence-minutes' })
+  assert.equal(result.Passed, 4, JSON.stringify(result.Results.filter(item => item.Status === 'failed')))
+  assert.equal(result.Failed, 0)
+  assert.equal(result.NotEvaluated, 1)
+  const wrongTime = structuredClone(cases)
+  wrongTime[0].Transcript = 'Iniciar sessão de Ana Clara hoje às 15:30.'
+  assert.equal(evaluateSyntheticVoice(wrongTime, { scenario: 'occurrence-minutes' }).Results[0].Status, 'failed')
+  const wrongDate = structuredClone(cases)
+  wrongDate[3].Transcript = 'Abrir adendo da sessão de Ana Clara em quatro de outubro de 2026 às 15:45.'
+  assert.equal(evaluateSyntheticVoice(wrongDate, { scenario: 'occurrence-minutes' }).Results[3].Status, 'failed')
+})
+
+test('minutos nativos incompletos por limite de duração não recebem aprovação semântica', () => {
+  const recorded = JSON.parse(readFileSync(new URL('./fixtures/native-voice-occurrence-minutes-20261004.json', import.meta.url), 'utf8'))
+  assert.equal(recorded.length, 5)
+  assert.deepEqual(recorded.map(item => item.Index), [0, 1, 2, 3, 4])
+  assert.ok(recorded.slice(0, 3).every(item => typeof item.Transcript === 'string' && item.Transcript.trim()))
+  assert.equal(recorded[3].Transcript, null)
+  assert.equal(recorded[3].CaptureStatus, 'rejected-duration')
+  assert.equal(recorded[4].Transcript, null)
+  assert.equal(recorded[4].CaptureStatus, 'not-run-after-native-failure')
+  assert.throws(() => evaluateSyntheticVoice(recorded, { scenario: 'occurrence-minutes' }), /Índice\/transcrição inválido/)
+})
+
 test('escolha nativa de rascunho exige interface e corpus estrito de três índices', () => {
   const cases = JSON.parse(readFileSync(new URL('./fixtures/native-voice-draft-choice-20261004.json', import.meta.url), 'utf8'))
   const result = evaluateSyntheticVoice(cases, { scenario: 'interface-draft-choice' })
